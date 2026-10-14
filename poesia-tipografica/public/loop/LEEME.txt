@@ -5,6 +5,9 @@ Van en tu carpeta de Documentos:
   Documentos/Umbral/logos/organizadores     → primero
   Documentos/Umbral/logos/socio-cultural    → segundo (más tiempo)
   Documentos/Umbral/logos/patrocinadores    → tercero
+  Documentos/Umbral/logos/acompanan         → cuarto
+  Documentos/Umbral/logos/embajadas         → quinto
+  Documentos/Umbral/logos/media-partner     → sexto
 
 El programa crea esas carpetas solo la primera vez que arranca.
 Panel C → Loop → «Abrir carpeta de logos» las abre en el Finder.

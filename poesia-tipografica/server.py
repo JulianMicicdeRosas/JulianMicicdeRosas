@@ -259,11 +259,11 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # los logos ni los ajustes. macOS/Windows: Documentos/Umbral (se puede cambiar con UMBRAL_DIR).
 _docs = os.path.join(os.path.expanduser("~"), "Documents")
 USER_DIR = os.path.realpath(os.environ.get("UMBRAL_DIR") or os.path.join(_docs if os.path.isdir(_docs) else os.path.expanduser("~"), "Umbral"))
-LOGO_GROUPS = ("organizadores", "socio-cultural", "patrocinadores")
+LOGO_GROUPS = ("organizadores", "socio-cultural", "patrocinadores", "acompanan", "embajadas", "media-partner")
 
 
 def ensure_user_dir() -> None:
-    """Crea Documentos/Umbral/logos/{organizadores,socio-cultural,patrocinadores} con un LEEME."""
+    """Crea Documentos/Umbral/logos/<grupo> (ver LOGO_GROUPS) con un LEEME."""
     try:
         logos = os.path.join(USER_DIR, "logos")
         os.makedirs(logos, exist_ok=True)
@@ -277,7 +277,10 @@ def ensure_user_dir() -> None:
                 fh.write("Umbral · carpeta de la muestra (no se borra al actualizar el programa)\n\n"
                          "logos/organizadores    → primero\n"
                          "logos/socio-cultural   → segundo (más tiempo en pantalla)\n"
-                         "logos/patrocinadores   → tercero\n\n"
+                         "logos/patrocinadores   → tercero\n"
+                         "logos/acompanan        → cuarto\n"
+                         "logos/embajadas        → quinto\n"
+                         "logos/media-partner    → sexto\n\n"
                          "Copia los archivos (PNG transparente ideal; JPG con fondo blanco también) en cada carpeta.\n"
                          "Se muestran en orden alfabético: para forzar un orden, numéralos (01-flat.png, 02-...).\n"
                          "No hace falta reiniciar: el loop relee las carpetas en cada vuelta.\n\n"

@@ -1,6 +1,6 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-#  Importar logos → Documentos/Umbral/logos/{organizadores,socio-cultural,patrocinadores}
+#  Importar logos → Documentos/Umbral/logos/{organizadores,socio-cultural,patrocinadores,acompanan,embajadas,media-partner}
 #  Doble clic. Busca la carpeta «FLAT 2026 - Logos…» en Descargas (o arrastra otra carpeta
 #  a esta ventana). Reconoce las subcarpetas por su nombre, convierte PDF a PNG y copia todo.
 #  Los logos quedan en tu Mac (sin internet) y no se borran al actualizar el programa.
@@ -33,6 +33,9 @@ group_of() {
     *organiz*) echo organizadores ;;
     *socio*|*cultural*) echo socio-cultural ;;
     *patrocin*|*sponsor*) echo patrocinadores ;;
+    *acompa*) echo acompanan ;;
+    *embajad*|*consulad*) echo embajadas ;;
+    *media*|*prensa*) echo media-partner ;;
     *) echo "" ;;
   esac
 }
@@ -71,7 +74,7 @@ while IFS= read -r -d '' d; do
 done < <(find "$SRC" -mindepth 1 -maxdepth 2 -type d -print0)
 
 if [ "$found" -eq 0 ]; then
-  echo "⚠ No reconocí subcarpetas «organizadores», «socio cultural» o «patrocinadores» en:"
+  echo "⚠ No reconocí subcarpetas «organizadores», «socio cultural», «patrocinadores», «acompañan», «embajadas» o «media partner» en:"
   ls -1 "$SRC"
   echo "Renombrá las subcarpetas con esas palabras y volvé a abrir este script."
 else

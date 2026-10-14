@@ -12,12 +12,16 @@ import { processLogo, paginate, composeLogos, LogoStage } from './logos.js';
 
 export const DEFAULT_SETTINGS = {
   artists: [{ name: 'Nombre del artista 1' }, { name: 'Nombre del artista 2' }, { name: 'Nombre del artista 3' }],
-  // Loop hasta que empieza la noche: organizadores → socio cultural (más tiempo) → patrocinadores → UMBRAL.
+  // Loop hasta que empieza la noche (categorías de flatfestival.org): organizadores → socio cultural (más
+  // tiempo) → patrocinadores → acompañan → embajadas → media partner → UMBRAL. Carpeta vacía = se salta.
   // Las carpetas se leen de Documentos/Umbral/logos/… (fuera del programa: no se pierden al actualizar).
   loop: [
     { tipo: 'logos', carpeta: 'logos/organizadores', imagenes: [], render: 'imagen', duracion: 8, por_pagina: 6, de_a_uno: false, monocromo: true, letras: '', alt: 'ORGANIZAN' },
     { tipo: 'logos', carpeta: 'logos/socio-cultural', imagenes: [], render: 'imagen', duracion: 16, por_pagina: 6, de_a_uno: false, monocromo: true, letras: '', alt: 'SOCIO CULTURAL' },
     { tipo: 'logos', carpeta: 'logos/patrocinadores', imagenes: [], render: 'imagen', duracion: 8, por_pagina: 8, de_a_uno: false, monocromo: true, letras: '', alt: 'PATROCINAN' },
+    { tipo: 'logos', carpeta: 'logos/acompanan', imagenes: [], render: 'imagen', duracion: 8, por_pagina: 10, de_a_uno: false, monocromo: true, letras: '', alt: 'ACOMPAÑAN' },
+    { tipo: 'logos', carpeta: 'logos/embajadas', imagenes: [], render: 'imagen', duracion: 8, por_pagina: 8, de_a_uno: false, monocromo: true, letras: '', alt: 'EMBAJADAS' },
+    { tipo: 'logos', carpeta: 'logos/media-partner', imagenes: [], render: 'imagen', duracion: 6, por_pagina: 6, de_a_uno: false, monocromo: true, letras: '', alt: 'MEDIA PARTNER' },
     { tipo: 'texto', contenido: 'UMBRAL', render: 'letras', duracion: 12, letras: 'UMBRAL' },
   ],
   prompt_estetica: '',
@@ -94,6 +98,20 @@ export class Show {
 
   setSettings(settings) {
     this.settings = { ...structuredClone(DEFAULT_SETTINGS), ...settings };
+    this._addNewLogoGroups();
+  }
+
+  /** Un loop guardado con una versión anterior (3 grupos) recibe los grupos nuevos detrás del último. */
+  _addNewLogoGroups() {
+    const loop = this.settings.loop;
+    if (!Array.isArray(loop) || this.settings.loop_grupos_v2) return;
+    const has = (c) => loop.some((s) => s && s.carpeta === c);
+    if (has('logos/organizadores') || has('logos/patrocinadores')) {
+      const extra = DEFAULT_SETTINGS.loop.filter((s) => s.tipo === 'logos' && !has(s.carpeta));
+      let at = loop.reduce((i, s, k) => (s && s.tipo === 'logos' ? k + 1 : i), 0);
+      for (const s of extra) loop.splice(at++, 0, structuredClone(s));
+    }
+    this.settings.loop_grupos_v2 = true;
   }
 
   get artists() {

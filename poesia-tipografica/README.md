@@ -157,7 +157,7 @@ descarta y se desvanece. Cada estrofa produce una imagen (nunca queda sólo en f
 
 ### Loop de logos (hasta que empieza la noche)
 
-Los logos vienen **integrados en el programa** en `poesia-tipografica/logos/` (orden de la «Pirámide de logos»,
+Los 39 logos de FLAT 2026 vienen **integrados en el programa** en `poesia-tipografica/logos/` (orden de la «Pirámide de logos»,
 ver `logos/LEEME.txt`). Para cambiar uno sin esperar una versión nueva, ponerlo en **Documentos/Umbral/logos/** (fuera del programa: actualizar o volver a descargar no los borra; los
 ajustes del panel C también viven ahí, en `Documentos/Umbral/ajustes.json`). El programa crea las carpetas solo.
 
@@ -170,6 +170,9 @@ todo a `Documentos/Umbral/logos/`:
 | `organizadores` | 1º | 8 s |
 | `socio-cultural` (también vale «socio cultural») | 2º | 16 s |
 | `patrocinadores` | 3º | 8 s |
+| `acompanan` | 4º | 8 s |
+| `embajadas` | 5º | 8 s |
+| `media-partner` | 6º | 6 s (vacía = se salta) |
 
 Luego UMBRAL en letras, y vuelve a empezar hasta que se aprieta un número de artista. Cada carpeta se muestra en grilla
 adaptativa (o «de a uno»); entre logo y logo hay una transición de **glitch** (cortes, separación rojo/cian, bloques).

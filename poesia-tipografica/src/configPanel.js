@@ -421,7 +421,7 @@ export class ConfigPanel {
   }
 
   setUserDir(dir) {
-    if (dir) this.$('[data-userdir]').textContent = `${dir}/logos  (organizadores · socio-cultural · patrocinadores)`;
+    if (dir) this.$('[data-userdir]').textContent = `${dir}/logos  (organizadores · socio-cultural · patrocinadores · acompanan · embajadas · media-partner)`;
   }
 
   setBackend(on) {

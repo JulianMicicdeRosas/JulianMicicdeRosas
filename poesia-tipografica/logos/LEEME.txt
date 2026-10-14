@@ -1,15 +1,16 @@
 LOGOS INTEGRADOS AL PROGRAMA (funcionan sin internet)
+Fuente: Drive «FLAT 2026 - Logos-2» (categorías de flatfestival.org). Orden de aparición en el loop:
 
-Orden de aparición (según «PIRÁMIDE DE LOGOS - Gráfica FLAT»):
+  organizadores/     01–04  El Zorro Azul · CEES · MMAMM · Mendoza Ciudad
+  socio-cultural/    05–08  UM FAUD/FI · Huarpe Riglos · Fundación Werthein · Colección Pampa  (más tiempo)
+  patrocinadores/    09–15  Azcuy · Corralón Luján · Rodríguez Hnos. · Mi Terruño · U. Champagnat ·
+                            U. Maza · Villa Victoria Lodge
+  acompanan/         16–25  FNA · Manso Orgullo · FAD UNCuyo · Nave UNCuyo · Polo TIC · Loras · …
+  embajadas/         26–39  Consulados y embajadas (Perú, Panamá, Italia, Bolivia, Brasil, Chile, …)
+  media-partner/     (vacía por ahora: se salta sola)
 
-  organizadores/     FLAT · CEES · El Zorro Azul · Municipalidad · MMAMM
-  socio-cultural/    Universidad de Mendoza (FADUM y FI) · Bodega Riglos Wine Huarpe ·
-                     Colección Pampa · Fundación Norma y Leo Werthein      (más tiempo en pantalla)
-  patrocinadores/    Azcuy · Corralón Luján · Transporte Rodriguez · Bodega Mi Terruño ·
-                     Universidad Maza · Villa Victoria Lodge · Universidad Champagnat
-
-Dentro de cada carpeta se muestran en orden alfabético: numerar para fijar el orden
-(01-flat.png, 02-cees.png, …). PNG con fondo transparente ideal; JPG con fondo blanco también.
+Dentro de cada carpeta se muestran en orden alfabético (por eso van numerados 01, 02, …).
+PNG con fondo transparente ideal; JPG con fondo blanco también.
 
 Si en la Mac hay logos en Documentos/Umbral/logos/<grupo>, esos tienen prioridad
 (para cambiar un logo sin esperar una versión nueva del programa).
