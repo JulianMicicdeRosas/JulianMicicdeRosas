@@ -19,21 +19,63 @@ fail() { printf '\n\033[31m[!] %s\033[0m\n' "$*"; read -r -p "Enter para cerrar�
 # Homebrew en Apple Silicon no siempre está en el PATH de una ventana nueva
 [ -x /opt/homebrew/bin/brew ] && eval "$(/opt/homebrew/bin/brew shellenv)"
 
+# ── ¿Se puede escribir en esta carpeta? ──────────────────────────────────────
+if ! touch .write_test 2>/dev/null; then
+  fail "macOS no deja escribir en $(pwd).
+    Opción 1: Ajustes del Sistema → Privacidad y seguridad → Archivos y carpetas (o Acceso total al disco) → Terminal.
+    Opción 2 (recomendada): mover la carpeta a tu carpeta personal, por ejemplo  ~/umbral"
+fi
+rm -f .write_test
+case "$(pwd)" in
+  *"Mobile Documents"*|*CloudDocs*) echo "Aviso: la carpeta está en iCloud Drive; si algo falla, muévela a ~/umbral." ;;
+esac
+
 # ── Python ≥ 3.10 (el python3 de Xcode suele ser 3.9) ───────────────────────
-PY=""
-for c in python3.13 python3.12 python3.11 python3.10 python3; do
+CANDS=()
+for c in /opt/homebrew/bin/python3.13 /opt/homebrew/bin/python3.12 /opt/homebrew/bin/python3.11 \
+         python3.13 python3.12 python3.11 python3.10 python3; do
   if command -v "$c" >/dev/null 2>&1 && "$c" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
-    PY="$c"; break
+    CANDS+=("$c")
   fi
 done
-[ -z "$PY" ] && fail "Falta Python 3.10 o superior. Instálalo con:  brew install python@3.12"
+[ ${#CANDS[@]} -eq 0 ] && fail "Falta Python 3.10 o superior. Instálalo con:  brew install python@3.12"
 command -v node >/dev/null 2>&1 || fail "Falta Node.js. Instálalo con:  brew install node"
 
-if [ ! -x .venv/bin/python ]; then
-  say "Preparando Python ($PY)…"
-  "$PY" -m venv .venv || fail "No se pudo crear .venv"
-  .venv/bin/python -m pip install --upgrade pip >/dev/null
-  .venv/bin/pip install -r requirements.txt || fail "Falló pip install"
+make_venv() {
+  # prueba cada Python disponible; borra restos de intentos anteriores
+  : > logs/venv.log
+  for c in "${CANDS[@]}"; do
+    rm -rf .venv
+    echo "== $c ($("$c" --version 2>&1))" >> logs/venv.log
+    if "$c" -m venv .venv >> logs/venv.log 2>&1 && [ -x .venv/bin/python ]; then
+      echo "Python: $c"; return 0
+    fi
+    # Pythons sin ensurepip: crear sin pip e instalarlo aparte
+    rm -rf .venv
+    if "$c" -m venv --without-pip .venv >> logs/venv.log 2>&1 && [ -x .venv/bin/python ]; then
+      if curl -fsSL https://bootstrap.pypa.io/get-pip.py -o logs/get-pip.py >> logs/venv.log 2>&1 \
+         && .venv/bin/python logs/get-pip.py >> logs/venv.log 2>&1; then
+        echo "Python: $c (pip instalado aparte)"; return 0
+      fi
+    fi
+  done
+  rm -rf .venv
+  return 1
+}
+
+if [ ! -x .venv/bin/python ] || ! .venv/bin/python -c 'import numpy, websockets, httpx, dotenv, sounddevice' 2>/dev/null; then
+  say "Preparando Python…"
+  if ! make_venv; then
+    echo; echo "---- detalle (logs/venv.log) ----"; tail -n 25 logs/venv.log
+    fail "No se pudo crear el entorno de Python con ninguno de: ${CANDS[*]}
+    Prueba en Terminal:  brew reinstall python@3.12   y vuelve a abrir este script.
+    Si sigue fallando, envía el contenido de logs/venv.log."
+  fi
+  .venv/bin/python -m pip install --upgrade pip > logs/pip.log 2>&1
+  if ! .venv/bin/python -m pip install -r requirements.txt >> logs/pip.log 2>&1; then
+    tail -n 25 logs/pip.log
+    fail "Falló la instalación de paquetes de Python (detalle en logs/pip.log)."
+  fi
 fi
 if [ ! -d node_modules ]; then
   say "Instalando dependencias del frontend…"

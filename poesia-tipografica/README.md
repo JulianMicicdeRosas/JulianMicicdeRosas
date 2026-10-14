@@ -54,7 +54,7 @@ Una sola vez, en Terminal:
 brew install python@3.12 node
 brew install ollama            # opcional: director de arte local (Metal, muy rápido en chips M)
 brew install --cask google-chrome   # si no tienes Chrome
-git clone https://github.com/JulianMicicdeRosas/JulianMicicdeRosas.git
+git clone -b claude/lucid-goldberg-asyjj8 https://github.com/JulianMicicdeRosas/JulianMicicdeRosas.git ~/umbral   # fuera del Escritorio/iCloud
 ```
 
 Después, cada noche: **doble clic en `poesia-tipografica/start_mac.command`** (la primera vez: clic derecho →
