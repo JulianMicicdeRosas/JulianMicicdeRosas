@@ -704,8 +704,16 @@ async function boot() {
   // ── glitch azaroso: ráfagas de duración e intensidad al azar (la voz fuerte las provoca) ──
   const glitch = { level: 0, burst: 0, amp: 0, wait: 1, frame: 0 };
   // toda transición (figura, título, palabras) dispara una ráfaga de glitch de pantalla
+  let lastSmallGlitch = 0;
   field.onTransition = (amp) => {
     if ((settings.glitch_transiciones ?? 1) <= 0) return;
+    // las transiciones chicas (cada palabra, cada letra que se rompe) no encadenan glitches de pantalla:
+    // a lo sumo uno cada 1,5 s, para que las letras se lean; las grandes (dibujo, escena) siempre
+    const now = performance.now();
+    if (amp < 0.4) {
+      if (now - lastSmallGlitch < 1500) return;
+      lastSmallGlitch = now;
+    }
     amp *= settings.glitch_transiciones ?? 1;
     glitch.amp = Math.max(glitch.burst > 0 ? glitch.amp : 0, amp);
     glitch.burst = Math.max(glitch.burst, 0.18 + amp * 0.4);

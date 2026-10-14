@@ -8,7 +8,8 @@ cd /d "%~dp0"
 
 REM ── Requisitos: Python 3 y Node.js (si faltan, se instalan con winget) ──
 set NEED_RESTART=
-where py >nul 2>&1 || where python >nul 2>&1 || (
+REM ("python" de la Microsoft Store es un acceso directo vacío: se prueba que Python responda de verdad)
+py -3 --version >nul 2>&1 || python -c "import sys" >nul 2>&1 || (
   echo [i] Falta Python. Instalando Python 3.12 con winget...
   winget install -e --id Python.Python.3.12 --accept-package-agreements --accept-source-agreements || goto :noreq
   set NEED_RESTART=1
@@ -31,14 +32,22 @@ if not exist .venv (
   py -3 -m venv .venv || python -m venv .venv || goto :error
   .venv\Scripts\python -m pip install --upgrade pip
 )
-REM cada arranque: dependencias al día y frontend recompilado (tras actualizar el programa, nada queda viejo)
-.venv\Scripts\pip install -q -r requirements.txt || goto :error
+REM cada arranque: dependencias al día y frontend recompilado (tras actualizar el programa, nada queda viejo).
+REM Sin internet en la sala no se frena: si ya está todo instalado, sigue.
+.venv\Scripts\python -m pip install -q -r requirements.txt || (
+  .venv\Scripts\python -c "import numpy, websockets, httpx, dotenv, sounddevice" || goto :error
+  echo [i] Sin internet: sigo con las dependencias ya instaladas.
+)
 if not exist node_modules (
   call npm install || goto :error
 )
 call npm install --no-audit --no-fund >nul 2>&1
 call npm run build || goto :error
 
+REM si quedó abierta una ejecución anterior, se cierra (si no, el puerto queda ocupado)
+taskkill /FI "WINDOWTITLE eq poesia-backend*" /T /F >nul 2>&1
+taskkill /FI "WINDOWTITLE eq poesia-frontend*" /T /F >nul 2>&1
+taskkill /FI "WINDOWTITLE eq Umbral - re-proyeccion*" /T /F >nul 2>&1
 start "poesia-backend" /min cmd /k ".venv\Scripts\python server.py"
 start "poesia-frontend" /min cmd /k "npm run preview"
 timeout /t 4 /nobreak >nul
@@ -46,6 +55,9 @@ timeout /t 4 /nobreak >nul
 set CHROME=%ProgramFiles%\Google\Chrome\Application\chrome.exe
 if not exist "%CHROME%" set CHROME=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe
 if not exist "%CHROME%" set CHROME=%LocalAppData%\Google\Chrome\Application\chrome.exe
+REM sin Chrome: Microsoft Edge (viene con Windows y también tiene modo kiosk)
+if not exist "%CHROME%" set CHROME=%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe
+if not exist "%CHROME%" set CHROME=%ProgramFiles%\Microsoft\Edge\Application\msedge.exe
 
 REM GPU dedicada (p. ej. RTX 3070 Ti): forzar la placa de alto rendimiento y no caer en la integrada
 start "" "%CHROME%" --kiosk --start-fullscreen --no-first-run --disable-infobars ^

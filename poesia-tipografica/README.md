@@ -106,6 +106,17 @@ Descargas (`FLAT-Logo*.png`). Si algo falla: **`diagnostico_windows.bat`**.
 
 Requisitos (manual): Python 3.10+, Node.js 18+, Google Chrome, y opcionalmente [Ollama](https://ollama.com).
 
+Notas de Windows:
+- Sin internet en la sala el arranque no se frena: si las dependencias ya están instaladas, sigue.
+- Si quedó abierta una ejecución anterior (o una re-proyección), el lanzador la cierra antes de arrancar.
+- Sin Chrome se usa Microsoft Edge en modo kiosk.
+- La carpeta de la muestra es la de **Documentos** que informa Windows (también si está en OneDrive).
+- La clave de OpenAI queda en `C:\Users\<usuario>\.poesia-tipografica\openai_key` (fuera del programa).
+
+**Ensayo sin micrófono**: `.venv\Scripts\python server.py --audio-archivo voz.wav` hace entrar un .wav (en bucle,
+a tiempo real) exactamente por el camino de la placa de audio: análisis, arranque por voz en las placas, envío a
+OpenAI y grabación de la sesión. Sirve para ensayar el show completo con una lectura grabada.
+
 ```bat
 copy .env.example .env          :: opcional: el arranque lo crea solo. La clave se pega en el panel C
 py -3 -m venv .venv

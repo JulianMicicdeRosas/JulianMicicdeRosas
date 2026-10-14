@@ -1567,6 +1567,8 @@ export class TypeField {
   /** Disuelve todo lo compuesto (verso, figura, título, palabras) de vuelta al campo. */
   clearScene() {
     this.backdropHoles = [];
+    this.setShape(null); // el dibujo de la escena anterior no pasa a la siguiente
+    this.titleFade = null;
     this.clearSparse();
     this.clearWallFx();
     if (this.line) {
@@ -1846,8 +1848,19 @@ export class TypeField {
     // «cruce»: la mitad de las palabras van en vertical (letras de arriba abajo), si entran
     const vert = this.artistCross && Math.random() < 0.5 && len * k <= W.rowsN;
     const wC = vert ? k : len * k, hR = vert ? len * k : k;
+    // con un dibujo en pantalla, las palabras nuevas buscan lugar fuera de él
+    const overShape = (r, c) => {
+      if (!this.shape || !this.backdrop) return false;
+      for (let n = 0; n < len; n++) {
+        const x = W.x0 + (c + (vert ? 0 : n * k) + k / 2) * W.cw, y = W.y0 - (r + (vert ? n * k : 0) + k / 2) * W.rh;
+        const h = W.rh * k * 0.5;
+        for (const [dx, dy] of [[0, 0], [-h, -h], [h, -h], [-h, h], [h, h]]) if (!this._shapeHides(x + dx, y + dy)) return true;
+      }
+      return false;
+    };
     const free = (r, c) => {
       if (r < 0 || c < 0 || r + hR > W.rowsN || c + wC > W.colsN) return false;
+      if (overShape(r, c)) return false;
       for (let dr = -1; dr <= hR; dr++) {
         const rr = r + dr;
         if (rr < 0 || rr >= W.rowsN) continue;

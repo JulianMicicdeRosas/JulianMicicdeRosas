@@ -151,6 +151,8 @@ class Config:
     vad_prefix_ms: int
 
     audio_device: str
+    audio_file: str
+    openai_base_url: str
     audio_channel: int
     sample_rate: int
     block_ms: int
@@ -192,6 +194,8 @@ class Config:
             vad_silence_ms=_env_int("VAD_SILENCE_MS", 350),
             vad_prefix_ms=_env_int("VAD_PREFIX_PADDING_MS", 300),
             audio_device=_env("AUDIO_DEVICE"),
+            audio_file=_env("AUDIO_FILE"),  # prueba sin micrófono: un .wav entra como si fuera la voz
+            openai_base_url=_env("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/"),
             audio_channel=max(1, _env_int("AUDIO_CHANNEL", 1)),  # entrada de la placa (Focusrite: 1..18)
             sample_rate=_env_int("AUDIO_SAMPLE_RATE", 24000),
             block_ms=max(5, _env_int("AUDIO_BLOCK_MS", 10)),
@@ -262,7 +266,29 @@ class SettingsStore:
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Carpeta del usuario, FUERA del proyecto: actualizar o volver a descargar el programa no borra
 # los logos ni los ajustes. macOS/Windows: Documentos/Umbral (se puede cambiar con UMBRAL_DIR).
-_docs = os.path.join(os.path.expanduser("~"), "Documents")
+def _documents_dir() -> str:
+    """Documentos del usuario. En Windows se pregunta al sistema (suele estar redirigida a OneDrive)."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            class GUID(ctypes.Structure):
+                _fields_ = [("a", wintypes.DWORD), ("b", wintypes.WORD), ("c", wintypes.WORD), ("d", ctypes.c_ubyte * 8)]
+
+            fid = GUID(0xFDD39AD0, 0x238F, 0x46AF, (ctypes.c_ubyte * 8)(0xAD, 0xB4, 0x6C, 0x85, 0x48, 0x03, 0x69, 0xC7))
+            out = ctypes.c_wchar_p()
+            if ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(fid), 0, None, ctypes.byref(out)) == 0:
+                path = out.value
+                ctypes.windll.ole32.CoTaskMemFree(out)
+                if path and os.path.isdir(path):
+                    return path
+        except Exception:  # noqa: BLE001
+            pass
+    return os.path.join(os.path.expanduser("~"), "Documents")
+
+
+_docs = _documents_dir()
 USER_DIR = os.path.realpath(os.environ.get("UMBRAL_DIR") or os.path.join(_docs if os.path.isdir(_docs) else os.path.expanduser("~"), "Umbral"))
 LOGO_GROUPS = ("flat", "organizadores", "socio-cultural", "patrocinadores", "acompanan", "embajadas", "media-partner")
 
@@ -764,7 +790,49 @@ class AudioEngine:
             self.resampler = LinearResampler(native, self.sr)
             return stream
 
+    async def run_file(self, path: str) -> None:
+        """Prueba sin micrófono: un .wav (mono o estéreo, cualquier frecuencia) entra a tiempo real, en bucle,
+        exactamente por el mismo camino que la placa de audio (análisis, grabación de la sesión, OpenAI)."""
+        import wave
+        try:
+            wf = wave.open(path, "rb")
+        except Exception as exc:  # noqa: BLE001
+            log.error("No pude abrir el audio de prueba %s: %s", path, exc)
+            self.hub.set_status(mic="error", mic_device=f"archivo: {exc}")
+            return
+        sr, nch, width = wf.getframerate(), wf.getnchannels(), wf.getsampwidth()
+        if width != 2:
+            log.error("El audio de prueba tiene que ser PCM de 16 bits")
+            return
+        self.device_name = f"archivo de prueba: {os.path.basename(path)}"
+        self.hub.set_status(mic="ok", mic_device=self.device_name)
+        log.info("Micrófono simulado con %s (%d Hz, %d canal/es)", path, sr, nch)
+        res = LinearResampler(sr, self.sr) if sr != self.sr else None
+        block = max(64, int(sr * self.cfg.block_ms / 1000))
+        t0, sent = time.monotonic(), 0
+        while True:
+            raw = wf.readframes(block)
+            if len(raw) < block * 2 * nch:
+                wf.rewind()  # en bucle
+                if not raw:
+                    continue
+            x = np.frombuffer(raw, dtype=np.int16)
+            if nch > 1:
+                x = x.reshape(-1, nch)[:, min(self.cfg.audio_channel, nch) - 1]
+            if res is not None:
+                y = res.process(x.astype(np.float32) / 32768.0)
+                x = (np.clip(y, -1, 1) * 32767).astype(np.int16)
+            if x.size:
+                self._process(x.tobytes())
+            sent += block
+            delay = t0 + sent / sr - time.monotonic()  # a tiempo real, como una placa
+            if delay > 0:
+                await asyncio.sleep(delay)
+
     async def run(self) -> None:
+        if self.cfg.audio_file:
+            await self.run_file(self.cfg.audio_file)
+            return
         if sd is None:
             log.error("sounddevice no disponible (%s). Audio desactivado.", _SD_IMPORT_ERROR)
             self.hub.set_status(mic="unavailable")
@@ -2198,7 +2266,7 @@ class ArtDirector:
         models = list(dict.fromkeys([self.cfg.openai_director_model, "gpt-4.1-mini", "gpt-4o-mini"]))
         last: Exception | None = None
         for model in models:
-            r = await self.http.post("https://api.openai.com/v1/chat/completions", headers={
+            r = await self.http.post(f"{self.cfg.openai_base_url}/chat/completions", headers={
                 "Authorization": f"Bearer {self.cfg.openai_api_key}"}, json={
                 "model": model, "messages": messages or self._messages(text), "response_format": {"type": "json_object"},
                 "temperature": self.cfg.llm_temperature, "max_tokens": max_tokens or self._max_tokens(),
@@ -2880,6 +2948,8 @@ def main() -> None:
     parser.add_argument("--no-openai", action="store_true", help="no conectar a OpenAI Realtime")
     parser.add_argument("--env", default=".env", help="ruta del archivo .env")
     parser.add_argument("--no-record", action="store_true", help="no grabar la sesión (audio + eventos)")
+    parser.add_argument("--audio-archivo", default="", metavar="WAV",
+                        help="prueba sin micrófono: este .wav entra como si fuera la voz (en bucle)")
     parser.add_argument("--replay", default="", metavar="CARPETA",
                         help="re-proyectar una sesión grabada: carpeta, «ultima» o «elegir»")
     parser.add_argument("--desde", default="0", help="re-proyección: empezar en este punto (segundos o mm:ss)")
@@ -2888,6 +2958,8 @@ def main() -> None:
     args = parser.parse_args()
 
     load_dotenv(args.env)
+    if args.audio_archivo:
+        os.environ["AUDIO_FILE"] = args.audio_archivo
     logging.basicConfig(level=getattr(logging, _env("LOG_LEVEL", "INFO").upper(), logging.INFO),
                         format="%(asctime)s %(levelname)-7s %(name)s · %(message)s", datefmt="%H:%M:%S")
     if args.list_devices:
