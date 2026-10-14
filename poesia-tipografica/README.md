@@ -159,7 +159,11 @@ descarta y se desvanece. Cada estrofa produce una imagen (nunca queda sólo en f
 
 Los logos vienen **integrados en el programa** en `poesia-tipografica/logos/` (orden de la «Pirámide de logos»,
 ver `logos/LEEME.txt`). Para cambiar uno sin esperar una versión nueva, ponerlo en **Documentos/Umbral/logos/** (fuera del programa: actualizar o volver a descargar no los borra; los
-ajustes del panel C también viven ahí, en `Documentos/Umbral/ajustes.json`). El programa crea las carpetas solo:
+ajustes del panel C también viven ahí, en `Documentos/Umbral/ajustes.json`). El programa crea las carpetas solo.
+
+**Atajo:** doble clic en `importar_logos.command` — busca la carpeta «FLAT 2026 - Logos…» en Descargas (o la que
+arrastres), reconoce las subcarpetas organizadores / socio cultural / patrocinadores, convierte PDF a PNG y copia
+todo a `Documentos/Umbral/logos/`:
 
 | Carpeta | Orden | Tiempo por página (por defecto) |
 | --- | --- | --- |
