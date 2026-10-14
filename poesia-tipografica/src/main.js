@@ -7,6 +7,7 @@
 //    ?bloom=0.55  ?grain=0.055  ?dpr=1.5
 //    ?debug          abre el panel de calibración al inicio
 // ─────────────────────────────────────────────────────────────────────────────
+import { frameRect, setFormat, DEFAULT_FORMAT } from './frame.js'; // primero: fija el cuadro de salida
 import '@fontsource/cormorant-garamond/500.css';
 import '@fontsource/ibm-plex-mono/400.css';
 // Manual de marca FLAT: Geist Mono (títulos y destacados) y Roboto (texto). Empaquetadas: funcionan sin internet.
@@ -47,7 +48,8 @@ async function boot() {
   const stage = document.getElementById('stage');
   const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false, powerPreference: 'high-performance', stencil: false });
   renderer.setPixelRatio(CONFIG.dpr);
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  const fr0 = frameRect();
+  renderer.setSize(fr0.w, fr0.h);
   renderer.setClearColor(0x000000, 1);
   renderer.toneMapping = THREE.NoToneMapping;
   stage.appendChild(renderer.domElement);
@@ -55,7 +57,7 @@ async function boot() {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000000);
   const fov = 30;
-  const camera = new THREE.PerspectiveCamera(fov, window.innerWidth / window.innerHeight, 10, 8000);
+  const camera = new THREE.PerspectiveCamera(fov, fr0.w / fr0.h, 10, 8000);
   const camDist = CONFIG.worldH / 2 / Math.tan(THREE.MathUtils.degToRad(fov / 2));
   camera.position.set(0, 0, camDist);
 
@@ -120,14 +122,17 @@ async function boot() {
     if (dir.modo_visual === 'simbolico' && raw.source !== 'forzar-simbolico') dir = { ...dir, modo_visual: 'hibrido' };
     if ((settings.imagenes || 'grilla') === 'grilla') {
       // ilustración en grilla de texto: compuesta con las palabras del muro (positivo o negativo)
-      let grid = dir.grilla, origen = 'grilla del LLM';
+      let grid = dir.grilla, origen = raw.grilla_origen === 'reintento' ? 'grilla del LLM (2.º intento)' : 'grilla del LLM';
       if (!grid) {
-        const fig = (dir.svg_paths?.length && sampleFigure(dir.svg_paths.map((d) => ({ d, op: 'fill' })), {})) || sampleFigure(SHAPES[dir.figura] || SHAPES.luna, {});
+        const svg = dir.svg_paths?.length && sampleFigure(dir.svg_paths.map((d) => ({ d, op: 'fill' })), {});
+        const fig = svg || sampleFigure(SHAPES[dir.figura] || SHAPES.luna, {});
         grid = fig ? maskToGrid(fig) : null;
-        origen = 'biblioteca → grilla';
+        origen = svg ? 'silueta SVG del LLM → grilla' : `biblioteca (${SHAPES[dir.figura] ? dir.figura : 'luna'}) → grilla`;
       }
       const pol = choosePolarity(dir);
+      lastGrid = grid ? { grid, origen, pol } : null;
       field.releaseFigure(true);
+      field.setBackdrop(true); // la ilustración se cala en el muro: tiene que estar visible
       field.refillSecs = (settings.cadencia && settings.cadencia.min_s) || 14;
       field.setShape(grid, { polaridad: pol, duracion: Math.max(8, +dir.duracion_s || 16) });
       config.setLastDirection({ ...dir, origen: `${origen} · ${pol}`, pidio: 'grilla', estiloVisto: 'grilla' });
@@ -154,6 +159,7 @@ async function boot() {
 
   // polaridad de la grilla: fija (positivo / negativo), alternada, o la que elija el LLM
   let polFlip = false;
+  let lastGrid = null; // última grilla aplicada (para mostrarla en el panel C)
   function choosePolarity(dir) {
     const p = settings.polaridad || 'alternar';
     if (p === 'positivo' || p === 'negativo') return p;
@@ -223,6 +229,7 @@ async function boot() {
   let saveTimer = 0;
   let brandFontLoaded = '';
   function applyLiveSettings() {
+    setFormat(settings.formato || DEFAULT_FORMAT);
     field.wallMode = (settings.muro?.tipo || 'grilla') === 'grilla';
     field.brandAll = settings.marca?.global === true;
     field.brandUpper = field.brandAll && settings.marca?.mayusculas !== false;
@@ -335,8 +342,10 @@ async function boot() {
     },
     key_status: (m) => config.setKeyStatus(m),
     grid_test: (m) => {
-      config.setGridTest(m);
-      if (m.ok && m.direction) applyDirection({ ...m.direction, verso: m.text }); // verla también en la pared
+      lastGrid = null;
+      // verla también en la pared: si la grilla del LLM falló, se usa su silueta SVG o la biblioteca
+      if (m.direction) applyDirection({ ...m.direction, verso: m.text });
+      config.setGridTest({ ...m, usada: lastGrid });
     },
     cadence: (m) => config.setCadence(m),
     status: (m) => {
@@ -360,8 +369,8 @@ async function boot() {
     verse_discard: (m) => field.discardLine(m.item_id || 'voz'),
     art_direction: (m) => {
       const d = m.data || m;
-      // las direcciones del simulador siempre se aplican; las de la voz sólo grabando en modo poema
-      if (d.source === 'debug' || (show.recording && show.mode === 'poema')) applyDirection(d);
+      // las direcciones del simulador siempre se aplican; las de la voz, grabando (poema o palabras)
+      if (d.source === 'debug' || show.recording) applyDirection(d);
     },
   });
 
@@ -433,7 +442,7 @@ async function boot() {
     await wait(350);
     if (token !== sim.token) return;
     onCompleted(itemId, text, true);
-    if (show.mode === 'poema') requestDirection(text, itemId);
+    requestDirection(text, itemId);
   }
 
   async function simulatePoem(lines) {
@@ -506,7 +515,7 @@ async function boot() {
   showCursor();
 
   function onResize() {
-    const w = window.innerWidth, h = window.innerHeight;
+    const { w, h } = frameRect();
     renderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
@@ -577,7 +586,7 @@ async function boot() {
   function applyQuality() {
     const q = QUALITY[quality];
     renderer.setPixelRatio(CONFIG.dpr * q.dpr);
-    fx.setSize(window.innerWidth, window.innerHeight);
+    fx.setSize(frameRect().w, frameRect().h);
     cloud.points.geometry.setDrawRange(0, Math.round(CONFIG.points * q.points));
     cloud.resize(field.W, field.H, renderer.domElement.height, fov, camDist);
   }

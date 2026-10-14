@@ -120,6 +120,7 @@ export class TypeField {
     this.wordBufs = new Map();
     // muro de palabras (modo T): grilla monoespaciada estricta
     this.wallMode = true;
+    this.wordsToBackdrop = false; // modo palabras: lo dicho se escribe en el telón (donde se calan las ilustraciones)
     // marca aplicada a todo (tipografía y mayúsculas del manual)
     this.brandAll = false;
     this.brandUpper = false;
@@ -236,7 +237,7 @@ export class TypeField {
     this.H = worldH;
     this.W = worldH * aspect;
     this.lineSize = clamp(this.H * 0.05, 34, 70);
-    this.lineY = -this.H * 0.385;
+    this.lineY = -this.lineSize * 0.5; // centrada: el muro le abre un hueco (ver _bdHoles)
     this.lineMaxW = this.W * 0.78;
     this.colW = this.W / RAIN_COLS;
     this.gridCols = Math.ceil(this.W / GRID_CELL) + 2;
@@ -249,6 +250,7 @@ export class TypeField {
     this.gVy = new Float32Array(cells);
     this._recomputeFloor();
     if (this.line) this._layoutLine();
+    if (this.backdrop) this._bdClear(); // cambio de formato: el telón se rearma a la medida nueva
   }
 
   // ════════════════════════════════════════════════════════════════════════
@@ -430,6 +432,10 @@ export class TypeField {
     if (!line) return;
     const S = this.lineSize;
     const rows = line.rows;
+    let maxW = 0;
+    for (const row of rows) maxW = Math.max(maxW, row.reduce((a, e) => a + e.adv, 0));
+    const pad = S * 0.6;
+    line.rect = { x0: -maxW / 2 - pad, x1: maxW / 2 + pad, y0: this.lineY - S * 0.5 - pad, y1: this.lineY + (rows.length - 0.5) * S * 0.98 + pad };
     for (let r = 0; r < rows.length; r++) {
       const row = rows[r];
       let width = 0;
@@ -815,8 +821,7 @@ export class TypeField {
     this._unrest(i);
     this.keepFall[i] = 0;
     if (mode === RAIN) {
-      // con telón, la lluvia ambiente cae sólo en la franja libre (izquierda), como letras sueltas
-      this.px[i] = this.backdropOn ? -W / 2 + Math.random() * W * 0.28 : (Math.random() - 0.5) * W * 1.02;
+      this.px[i] = (Math.random() - 0.5) * W * 1.02;
       this.py[i] = H / 2 + 20 + Math.random() * H * 0.3;
       this.vx[i] = 0;
       this.vy[i] = -40;
@@ -1256,13 +1261,14 @@ export class TypeField {
 
   _bdBuild() {
     const rowsN = Math.round(clamp(this.bdRows, 10, 60));
-    const top = this.H * 0.47, bottom = -this.H * 0.3;
+    // centrado en el cuadro: mismo margen arriba/abajo y a los lados
+    const top = this.H * 0.45, bottom = -this.H * 0.45;
     const rh = (top - bottom) / rowsN;
     const size = rh * 1.12;
     const kind = this._k('mono');
     const cw = this.atlas.adv(this.atlas.slot('M', kind)) * size;
-    const x0 = -this.W * 0.2, x1 = this.W * 0.49;
-    const colsN = Math.max(8, Math.floor((x1 - x0) / cw));
+    const colsN = Math.max(8, Math.floor((this.W * 0.94) / cw));
+    const x0 = -(colsN * cw) / 2, x1 = (colsN * cw) / 2;
     const cells = [];
     for (let r = 0; r < rowsN; r++) {
       for (let c = 0; c < colsN; c++) cells.push({ x: x0 + (c + 0.5) * cw, y: top - (r + 0.5) * rh, ch: ' ', i: -1, at: 0 });
@@ -1343,6 +1349,30 @@ export class TypeField {
     }
   }
 
+  /** Escribe la palabra recién dicha en el telón, a continuación de la anterior (cada letra cambia con un salto). */
+  _bdWrite(word) {
+    if (!this.backdrop) this._bdBuild();
+    const B = this.backdrop, t = this.time;
+    const chars = [...this._u(word + ' ')];
+    let k = B.wc || 0;
+    if (k % B.colsN + chars.length > B.colsN) k = (Math.floor(k / B.colsN) + 1) * B.colsN; // no partir palabras
+    for (const ch of chars) {
+      k %= B.cells.length;
+      const c = B.cells[k++];
+      c.ch = ch;
+      if (c.i < 0) continue;
+      if (ch === ' ') this._bdDrop(c, t, false);
+      else {
+        this.slot[c.i] = this.atlas.slot(ch, B.kind);
+        this.birth[c.i] = t; // destello
+        this.talpha[c.i] = 1;
+      }
+    }
+    B.wc = k % B.cells.length;
+    this.onTransition?.(0.15);
+    this.metaDirty = true;
+  }
+
   _bdPlace(c, t) {
     const B = this.backdrop;
     const i = this._allocParticle(false);
@@ -1395,6 +1425,7 @@ export class TypeField {
   _bdHoles() {
     const H = this.backdropHoles.slice();
     if (this.title?.rect) H.push(this.title.rect);
+    if (this.line?.rect) H.push(this.line.rect); // la transcripción en vivo se lee sobre negro
     if (this.figure) H.push(this.figure);
     return H;
   }
@@ -1427,6 +1458,7 @@ export class TypeField {
 
   /** Disuelve todo lo compuesto (verso, figura, título, palabras) de vuelta al campo. */
   clearScene() {
+    this.backdropHoles = [];
     if (this.line) {
       const old = this.line;
       this.line = null;
@@ -1440,7 +1472,7 @@ export class TypeField {
   }
 
   /** Nombre de artista (o cualquier título) compuesto con letras que vuelan desde el campo. */
-  showTitle(text, { cy = 0.03, maxSize = 0.13 } = {}) {
+  showTitle(text, { cy = 0, maxSize = 0.13 } = {}) {
     this.clearTitle();
     const words = this._u(String(text || '')).trim().split(/\s+/).filter(Boolean);
     if (!words.length) return;
@@ -1686,6 +1718,10 @@ export class TypeField {
   placeWord(raw) {
     const word = String(raw).replace(/^[^\p{L}\p{N}¿¡]+|[^\p{L}\p{N}?!]+$/gu, '');
     if (!word) return;
+    if (this.wordsToBackdrop && this.backdropOn) {
+      this._bdWrite(word);
+      return;
+    }
     if (this.wallMode) {
       const big = this.keywords.has(normalizeWord(word)) || this.rms > 0.55 || (word.length >= 9 && Math.random() < 0.3);
       this._placeWallWord(word, big);

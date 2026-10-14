@@ -16,12 +16,14 @@ body.hide-cursor * {
   cursor: none !important;
 }
 
+/* formato de salida (src/frame.js): todas las capas ocupan el mismo cuadro centrado */
 #stage,
 #stage canvas {
   position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  left: var(--fx, 0);
+  top: var(--fy, 0);
+  width: var(--fw, 100%);
+  height: var(--fh, 100%);
   display: block;
   background: #000;
 }
@@ -152,7 +154,10 @@ body.hide-cursor * {
 /* ── Logo / imagen del loop ───────────────────────────────────────── */
 #overlay {
   position: fixed;
-  inset: 0;
+  left: var(--fx, 0);
+  top: var(--fy, 0);
+  width: var(--fw, 100%);
+  height: var(--fh, 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -165,8 +170,8 @@ body.hide-cursor * {
   opacity: 1;
 }
 #overlay img {
-  max-width: 62vw;
-  max-height: 58vh;
+  max-width: calc(var(--fw, 100vw) * 0.62);
+  max-height: calc(var(--fh, 100vh) * 0.58);
   object-fit: contain;
 }
 
@@ -380,7 +385,10 @@ body.hide-cursor * {
 /* ── Grilla de logos del loop ─────────────────────────────────────── */
 #logos {
   position: fixed;
-  inset: 0;
+  left: var(--fx, 0);
+  top: var(--fy, 0);
+  width: var(--fw, 100%);
+  height: var(--fh, 100%);
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.9s ease;
@@ -465,9 +473,10 @@ body.hide-cursor * {
 }
 #logostage {
   position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  left: var(--fx, 0);
+  top: var(--fy, 0);
+  width: var(--fw, 100%);
+  height: var(--fh, 100%);
   pointer-events: none;
   z-index: 2;
   opacity: 0;

@@ -226,7 +226,7 @@ class SettingsStore:
 
     KEYS = ("device", "artists", "loop", "prompt_estetica", "avisos", "pointcloud", "profundidad", "nube", "orbita",
             "curaduria", "imagenes", "prompt_grilla", "polaridad", "director", "cadencia", "estilos", "glitch_ambiente", "ascii_filas",
-            "marca", "muro")
+            "marca", "muro", "formato")
 
     def __init__(self, path: str) -> None:
         self.path = path
@@ -323,6 +323,45 @@ def _resolve_logo_folder(folder: str) -> str:
                 found.append(full)
     with_images = [f for f in found if _has_images(f)]
     return (with_images or found or [""])[0]
+
+
+FLAT_LOGO_URL = "https://centroeesonoros.org/wp-content/uploads/2026/08/FLAT-Logo-web-2-e1785969706315.png"
+
+
+def ensure_flat_logo() -> str:
+    """Si no hay logo de FLAT, lo toma de Descargas (FLAT-Logo*.png) o lo baja de la web a Documentos/Umbral/logos/flat."""
+    if _has_images(_resolve_logo_folder("logos/flat") or ""):
+        return "ya estaba"
+    dest_dir = os.path.join(USER_DIR, "logos", "flat")
+    os.makedirs(dest_dir, exist_ok=True)
+    home = os.path.expanduser("~")
+    cands = []
+    for d in ("Downloads", "Descargas", "Desktop", "Escritorio"):
+        folder = os.path.join(home, d)
+        if not os.path.isdir(folder):
+            continue
+        for name in os.listdir(folder):
+            n = name.lower()
+            if n.startswith("flat") and "logo" in n and os.path.splitext(n)[1] in LOGO_EXT:
+                cands.append(os.path.join(folder, name))
+    if cands:
+        src = max(cands, key=os.path.getmtime)
+        import shutil
+        shutil.copy2(src, os.path.join(dest_dir, os.path.basename(src)))
+        log.info("Logo de FLAT copiado de %s", src)
+        return f"copiado de {src}"
+    try:
+        r = httpx.get(FLAT_LOGO_URL, timeout=12, follow_redirects=True)
+        r.raise_for_status()
+        if not r.content.startswith(b"\x89PNG"):
+            raise RuntimeError("la respuesta no es un PNG")
+        with open(os.path.join(dest_dir, "FLAT-Logo.png"), "wb") as fh:
+            fh.write(r.content)
+        log.info("Logo de FLAT descargado de la web")
+        return "descargado"
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Sin logo de FLAT (ponlo en %s): %s", dest_dir, exc)
+        return f"falta: {exc}"
 
 
 def read_logo_folder(folder: str) -> list[dict[str, str]]:
@@ -1032,8 +1071,9 @@ IMAGES_LIBRARY = f"""Imágenes CURADAS: cada estrofa produce una imagen (modo_vi
 # compone con las palabras dichas, en positivo (la figura hecha de palabras) o en negativo (hueco en el muro).
 GRID_W, GRID_H = 48, 26
 IMAGES_GRID = f"""Imágenes en GRILLA DE TEXTO: cada estrofa DEBE producir una imagen. modo_visual es "concreto" o "hibrido".
-Deja svg_paths como []. Agrega la clave "grilla": una lista de EXACTAMENTE {GRID_H} cadenas de EXACTAMENTE {GRID_W}
-caracteres cada una, usando SOLO "#" (figura) y "." (fondo). Cada carácter es una celda el doble de alta que ancha:
+Agrega la clave "grilla": una lista de EXACTAMENTE {GRID_H} cadenas de EXACTAMENTE {GRID_W}
+caracteres cada una, usando SOLO "#" (figura) y "." (fondo). Además, en svg_paths, 1 a 3 paths cerrados que dibujen la
+MISMA silueta rellena (respaldo si la grilla falla; 40 comandos como máximo en total). Cada carácter es una celda el doble de alta que ancha:
 dibuja la figura más ancha de lo que parece en texto para que no quede estirada. Una sola silueta, rellena (no sólo el
 contorno), sin texto ni letras dentro de la grilla. En "figura" escribe el concepto dibujado."""
 GRID_POLARITY = """Agrega la clave "polaridad": "positivo" (la figura queda hecha de palabras sobre negro) o "negativo"
@@ -1226,25 +1266,78 @@ def heuristic_direction(text: str, last_modes: list[str]) -> dict[str, Any]:
     }
 
 
-def clean_grid(raw: Any) -> list[str] | None:
-    """Normaliza la grilla del modelo a GRID_H × GRID_W de '#'/'.'; descarta si está vacía o casi llena."""
+GRID_BG = set(" .·-_,'`0~:")
+
+
+def _grid_rows(raw: Any) -> list[str] | None:
+    """Acepta lo que devuelva el modelo: lista de cadenas, cadena con saltos, lista de listas o {"filas": [...]}."""
+    if isinstance(raw, dict):
+        raw = next((raw[k] for k in ("filas", "rows", "grilla", "grid", "lineas") if k in raw), None)
     if isinstance(raw, str):
-        raw = raw.splitlines()
-    if not isinstance(raw, list):
+        raw = raw.strip("\n").splitlines()
+    if not isinstance(raw, list) or not raw:
         return None
-    rows = [str(r) for r in raw if isinstance(r, (str, int))][: GRID_H + 4]
-    rows = [r for r in rows if r.strip()] if len(rows) > GRID_H else rows
-    full = set("#@X█▓▒1*%&")
+    rows = []
+    for r in raw:
+        if isinstance(r, list):
+            r = "".join(str(x)[:1] if str(x) else " " for x in r)
+        elif not isinstance(r, (str, int)):
+            continue
+        r = str(r).rstrip("\r")
+        if r.strip().startswith("```"):
+            continue
+        rows.append(r)
+    while rows and not rows[0].strip(" ."):  # filas vacías de los bordes: se recentra después
+        rows.pop(0)
+    while rows and not rows[-1].strip(" ."):
+        rows.pop()
+    return rows or None
+
+
+def check_grid(raw: Any) -> tuple[list[str] | None, str]:
+    """Normaliza la grilla del modelo a GRID_H × GRID_W de '#'/'.'. Devuelve (grilla, motivo si no sirve)."""
+    if raw is None or raw == "" or raw == []:
+        return None, "el modelo no devolvió «grilla»"
+    rows = _grid_rows(raw)
+    if not rows:
+        if isinstance(raw, (list, str)):
+            return None, "la grilla vino vacía"
+        return None, f"formato de grilla no reconocido ({type(raw).__name__})"
+    bits = [[0 if ch in GRID_BG else 1 for ch in r] for r in rows]
+    h, w = len(bits), max(len(r) for r in bits)
+    bits = [r + [0] * (w - len(r)) for r in bits]
+    total = sum(map(sum, bits))
+    if total and total / (w * h) > 0.85:  # el modelo invirtió figura y fondo
+        bits = [[1 - v for v in r] for r in bits]
+    # recortar a la figura y encajarla centrada (~80 % del alto o 90 % del ancho), sin deformar
+    ys = [y for y, r in enumerate(bits) if any(r)]
+    xs = [x for x in range(w) if any(bits[y][x] for y in range(h))]
+    if not ys:
+        return None, "la grilla vino vacía"
+    y0, y1, x0, x1 = ys[0], ys[-1] + 1, xs[0], xs[-1] + 1
+    bh, bw = y1 - y0, x1 - x0
+    sc = min(GRID_H * 0.8 / bh, GRID_W * 0.9 / bw)
+    sc = max(0.25, min(sc, 4.0))
+    oh, ow = max(1, round(bh * sc)), max(1, round(bw * sc))
+    oy, ox = (GRID_H - oh) // 2, (GRID_W - ow) // 2
     out = []
-    for r in rows[:GRID_H]:
-        line = "".join("#" if ch in full else "." for ch in r[:GRID_W])
-        out.append(line.ljust(GRID_W, "."))
-    if len(out) < GRID_H * 0.6:
-        return None
-    pad = GRID_H - len(out)
-    out = ["." * GRID_W] * (pad // 2) + out + ["." * GRID_W] * (pad - pad // 2)
+    for gy in range(GRID_H):
+        line = []
+        for gx in range(GRID_W):
+            ly, lx = gy - oy, gx - ox
+            on = 0 <= ly < oh and 0 <= lx < ow and bits[y0 + min(bh - 1, int(ly / sc))][x0 + min(bw - 1, int(lx / sc))]
+            line.append("#" if on else ".")
+        out.append("".join(line))
     filled = sum(r.count("#") for r in out) / (GRID_W * GRID_H)
-    return out if 0.03 <= filled <= 0.85 else None
+    if filled < 0.03:
+        return None, f"figura demasiado chica ({filled:.0%} de la grilla)"
+    if filled > 0.9:
+        return None, f"grilla casi llena ({filled:.0%}): sin figura reconocible"
+    return out, ""
+
+
+def clean_grid(raw: Any) -> list[str] | None:
+    return check_grid(raw)[0]
 
 
 def sanitize_direction(raw: Any, text: str, last_modes: list[str]) -> dict[str, Any]:
@@ -1268,9 +1361,12 @@ def sanitize_direction(raw: Any, text: str, last_modes: list[str]) -> dict[str, 
     elif fig_raw:
         # imágenes en vivo: nombre libre; la biblioteca de respaldo usa la heurística si el dibujo falla
         out["figura_libre"] = re.sub(r"[^\w\s-]", "", fig_raw, flags=re.UNICODE)[:32]
-    grid = clean_grid(raw.get("grilla"))
-    if grid:
-        out["grilla"] = grid
+    if "grilla" in raw or "grid" in raw:
+        grid, why = check_grid(raw.get("grilla", raw.get("grid")))
+        if grid:
+            out["grilla"] = grid
+        else:
+            out["grilla_problema"] = why
     pol = strip_accents(str(raw.get("polaridad", "")).lower().strip())
     if pol in ("positivo", "negativo"):
         out["polaridad"] = pol
@@ -1497,32 +1593,35 @@ class ArtDirector:
         return mode if mode in ("biblioteca", "llm", "grilla") else "grilla"
 
     def _max_tokens(self) -> int:
-        return 700 if self._images_mode() == "biblioteca" else 1600  # dibujar SVG necesita más salida
+        return 700 if self._images_mode() == "biblioteca" else 2600  # dibujar SVG necesita más salida
 
-    async def _ollama(self, text: str) -> Any:
+    async def _ollama(self, text: str, messages: list[dict[str, str]] | None = None,
+                      max_tokens: int | None = None) -> Any:
         assert self.http is not None
         r = await self.http.post(self.cfg.ollama_url, json={
-            "model": self.cfg.ollama_model, "messages": self._messages(text), "format": "json",
+            "model": self.cfg.ollama_model, "messages": messages or self._messages(text), "format": "json",
             "stream": False, "keep_alive": self.cfg.ollama_keep_alive,
-            "options": {"temperature": self.cfg.llm_temperature, "num_predict": self._max_tokens()},
+            "options": {"temperature": self.cfg.llm_temperature, "num_predict": max_tokens or self._max_tokens()},
         })
         r.raise_for_status()
         return extract_json(r.json()["message"]["content"])
 
-    async def _deepseek(self, text: str) -> Any:
+    async def _deepseek(self, text: str, messages: list[dict[str, str]] | None = None,
+                        max_tokens: int | None = None) -> Any:
         assert self.http is not None
         if not self.cfg.deepseek_key:
             raise RuntimeError("DEEPSEEK_API_KEY vacío")
         r = await self.http.post(f"{self.cfg.deepseek_base_url}/chat/completions", headers={
             "Authorization": f"Bearer {self.cfg.deepseek_key}"}, json={
-            "model": self.cfg.deepseek_model, "messages": self._messages(text),
+            "model": self.cfg.deepseek_model, "messages": messages or self._messages(text),
             "response_format": {"type": "json_object"}, "temperature": self.cfg.llm_temperature,
-            "max_tokens": self._max_tokens(), "stream": False,
+            "max_tokens": max_tokens or self._max_tokens(), "stream": False,
         })
         r.raise_for_status()
         return extract_json(r.json()["choices"][0]["message"]["content"])
 
-    async def _openai(self, text: str) -> Any:
+    async def _openai(self, text: str, messages: list[dict[str, str]] | None = None,
+                      max_tokens: int | None = None) -> Any:
         """Director con la misma clave de OpenAI (rápido: recomendado para imágenes en vivo)."""
         assert self.http is not None
         if not self.cfg.openai_api_key:
@@ -1532,8 +1631,8 @@ class ArtDirector:
         for model in models:
             r = await self.http.post("https://api.openai.com/v1/chat/completions", headers={
                 "Authorization": f"Bearer {self.cfg.openai_api_key}"}, json={
-                "model": model, "messages": self._messages(text), "response_format": {"type": "json_object"},
-                "temperature": self.cfg.llm_temperature, "max_tokens": self._max_tokens(),
+                "model": model, "messages": messages or self._messages(text), "response_format": {"type": "json_object"},
+                "temperature": self.cfg.llm_temperature, "max_tokens": max_tokens or self._max_tokens(),
             })
             if r.status_code in (400, 404) and "model" in r.text:
                 last = RuntimeError(f"modelo {model} no disponible")
@@ -1560,12 +1659,38 @@ class ArtDirector:
                 raw = await fn(text)
                 if self.hub.status.get("llm") != name:
                     self.hub.set_status(llm=name)
-                return self._always_image(sanitize_direction(raw, text, list(self.modes))), name
+                direction = sanitize_direction(raw, text, list(self.modes))
+                if self._images_mode() == "grilla" and not direction.get("grilla"):
+                    direction.setdefault("grilla_problema", "el modelo no devolvió «grilla»")
+                    await self._retry_grid(fn, direction, text)
+                return self._always_image(direction), name
             except Exception as exc:
                 log.warning("LLM %s falló: %s", name, exc)
         if self.hub.status.get("llm") != "heuristic":
             self.hub.set_status(llm="heuristic")
         return self._always_image(heuristic_direction(text, list(self.modes))), "heuristic"
+
+    async def _retry_grid(self, fn: Callable[..., Awaitable[Any]], direction: dict[str, Any], text: str) -> None:
+        """Segundo intento, sólo la grilla: pedido corto y enfocado (a menor resolución, que el modelo dibuja mejor)."""
+        concept = direction.get("figura_libre") or direction.get("figura") or "luna"
+        st = self.settings or {}
+        aesthetic = (st.get("prompt_grilla") or "").strip() or DEFAULT_GRID_AESTHETIC
+        w, h = GRID_W // 2, GRID_H // 2
+        system = (f"Dibujas siluetas como arte ASCII. Responde SOLO con JSON: {{\"grilla\": [{h} cadenas de {w} "
+                  f"caracteres]}} usando \"#\" para la figura y \".\" para el fondo. Cada carácter es una celda el doble "
+                  f"de alta que ancha. Una sola silueta maciza, centrada, reconocible.\nEstética:\n{aesthetic}")
+        user = f"Dibuja: «{concept}» (nace de estos versos: «{text[:300]}»)."
+        try:
+            raw = await fn(text, [{"role": "system", "content": system}, {"role": "user", "content": user}], 900)
+            grid, why = check_grid(raw if isinstance(raw, dict) else {"grilla": raw})
+        except Exception as exc:  # noqa: BLE001
+            grid, why = None, f"reintento falló: {exc}"
+        if grid:
+            direction["grilla"] = grid
+            direction["grilla_origen"] = "reintento"
+            direction.pop("grilla_problema", None)
+        else:
+            direction["grilla_problema"] = f"{direction.get('grilla_problema')}; reintento: {why}"
 
     @staticmethod
     def _always_image(direction: dict[str, Any]) -> dict[str, Any]:
@@ -1583,6 +1708,7 @@ async def main_async(args: argparse.Namespace) -> None:
     cfg = Config.from_env()
     loop = asyncio.get_running_loop()
     ensure_user_dir()
+    await asyncio.to_thread(ensure_flat_logo)
     settings_path = args.settings or os.path.join(USER_DIR, "ajustes.json")
     legacy = os.path.join(BASE_DIR, "settings.local.json")
     if not args.settings and not os.path.exists(settings_path) and os.path.exists(legacy):
@@ -1683,6 +1809,7 @@ async def main_async(args: argparse.Namespace) -> None:
                 await hub.reply(ws, "grid_test", ok=False, error=str(exc))
                 return
             await hub.reply(ws, "grid_test", ok=bool(direction.get("grilla")), provider=provider, text=text,
+                            problema=direction.get("grilla_problema", ""),
                             ms=int((time.perf_counter() - t0) * 1000), direction=direction)
         elif kind == "get_settings":
             await hub.reply(ws, "settings", settings=settings.data, default_prompt=DEFAULT_AESTHETIC,
@@ -1712,6 +1839,9 @@ async def run_check() -> None:
     cfg = Config.from_env()
     ok = True
     print("\n== Poesía Tipográfica · diagnóstico ==\n")
+    ensure_user_dir()
+    flat = ensure_flat_logo()
+    print(f"{'✗' if flat.startswith('falta') else '✓'} Logo de FLAT: {flat}")
 
     # ── OpenAI ──
     key = cfg.openai_api_key
@@ -1774,6 +1904,8 @@ async def run_check() -> None:
         if d.get("grilla"):
             dibujo = f"grilla de texto «{d.get('figura_libre') or d.get('figura')}»"
             print("\n".join("    " + r for r in d["grilla"]))
+        elif d.get("grilla_problema"):
+            print(f"  ⚠ la grilla del LLM no sirvió: {d['grilla_problema']}")
         mark = "✓" if prov != "heuristic" else "⚠"
         print(f"{mark} Director de arte: {prov} · {ms / 1000:.1f} s · {d['modo_visual']} · {dibujo}")
         if prov == "heuristic":

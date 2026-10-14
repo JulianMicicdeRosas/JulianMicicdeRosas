@@ -121,6 +121,19 @@ Producción: `start_instalacion.bat` compila el frontend, abre el backend minimi
   anclados a la luz: un píxel negro sale exactamente negro, el rectángulo del proyector desaparece.
 - GPU: con una gráfica dedicada se sostienen 60 FPS con 12 000–15 000 glifos. En integradas, `?pool=8000&dpr=1`.
 
+## Formato de salida
+
+Panel C → **Formato de salida**: 1822 × 737 (por defecto, la pantalla del FLAT), 1920 × 1080, pantalla completa u
+otro («ancho x alto»). Con formato fijo todo se compone para esa proporción y se centra en la ventana; lo que sobra
+queda negro. El muro de palabras, el título, los nombres y la transcripción quedan centrados en el cuadro.
+
+## Si la grilla de texto falla
+
+«Probar» (panel C → Grilla de texto) muestra por qué no sirvió la grilla del modelo (vacía, casi llena, formato raro…).
+El servidor la limpia (acepta otros caracteres, la recentra y la escala) y, si igual falla, hace un segundo pedido
+corto sólo de la grilla. Si eso también falla, se usa la silueta SVG que el modelo manda de respaldo, y si no hay,
+la figura de la biblioteca. En modo palabras (T) las ilustraciones también se calan en el muro.
+
 ## Operación de la noche
 
 ```
@@ -205,7 +218,7 @@ todo a `Documentos/Umbral/logos/`:
 
 | Carpeta | Orden | Tiempo por página (por defecto) |
 | --- | --- | --- |
-| `flat` | abre el loop (de a uno, grande) | 10 s · si está vacía se escribe «FLAT» |
+| `flat` | abre el loop: logo al centro, rodeado por el muro de palabras | 10 s · al arrancar, si está vacía, se copia `FLAT-Logo*.png` de Descargas (o se baja de la web) |
 | `organizadores` | 1º | 8 s |
 | `socio-cultural` (también vale «socio cultural») | 2º | 16 s |
 | `patrocinadores` | 3º | 8 s |

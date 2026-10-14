@@ -1,3 +1,4 @@
+import { frameRect } from './frame.js';
 // ─────────────────────────────────────────────────────────────────────────────
 //  logos.js — Paso de loop «logos»: cualquier cantidad de logos en una grilla
 //  que se adapta sola.
@@ -170,8 +171,9 @@ export class LogoStage {
 
   resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.canvas.width = Math.round(window.innerWidth * dpr);
-    this.canvas.height = Math.round(window.innerHeight * dpr);
+    const r = frameRect();
+    this.canvas.width = Math.round(r.w * dpr);
+    this.canvas.height = Math.round(r.h * dpr);
   }
 
   _render(page) {
@@ -180,7 +182,8 @@ export class LogoStage {
     buf.width = W;
     buf.height = H;
     const g = buf.getContext('2d');
-    const aw = W * 0.8, ah = H * 0.62;
+    const A = this.area || { w: 0.8, h: 0.62 }; // fracción del cuadro que ocupan los logos
+    const aw = W * A.w, ah = H * A.h;
     const rects = layoutLogos(page.map((c) => c.width / c.height), aw, ah);
     page.forEach((c, i) => g.drawImage(c, (W - aw) / 2 + rects[i].x, (H - ah) / 2 + rects[i].y, rects[i].w, rects[i].h));
     return buf;
@@ -206,8 +209,9 @@ export class LogoStage {
   }
 
   /** Muestra una página de logos; si había otra, transición glitch. */
-  show(page, { duration = 0.75, intensity = 1 } = {}) {
+  show(page, { duration = 0.75, intensity = 1, area = null } = {}) {
     this.page = page;
+    this.area = area;
     const next = this._render(page);
     const prev = this.cur;
     this.cur = next;

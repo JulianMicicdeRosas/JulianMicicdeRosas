@@ -191,6 +191,20 @@ export class ConfigPanel {
         <button data-act="add-step">+ Agregar paso</button>
       </section>
       <section>
+        <h2>Formato de salida</h2>
+        <p class="hint">Tamaño del cuadro proyectado. Con un formato fijo la imagen se compone para esa proporción y se
+        centra en la ventana (lo que sobra queda negro). Escribe otro como «ancho x alto».</p>
+        <div class="row">
+          <select data-formato>
+            <option value="1822x737">1822 × 737 (FLAT)</option>
+            <option value="1920x1080">1920 × 1080</option>
+            <option value="pantalla">Pantalla completa</option>
+            <option value="otro">Otro…</option>
+          </select>
+          <input data-formato-otro type="text" placeholder="ancho x alto" style="width:9em">
+        </div>
+      </section>
+      <section>
         <h2>Grilla de texto</h2>
         <p class="hint">La ilustración es texto: el modelo devuelve una grilla de 48×26 («#» figura, «.» fondo) y el muro
         de palabras la compone. <b>Positivo</b>: la figura hecha de palabras sobre negro. <b>Negativo</b>: la figura es
@@ -292,6 +306,12 @@ export class ConfigPanel {
     if (document.activeElement !== cur) cur.value = s.curaduria || '';
     for (const r of this.el.querySelectorAll('input[data-sopt="imagenes"]')) r.checked = r.value === (s.imagenes || 'grilla');
     this.$('select[data-sopt="polaridad"]').value = s.polaridad || 'alternar';
+    const fmt = s.formato || '1822x737';
+    const fsel = this.$('select[data-formato]');
+    fsel.value = [...fsel.options].some((o) => o.value === fmt) ? fmt : 'otro';
+    const fo = this.$('[data-formato-otro]');
+    if (document.activeElement !== fo) fo.value = fsel.value === 'otro' ? fmt : '';
+    fo.style.display = fsel.value === 'otro' ? '' : 'none';
     const pg = this.$('[data-prompt-grilla]');
     if (document.activeElement !== pg) pg.value = s.prompt_grilla || this.defaultPromptGrid || '';
     this.$('select[data-sopt="director"]').value = s.director || 'openai';
@@ -390,11 +410,21 @@ export class ConfigPanel {
     const pre = this.$('[data-grid-preview]');
     if (!pre) return;
     const d = m.direction || {};
-    if (!m.ok) {
-      pre.textContent = m.error ? `Error: ${m.error}` : `Sin grilla válida (director: ${m.provider || '?'}). Revisa la clave de OpenAI o el prompt.`;
+    if (m.error) {
+      pre.textContent = `Error: ${m.error}`;
       return;
     }
-    pre.textContent = `${d.figura || ''} · ${m.provider} · ${m.ms} ms${d.polaridad ? ' · ' + d.polaridad : ''}\n\n` + d.grilla.join('\n');
+    const u = m.usada;
+    const head = `${d.figura_libre || d.figura || ''} · director: ${m.provider || '?'}${m.ms ? ` · ${m.ms} ms` : ''}`;
+    if (m.ok) {
+      pre.textContent = `${head} · ${u ? u.origen + ' · ' + u.pol : 'grilla del LLM'}\n\n` + d.grilla.join('\n');
+      return;
+    }
+    const why = m.problema || 'el modelo no devolvió una grilla';
+    const hint = m.provider === 'heuristic' ? '\n(No respondió ningún LLM: revisa la clave de OpenAI con el diagnóstico.)' : '';
+    pre.textContent = u
+      ? `${head}\nLa grilla del LLM no sirvió: ${why}.${hint}\nSe usa respaldo: ${u.origen} · ${u.pol}\n\n${u.grid.join('\n')}`
+      : `${head}\nSin grilla: ${why}.${hint}`;
   }
 
   setDefaultPromptGrid(p) {
@@ -670,6 +700,17 @@ export class ConfigPanel {
         else cad[k] = Math.max(0, +t.value || 0);
         s.cadencia = cad;
       }, k === 'preset');
+      return;
+    }
+    if (t.matches('select[data-formato]')) {
+      if (t.value === 'otro') {
+        this.$('[data-formato-otro]').style.display = '';
+        this.$('[data-formato-otro]').focus();
+      } else this._commit((s) => (s.formato = t.value), false);
+      return;
+    }
+    if (t.matches('[data-formato-otro]')) {
+      if (/^\s*\d{3,5}\s*[x×X*]\s*\d{3,5}\s*$/.test(t.value)) this._commit((s) => (s.formato = t.value.replace(/\s|×|\*/g, 'x').replace(/x+/g, 'x')), false);
       return;
     }
     if (t.dataset.sopt) {

@@ -17,7 +17,7 @@ export const DEFAULT_SETTINGS = {
   // Las carpetas se leen de Documentos/Umbral/logos/… (fuera del programa: no se pierden al actualizar).
   loop: [
     // FLAT es el centro del evento: abre el loop. Si falta el PNG (logos/flat), se escribe «FLAT».
-    { tipo: 'logos', carpeta: 'logos/flat', imagenes: [], render: 'imagen', duracion: 10, por_pagina: 1, de_a_uno: true, monocromo: true, letras: '', alt: 'FLAT', si_vacia: 'texto' },
+    { tipo: 'logos', carpeta: 'logos/flat', imagenes: [], render: 'imagen', duracion: 10, por_pagina: 1, de_a_uno: true, monocromo: true, letras: '', alt: 'FLAT', fondo: true },
     { tipo: 'logos', carpeta: 'logos/organizadores', imagenes: [], render: 'imagen', duracion: 8, por_pagina: 6, de_a_uno: false, monocromo: true, letras: '', alt: 'ORGANIZAN' },
     { tipo: 'logos', carpeta: 'logos/socio-cultural', imagenes: [], render: 'imagen', duracion: 16, por_pagina: 6, de_a_uno: false, monocromo: true, letras: '', alt: 'SOCIO CULTURAL' },
     { tipo: 'logos', carpeta: 'logos/patrocinadores', imagenes: [], render: 'imagen', duracion: 8, por_pagina: 8, de_a_uno: false, monocromo: true, letras: '', alt: 'PATROCINAN' },
@@ -30,6 +30,7 @@ export const DEFAULT_SETTINGS = {
   curaduria: '', // texto curatorial en lenguaje normal (guía principal del director de arte)
   imagenes: 'grilla', // 'grilla' = el LLM devuelve la figura como texto · 'llm' = trazado SVG · 'biblioteca' = curadas
   polaridad: 'alternar', // grilla: positivo | negativo | alternar | llm
+  formato: '1822x737', // salida: 'ANCHOxALTO' (cuadro centrado) o 'pantalla'
   prompt_grilla: '', // parte estética del pedido de la grilla ('' = la de fábrica)
   director: 'openai', // openai | ollama | deepseek
   cadencia: { preset: 'estrofa' },
@@ -104,6 +105,20 @@ export class Show {
     this.settings = { ...structuredClone(DEFAULT_SETTINGS), ...settings };
     this._addNewLogoGroups();
     this._addFlatStep();
+    this._flatLogoCentered();
+  }
+
+  /** FLAT: su logo al centro con el muro de palabras alrededor (ya no la palabra escrita). */
+  _flatLogoCentered() {
+    const loop = this.settings.loop;
+    if (!Array.isArray(loop) || this.settings.loop_flat_v4) return;
+    for (const s of loop) {
+      if (s && s.carpeta === 'logos/flat') {
+        s.fondo = true;
+        delete s.si_vacia;
+      }
+    }
+    this.settings.loop_flat_v4 = true;
   }
 
   /** Loops guardados antes de que FLAT tuviera su paso propio: se le agrega al principio. */
@@ -236,7 +251,8 @@ export class Show {
     this._hideImage(step.tipo === 'logos'); // entre grupos de logos: glitch de logo a logo, sin pasar por negro
     f.clearTitle();
     if (step.tipo === 'logos') {
-      f.setBackdrop(false);
+      f.setBackdrop(!!step.fondo); // fondo: el muro de palabras rodea al logo
+      f.setBackdropHoles([]);
       const total = await this._playLogos(step, token);
       if (total === null && step.si_vacia === 'texto' && token === this.loopToken) {
         this.stage.hide();
@@ -249,6 +265,7 @@ export class Show {
     }
     this.stage.hide();
     f.setBackdrop(true);
+    f.setBackdropHoles([]);
     let kind = step.tipo === 'imagen' ? 'imagen' : 'texto';
     let content = String(step.contenido || '');
     let img = null;
@@ -324,6 +341,16 @@ export class Show {
       }
     }
     f.releaseFigure(true);
+    if (step.fondo && page.length) {
+      // logo chico al centro y un hueco negro en el muro a su medida (con aire alrededor)
+      const area = { w: 0.42, h: 0.4 };
+      const a = page[0].width / page[0].height;
+      const w = Math.min(f.W * area.w, f.H * area.h * a), h = w / a;
+      const pad = f.H * 0.05;
+      f.setBackdropHoles([{ x0: -w / 2 - pad, x1: w / 2 + pad, y0: -h / 2 - pad, y1: h / 2 + pad }]);
+      this.stage.show(page, { area });
+      return;
+    }
     this.stage.show(page); // glitch entre el logo anterior y éste
   }
 
@@ -400,13 +427,15 @@ export class Show {
     }
     if (mode === 'palabras') {
       f.releaseFigure(true);
-      f.setBackdrop(false); // el muro de palabras (grilla) es la imagen
+      f.setBackdrop(true); // lo dicho se escribe en el muro; las ilustraciones se calan en él
+      f.wordsToBackdrop = true;
       f.cursorEnabled = false;
       f.setSceneDensity(0.05);
       f.setPhysics({ modo: 'lluvia_text_rain', intensidad: 0.25, velocidad: 0.3, turbulencia: 0.1, densidad: 0.4 });
     } else {
       f.clearWords();
       f.setBackdrop(true);
+      f.wordsToBackdrop = false;
       f.cursorEnabled = true;
       f.setSceneDensity(0.18);
       f.setPhysics({ modo: 'lluvia_text_rain', intensidad: 0.5, velocidad: 0.45, turbulencia: 0.2, densidad: 0.6 });
