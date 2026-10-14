@@ -9,16 +9,16 @@ cd /d "%~dp0"
 if not exist .env copy .env.example .env >nul
 REM La clave de OpenAI se pega en el panel C del show (tecla C).
 if not exist .venv (
-  py -3 -m venv .venv || goto :error
+  py -3 -m venv .venv || python -m venv .venv || goto :error
   .venv\Scripts\python -m pip install --upgrade pip
-  .venv\Scripts\pip install -r requirements.txt || goto :error
 )
+REM cada arranque: dependencias al día y frontend recompilado (tras actualizar el programa, nada queda viejo)
+.venv\Scripts\pip install -q -r requirements.txt || goto :error
 if not exist node_modules (
   call npm install || goto :error
 )
-if not exist dist (
-  call npm run build || goto :error
-)
+call npm install --no-audit --no-fund >nul 2>&1
+call npm run build || goto :error
 
 start "poesia-backend" /min cmd /k ".venv\Scripts\python server.py"
 start "poesia-frontend" /min cmd /k "npm run preview"

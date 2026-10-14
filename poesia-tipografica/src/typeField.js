@@ -131,6 +131,8 @@ export class TypeField {
     this.backdrop = null;
     this.backdropOn = false;
     this.backdropHoles = [];
+    this.shape = null;       // grilla de texto del LLM: { grid, gw, gh, pol: 'positivo'|'negativo', until }
+    this.bdFill = null;      // llenado progresivo del telón hasta la próxima imagen: { t0, dur }
     this.bdRows = 26;
     this.glitchMoves = true; // toda letra que cambia de lugar lo hace a saltos con cortes, no volando
     this.ambientRain = true; // sin letras flotando: el ambiente es sólo lluvia que cae del telón
@@ -1221,6 +1223,37 @@ export class TypeField {
     this.backdropHoles = rects;
   }
 
+  /**
+   * Ilustración en grilla de texto: grid = filas de '#' (figura) y '.' (fondo).
+   * positivo: sólo quedan las palabras dentro de la figura · negativo: la figura es un hueco en el muro.
+   * Las letras que sobran caen con glitch; las que faltan aparecen con un salto.
+   */
+  setShape(grid, { polaridad = 'negativo', duracion = 20 } = {}) {
+    if (!grid || !grid.length) {
+      if (this.shape) this.onTransition?.(0.45);
+      this.shape = null;
+      return;
+    }
+    this.shape = { grid, gw: grid[0].length, gh: grid.length, pol: polaridad === 'positivo' ? 'positivo' : 'negativo', until: this.time + duracion };
+    this.bdFill = null; // la imagen se muestra completa
+    this.onTransition?.(0.75);
+  }
+
+  /** El muro se va escribiendo durante `segundos` (hasta la próxima imagen) en lugar de aparecer entero. */
+  setBackdropFill(segundos) {
+    this.bdFill = segundos > 0 ? { t0: this.time, dur: segundos } : null;
+  }
+
+  /** ¿La celda (x, y) del telón queda vacía por la ilustración en grilla? */
+  _shapeHides(x, y) {
+    const S = this.shape, B = this.backdrop;
+    const gh = B.top - B.bottom, cellH = gh / S.gh, cellW = cellH / 2;
+    const gwW = cellW * S.gw, cx = (B.x0 + B.x1) / 2;
+    const gx = Math.floor((x - (cx - gwW / 2)) / cellW), gy = Math.floor((B.top - y) / cellH);
+    const inside = gx >= 0 && gx < S.gw && gy >= 0 && gy < S.gh && S.grid[gy][gx] === '#';
+    return S.pol === 'positivo' ? !inside : inside;
+  }
+
   _bdBuild() {
     const rowsN = Math.round(clamp(this.bdRows, 10, 60));
     const top = this.H * 0.47, bottom = -this.H * 0.3;
@@ -1234,7 +1267,7 @@ export class TypeField {
     for (let r = 0; r < rowsN; r++) {
       for (let c = 0; c < colsN; c++) cells.push({ x: x0 + (c + 0.5) * cw, y: top - (r + 0.5) * rh, ch: ' ', i: -1, at: 0 });
     }
-    this.backdrop = { rowsN, colsN, rh, size, cw, kind, cells, tick: 0, ver: this.corpusChars, next: null, rw: 0 };
+    this.backdrop = { rowsN, colsN, rh, size, cw, kind, cells, top, bottom, x0, x1, tick: 0, ver: this.corpusChars, next: null, rw: 0 };
     const txt = this._bdText(cells.length);
     cells.forEach((c, j) => (c.ch = txt[j] || ' '));
   }
@@ -1280,18 +1313,26 @@ export class TypeField {
       if (B.rw >= B.cells.length) B.next = null;
       this.metaDirty = true;
     }
+    if (this.shape && this.time > this.shape.until) {
+      this.setShape(null);
+      if (this.refillSecs) this.setBackdropFill(this.refillSecs); // el muro se reescribe hasta la próxima imagen
+    }
     const holes = this._bdHoles();
+    // llenado progresivo: sólo se escribe la fracción del muro que corresponde al tiempo transcurrido
+    const F = this.bdFill;
+    const limit = F ? Math.floor(B.cells.length * clamp((t - F.t0) / F.dur, 0.04, 1)) : B.cells.length;
     let budget = Math.max(60, Math.round(1400 * step)); // ~2 s para llenar el telón, a cualquier FPS
-    for (const c of B.cells) {
+    for (let j = 0; j < B.cells.length; j++) {
+      const c = B.cells[j];
       if (c.i >= 0 && this.state[c.i] !== BGW) {
         c.i = -1; // otra escena tomó la partícula
         c.at = t + 1;
       }
-      if (holes.length && this._inHoles(c.x, c.y, B.cw * 0.5, holes)) {
-        if (c.i >= 0) this._bdDrop(c, t);
+      if ((holes.length && this._inHoles(c.x, c.y, B.cw * 0.5, holes)) || (this.shape && this._shapeHides(c.x, c.y))) {
+        if (c.i >= 0) this._bdDrop(c, t, Math.random() < 0.12); // la mayoría se apaga; sólo algunas caen
         continue;
       }
-      if (c.i < 0 && c.ch !== ' ' && t >= c.at && budget-- > 0) this._bdPlace(c, t);
+      if (c.i < 0 && c.ch !== ' ' && j < limit && t >= c.at && budget-- > 0) this._bdPlace(c, t);
     }
     // letras que se desprenden y caen (más con la voz fuerte)
     const rate = (0.8 + 5 * this.phys.intensidad + 14 * this.rms) * step;
@@ -1331,14 +1372,15 @@ export class TypeField {
   }
 
   /** La letra del telón se suelta y cae (lluvia) hasta apilarse abajo. */
-  _bdDrop(c, t) {
+  _bdDrop(c, t, fall = true) {
     const i = c.i;
     c.i = -1;
     c.at = t + 1.5 + Math.random() * 5;
     if (i < 0 || this.state[i] !== BGW) return;
     this.state[i] = FREE;
     this.pslot[i] = -1;
-    this.keepFall[i] = 1;
+    this.keepFall[i] = fall ? 1 : 0;
+    if (!fall) this.alpha[i] *= 0.4; // se apaga con un parpadeo en su lugar
     this.vx[i] = (Math.random() - 0.5) * 10;
     this.vy[i] = -5;
     this.life[i] = 0;

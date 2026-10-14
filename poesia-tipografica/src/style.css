@@ -487,3 +487,15 @@ body.hide-cursor * {
   padding: 0;
   border: 1px solid #222;
 }
+
+/* vista previa de la grilla de texto del LLM (panel C) */
+#config .grid-preview {
+  font: 10px/1.05 'Geist Mono', 'IBM Plex Mono', monospace;
+  color: #f4f1ea;
+  background: #000;
+  padding: 8px;
+  margin: 6px 0 0;
+  white-space: pre;
+  overflow-x: auto;
+  min-height: 1em;
+}

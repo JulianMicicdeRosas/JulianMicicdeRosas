@@ -225,7 +225,7 @@ class SettingsStore:
     """settings.local.json junto a server.py. Lo escribe el panel C del frontend."""
 
     KEYS = ("device", "artists", "loop", "prompt_estetica", "avisos", "pointcloud", "profundidad", "nube", "orbita",
-            "curaduria", "imagenes", "director", "cadencia", "estilos", "glitch_ambiente", "ascii_filas",
+            "curaduria", "imagenes", "prompt_grilla", "polaridad", "director", "cadencia", "estilos", "glitch_ambiente", "ascii_filas",
             "marca", "muro")
 
     def __init__(self, path: str) -> None:
@@ -1028,6 +1028,25 @@ con 60 comandos como máximo en total, ocupando buena parte del lienzo 512×512.
 IMAGES_LIBRARY = f"""Imágenes CURADAS: cada estrofa produce una imagen (modo_visual "concreto" o "hibrido", nunca
 "simbolico"). Deja svg_paths como [] y elige "figura" EXACTAMENTE de esta lista: {FIGURES}."""
 
+# Imágenes en GRILLA DE TEXTO: el modelo devuelve la silueta como texto (# = figura, . = fondo); el programa la
+# compone con las palabras dichas, en positivo (la figura hecha de palabras) o en negativo (hueco en el muro).
+GRID_W, GRID_H = 48, 26
+IMAGES_GRID = f"""Imágenes en GRILLA DE TEXTO: cada estrofa DEBE producir una imagen. modo_visual es "concreto" o "hibrido".
+Deja svg_paths como []. Agrega la clave "grilla": una lista de EXACTAMENTE {GRID_H} cadenas de EXACTAMENTE {GRID_W}
+caracteres cada una, usando SOLO "#" (figura) y "." (fondo). Cada carácter es una celda el doble de alta que ancha:
+dibuja la figura más ancha de lo que parece en texto para que no quede estirada. Una sola silueta, rellena (no sólo el
+contorno), sin texto ni letras dentro de la grilla. En "figura" escribe el concepto dibujado."""
+GRID_POLARITY = """Agrega la clave "polaridad": "positivo" (la figura queda hecha de palabras sobre negro) o "negativo"
+(la figura es un hueco negro calado en un muro de palabras). Elige según la estrofa y alterna."""
+
+# Parte estética de la grilla: editable desde el panel C.
+DEFAULT_GRID_AESTHETIC = """- Elige UN concepto concreto y dibujable que nazca de lo dicho (un objeto, un animal, una parte del cuerpo, un
+  elemento de la naturaleza); si la estrofa es abstracta, una metáfora visual simple de ella.
+- Silueta sintética y frontal o de perfil, de lectura inmediata a distancia, como un sello o una sombra chinesca.
+- Formas grandes y macizas, ocupando entre el 40 % y el 70 % de la grilla, centrada, con aire alrededor.
+- Sin detalles de un solo carácter, sin líneas finas sueltas ni ruido; bordes limpios.
+- Varía de una estrofa a otra: no repitas la figura anterior."""
+
 # Parte estética: editable en vivo desde el panel C del frontend (se guarda en settings.local.json).
 DEFAULT_AESTHETIC = """- "concreto": la figura se dibuja nítida con las letras (caligrama, ASCII, glitch o marca).
 - "hibrido": figura más tenue mientras la física de las letras sigue alrededor; ideal para estrofas abstractas
@@ -1047,9 +1066,16 @@ STYLE_HELP = {
 
 
 def build_system_prompt(aesthetic: str | None, curaduria: str | None = None, imagenes: str = "llm",
-                        estilos: list[str] | None = None) -> str:
+                        estilos: list[str] | None = None, grid_aesthetic: str | None = None,
+                        polaridad: str = "alternar") -> str:
     text = (aesthetic or "").strip() or DEFAULT_AESTHETIC
-    parts = [SCHEMA_PROMPT, IMAGES_LIBRARY if imagenes == "biblioteca" else IMAGES_LIVE]
+    if imagenes == "grilla":
+        parts = [SCHEMA_PROMPT, IMAGES_GRID]
+        if polaridad == "llm":
+            parts.append(GRID_POLARITY)
+        parts.append("Estética de la grilla:\n" + ((grid_aesthetic or "").strip() or DEFAULT_GRID_AESTHETIC))
+    else:
+        parts = [SCHEMA_PROMPT, IMAGES_LIBRARY if imagenes == "biblioteca" else IMAGES_LIVE]
     est = [e for e in (estilos or []) if e in STYLE_HELP]
     if len(est) > 1:
         parts.append('Agrega la clave "estilo" con uno de ' + str(est) + ". Elige el que la estrofa pida y alterna:\n"
@@ -1200,6 +1226,27 @@ def heuristic_direction(text: str, last_modes: list[str]) -> dict[str, Any]:
     }
 
 
+def clean_grid(raw: Any) -> list[str] | None:
+    """Normaliza la grilla del modelo a GRID_H × GRID_W de '#'/'.'; descarta si está vacía o casi llena."""
+    if isinstance(raw, str):
+        raw = raw.splitlines()
+    if not isinstance(raw, list):
+        return None
+    rows = [str(r) for r in raw if isinstance(r, (str, int))][: GRID_H + 4]
+    rows = [r for r in rows if r.strip()] if len(rows) > GRID_H else rows
+    full = set("#@X█▓▒1*%&")
+    out = []
+    for r in rows[:GRID_H]:
+        line = "".join("#" if ch in full else "." for ch in r[:GRID_W])
+        out.append(line.ljust(GRID_W, "."))
+    if len(out) < GRID_H * 0.6:
+        return None
+    pad = GRID_H - len(out)
+    out = ["." * GRID_W] * (pad // 2) + out + ["." * GRID_W] * (pad - pad // 2)
+    filled = sum(r.count("#") for r in out) / (GRID_W * GRID_H)
+    return out if 0.03 <= filled <= 0.85 else None
+
+
 def sanitize_direction(raw: Any, text: str, last_modes: list[str]) -> dict[str, Any]:
     """Convierte la salida (posiblemente defectuosa) del LLM en el contrato estricto del frontend."""
     base = heuristic_direction(text, last_modes)
@@ -1221,6 +1268,12 @@ def sanitize_direction(raw: Any, text: str, last_modes: list[str]) -> dict[str, 
     elif fig_raw:
         # imágenes en vivo: nombre libre; la biblioteca de respaldo usa la heurística si el dibujo falla
         out["figura_libre"] = re.sub(r"[^\w\s-]", "", fig_raw, flags=re.UNICODE)[:32]
+    grid = clean_grid(raw.get("grilla"))
+    if grid:
+        out["grilla"] = grid
+    pol = strip_accents(str(raw.get("polaridad", "")).lower().strip())
+    if pol in ("positivo", "negativo"):
+        out["polaridad"] = pol
     paths = raw.get("svg_paths", [])
     if isinstance(paths, str):
         paths = [paths]
@@ -1435,11 +1488,13 @@ class ArtDirector:
         est = (st.get("estilos") or {}) if st else {}
         allowed = est.get("activos") if est.get("modo", "llm") == "llm" else None
         prompt = build_system_prompt(st.get("prompt_estetica") if st else None, st.get("curaduria") if st else None,
-                                     self._images_mode(), allowed)
+                                     self._images_mode(), allowed, st.get("prompt_grilla") if st else None,
+                                     (st.get("polaridad") or "alternar") if st else "alternar")
         return [{"role": "system", "content": prompt}, {"role": "user", "content": user}]
 
     def _images_mode(self) -> str:
-        return "biblioteca" if self.settings and self.settings.get("imagenes") == "biblioteca" else "llm"
+        mode = (self.settings or {}).get("imagenes") or "grilla"
+        return mode if mode in ("biblioteca", "llm", "grilla") else "grilla"
 
     def _max_tokens(self) -> int:
         return 700 if self._images_mode() == "biblioteca" else 1600  # dibujar SVG necesita más salida
@@ -1551,7 +1606,8 @@ async def main_async(args: argparse.Namespace) -> None:
         return {"has_key": bool(cfg.openai_api_key), "masked": mask_key(cfg.openai_api_key),
                 "source": cfg.openai_key_source}
 
-    hub.hello_extra = lambda: {"settings": settings.data, "default_prompt": DEFAULT_AESTHETIC, "key": key_status(),
+    hub.hello_extra = lambda: {"settings": settings.data, "default_prompt": DEFAULT_AESTHETIC,
+                                     "default_prompt_grilla": DEFAULT_GRID_AESTHETIC, "key": key_status(),
                                "user_dir": USER_DIR,
                                "session": hub.session}
 
@@ -1618,8 +1674,19 @@ async def main_async(args: argparse.Namespace) -> None:
             folder = str(msg.get("carpeta", ""))[:200]
             logos = await asyncio.to_thread(read_logo_folder, folder)
             await hub.reply(ws, "logos", id=msg.get("id"), carpeta=folder, logos=logos)
+        elif kind == "test_grid":  # panel C: probar el prompt de la grilla con un texto de ejemplo
+            text = str(msg.get("text", "")).strip()[:600] or "la luna se moja en el agua quieta del patio"
+            t0 = time.perf_counter()
+            try:
+                direction, provider = await director.direct(text)
+            except Exception as exc:  # nunca tumbar el servidor por una prueba
+                await hub.reply(ws, "grid_test", ok=False, error=str(exc))
+                return
+            await hub.reply(ws, "grid_test", ok=bool(direction.get("grilla")), provider=provider, text=text,
+                            ms=int((time.perf_counter() - t0) * 1000), direction=direction)
         elif kind == "get_settings":
-            await hub.reply(ws, "settings", settings=settings.data, default_prompt=DEFAULT_AESTHETIC)
+            await hub.reply(ws, "settings", settings=settings.data, default_prompt=DEFAULT_AESTHETIC,
+                            default_prompt_grilla=DEFAULT_GRID_AESTHETIC)
 
     hub.on_message = on_frontend
     tasks: list[Awaitable[Any]] = [director.run()]
@@ -1704,6 +1771,9 @@ async def run_check() -> None:
         ms = int((time.perf_counter() - t0) * 1000)
         paths = len(d.get("svg_paths") or [])
         dibujo = f"dibujó {paths} trazo(s) SVG" if paths else "sin dibujo propio (usa la biblioteca)"
+        if d.get("grilla"):
+            dibujo = f"grilla de texto «{d.get('figura_libre') or d.get('figura')}»"
+            print("\n".join("    " + r for r in d["grilla"]))
         mark = "✓" if prov != "heuristic" else "⚠"
         print(f"{mark} Director de arte: {prov} · {ms / 1000:.1f} s · {d['modo_visual']} · {dibujo}")
         if prov == "heuristic":

@@ -28,7 +28,9 @@ export const DEFAULT_SETTINGS = {
   ],
   prompt_estetica: '',
   curaduria: '', // texto curatorial en lenguaje normal (guía principal del director de arte)
-  imagenes: 'llm', // 'llm' = el LLM dibuja cada figura en vivo · 'biblioteca' = figuras curadas
+  imagenes: 'grilla', // 'grilla' = el LLM devuelve la figura como texto · 'llm' = trazado SVG · 'biblioteca' = curadas
+  polaridad: 'alternar', // grilla: positivo | negativo | alternar | llm
+  prompt_grilla: '', // parte estética del pedido de la grilla ('' = la de fábrica)
   director: 'openai', // openai | ollama | deepseek
   cadencia: { preset: 'estrofa' },
   // estilos de imagen que oscilan; el LLM elige entre los activos (o azar / secuencia)

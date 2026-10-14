@@ -155,6 +155,30 @@ título, el nombre y las figuras lo calan (quedan como huecos negros).
 
 Sólo se envía audio a OpenAI mientras se graba (`S` o `T`): el loop y los nombres no consumen la API.
 
+### Ilustraciones en grilla de texto
+
+La imagen está hecha de texto. Con cada estrofa el director (OpenAI, o Ollama sin internet) elige un concepto
+dibujable y devuelve, además de la física, una **grilla de 48 × 26** caracteres (`#` figura, `.` fondo). El
+programa la compone con el **muro de palabras** (las últimas palabras dichas, repetidas en ciclo hasta llenar todas
+las celdas: cuantas menos palabras, más veces se repite cada una):
+
+- **Positivo**: sólo quedan las palabras dentro de la figura (la figura hecha de palabras sobre negro).
+- **Negativo**: la figura es un hueco negro calado en el muro.
+- Polaridad en el panel C: alternar, siempre positivo, siempre negativo, o que la elija el LLM.
+- Al terminar la imagen, el muro se reescribe de a poco hasta la próxima (en el tiempo de la cadencia).
+- Si el modelo no responde o la grilla no es válida, la figura de la biblioteca se convierte a grilla.
+
+En el panel C, sección **Grilla de texto**, se edita la **parte estética** del pedido (qué dibujar, cuán sintético,
+cuánto ocupa…); el formato técnico se agrega solo. El botón **Probar** pide una grilla con un texto de ejemplo, la
+muestra como texto en el panel y la aplica en la pared.
+
+### Windows
+
+`start_instalacion.bat`: en cada arranque instala/actualiza dependencias, recompila el frontend, abre el backend y
+Chrome en modo kiosco. La clave de OpenAI se pega en el panel C (queda guardada fuera del programa).
+`diagnostico_windows.bat`: prueba la clave, el director (muestra la grilla que devuelve) y el micrófono.
+Requisitos: Python 3.10+ (python.org, marcar «Add to PATH»), Node.js LTS y Google Chrome.
+
 ### Manual de marca FLAT (integrado)
 
 Tipografías **Geist Mono** (títulos, nombres, muro, figuras) y **Roboto** (texto), empaquetadas en el programa

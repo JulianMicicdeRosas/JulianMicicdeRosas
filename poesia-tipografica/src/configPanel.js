@@ -28,6 +28,7 @@ export class ConfigPanel {
   constructor({ getSettings, onChange, onDevice, requestDevices, onScanLogos, onSaveKey, onRecord, onStop, onPreviewStyle, defaultPrompt }) {
     this.onPreviewStyle = onPreviewStyle;
     this.onOpenFolder = arguments[0].onOpenFolder;
+    this.onTestGrid = arguments[0].onTestGrid;
     this.onRecord = onRecord;
     this.onStop = onStop;
     this.onSaveKey = onSaveKey;
@@ -64,7 +65,8 @@ export class ConfigPanel {
       </section>
       <section>
         <h2>Imágenes</h2>
-        <label><input type="radio" name="imagenes" value="llm" data-sopt="imagenes"> Generadas en vivo por el LLM (dibuja cada figura)</label><br>
+        <label><input type="radio" name="imagenes" value="grilla" data-sopt="imagenes"> Grilla de texto: el LLM devuelve la figura como texto y se compone con las palabras dichas</label><br>
+        <label><input type="radio" name="imagenes" value="llm" data-sopt="imagenes"> Caligrama: el LLM dibuja un trazado y las letras lo recorren</label><br>
         <label><input type="radio" name="imagenes" value="biblioteca" data-sopt="imagenes"> Curadas: biblioteca de 20 figuras (más rápido)</label>
         <div class="row">
           <span>Director de arte:</span>
@@ -189,6 +191,28 @@ export class ConfigPanel {
         <button data-act="add-step">+ Agregar paso</button>
       </section>
       <section>
+        <h2>Grilla de texto</h2>
+        <p class="hint">La ilustración es texto: el modelo devuelve una grilla de 48×26 («#» figura, «.» fondo) y el muro
+        de palabras la compone. <b>Positivo</b>: la figura hecha de palabras sobre negro. <b>Negativo</b>: la figura es
+        un hueco negro en el muro. Abajo, la parte estética del pedido (el formato técnico se agrega solo).</p>
+        <div class="row">
+          <span>Polaridad:</span>
+          <select data-sopt="polaridad">
+            <option value="alternar">Alternar positivo / negativo</option>
+            <option value="positivo">Siempre positivo</option>
+            <option value="negativo">Siempre negativo</option>
+            <option value="llm">Que la elija el LLM según la estrofa</option>
+          </select>
+        </div>
+        <textarea data-prompt-grilla spellcheck="false" rows="8"></textarea>
+        <div class="row"><button data-act="reset-prompt-grilla">Restaurar por defecto</button></div>
+        <div class="row">
+          <input data-grid-text type="text" placeholder="Texto de prueba (ej.: la luna se moja en el agua quieta del patio)" style="flex:1">
+          <button data-act="test-grid">Probar</button>
+        </div>
+        <pre data-grid-preview class="grid-preview"></pre>
+      </section>
+      <section>
         <h2>Reglas visuales (avanzado)</h2>
         <p class="hint">Reglas finas para el director (modos, físicas, paleta). Lo habitual es dejarlas como están y
         escribir arriba, en «Curaduría». El formato técnico se agrega solo.</p>
@@ -266,7 +290,10 @@ export class ConfigPanel {
     if (document.activeElement !== prompt) prompt.value = s.prompt_estetica || this.defaultPrompt;
     const cur = this.$('[data-curaduria]');
     if (document.activeElement !== cur) cur.value = s.curaduria || '';
-    for (const r of this.el.querySelectorAll('input[data-sopt="imagenes"]')) r.checked = r.value === (s.imagenes || 'llm');
+    for (const r of this.el.querySelectorAll('input[data-sopt="imagenes"]')) r.checked = r.value === (s.imagenes || 'grilla');
+    this.$('select[data-sopt="polaridad"]').value = s.polaridad || 'alternar';
+    const pg = this.$('[data-prompt-grilla]');
+    if (document.activeElement !== pg) pg.value = s.prompt_grilla || this.defaultPromptGrid || '';
     this.$('select[data-sopt="director"]').value = s.director || 'openai';
     const est = s.estilos || { activos: ['caligrama'], modo: 'llm' };
     for (const el of this.el.querySelectorAll('[data-style]')) el.checked = (est.activos || []).includes(el.dataset.style);
@@ -356,6 +383,23 @@ export class ConfigPanel {
     this.devices = devices || [];
     this.currentDevice = current ?? '';
     if (this.isOpen) this._renderDevices();
+  }
+
+  /** Resultado de «Probar» en la sección Grilla: muestra la grilla como texto. */
+  setGridTest(m) {
+    const pre = this.$('[data-grid-preview]');
+    if (!pre) return;
+    const d = m.direction || {};
+    if (!m.ok) {
+      pre.textContent = m.error ? `Error: ${m.error}` : `Sin grilla válida (director: ${m.provider || '?'}). Revisa la clave de OpenAI o el prompt.`;
+      return;
+    }
+    pre.textContent = `${d.figura || ''} · ${m.provider} · ${m.ms} ms${d.polaridad ? ' · ' + d.polaridad : ''}\n\n` + d.grilla.join('\n');
+  }
+
+  setDefaultPromptGrid(p) {
+    this.defaultPromptGrid = p || this.defaultPromptGrid;
+    if (this.isOpen) this.render();
   }
 
   setDefaultPrompt(p) {
@@ -500,6 +544,11 @@ export class ConfigPanel {
     else if (act === 'reset-prompt') this._commit((s) => (s.prompt_estetica = ''));
     else if (act === 'swatch') this._commit((s) => (s.marca = { ...(s.marca || {}), acento: ev.target.dataset.color.toUpperCase() }));
     else if (act === 'open-logos') this.onOpenFolder?.('logos');
+    else if (act === 'reset-prompt-grilla') this._commit((s) => (s.prompt_grilla = ''));
+    else if (act === 'test-grid') {
+      this.$('[data-grid-preview]').textContent = 'Pidiendo la grilla…';
+      this.onTestGrid?.(this.$('[data-grid-text]').value.trim());
+    }
     else if (act === 'preview') this.onPreviewStyle?.(ev.target.dataset.stylePreview);
     else if (act === 'brand-font') {
       const input = Object.assign(document.createElement('input'), { type: 'file', accept: '.woff2,.woff,.ttf,.otf' });
@@ -561,6 +610,14 @@ export class ConfigPanel {
         this.onDevice(t.value);
         this.flashSaved();
       }
+      return;
+    }
+    if (t.matches('[data-prompt-grilla]')) {
+      clearTimeout(this._promptGT);
+      this._promptGT = setTimeout(() => {
+        const v = t.value.trim();
+        this._commit((s) => (s.prompt_grilla = v === (this.defaultPromptGrid || '').trim() ? '' : v), false);
+      }, 500);
       return;
     }
     if (t.matches('[data-prompt]')) {

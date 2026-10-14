@@ -118,6 +118,22 @@ async function boot() {
     field.setPhysics(dir.fisica);
     // cada estrofa produce una imagen: si llegara «simbolico», se dibuja igual (más tenue)
     if (dir.modo_visual === 'simbolico' && raw.source !== 'forzar-simbolico') dir = { ...dir, modo_visual: 'hibrido' };
+    if ((settings.imagenes || 'grilla') === 'grilla') {
+      // ilustración en grilla de texto: compuesta con las palabras del muro (positivo o negativo)
+      let grid = dir.grilla, origen = 'grilla del LLM';
+      if (!grid) {
+        const fig = (dir.svg_paths?.length && sampleFigure(dir.svg_paths.map((d) => ({ d, op: 'fill' })), {})) || sampleFigure(SHAPES[dir.figura] || SHAPES.luna, {});
+        grid = fig ? maskToGrid(fig) : null;
+        origen = 'biblioteca → grilla';
+      }
+      const pol = choosePolarity(dir);
+      field.releaseFigure(true);
+      field.refillSecs = (settings.cadencia && settings.cadencia.min_s) || 14;
+      field.setShape(grid, { polaridad: pol, duracion: Math.max(8, +dir.duracion_s || 16) });
+      config.setLastDirection({ ...dir, origen: `${origen} · ${pol}`, pidio: 'grilla', estiloVisto: 'grilla' });
+      debug.setDirection(dir);
+      return;
+    }
     if (dir.modo_visual === 'concreto' || dir.modo_visual === 'hibrido') {
       const interiorTarget = Math.min(4200, CONFIG.pool * 0.32);
       let fig = null;
@@ -134,6 +150,35 @@ async function boot() {
       config.setLastDirection({ ...dir, origen: 'sin figura' });
     }
     debug.setDirection(dir);
+  }
+
+  // polaridad de la grilla: fija (positivo / negativo), alternada, o la que elija el LLM
+  let polFlip = false;
+  function choosePolarity(dir) {
+    const p = settings.polaridad || 'alternar';
+    if (p === 'positivo' || p === 'negativo') return p;
+    if (p === 'llm' && (dir.polaridad === 'positivo' || dir.polaridad === 'negativo')) return dir.polaridad;
+    polFlip = !polFlip;
+    return polFlip ? 'negativo' : 'positivo';
+  }
+
+  /** Máscara de una figura (SVG o biblioteca) → grilla 48×26 de '#'/'.' (celdas el doble de altas que anchas). */
+  function maskToGrid(fig, gw = 48, gh = 26) {
+    if (!fig.mask) return null;
+    const R = 512, bb = fig.bbox || { x: 0, y: 0, w: R, h: R };
+    // la figura ocupa ~70 % del alto; el ancho respeta la proporción real (celda = 1 × 2)
+    const cell = Math.max(bb.h / (gh * 0.72), bb.w / (gw * 2 * 0.9));
+    const cx = bb.x + bb.w / 2, cy = bb.y + bb.h / 2;
+    const rows = [];
+    for (let y = 0; y < gh; y++) {
+      let row = '';
+      for (let x = 0; x < gw; x++) {
+        const mx = Math.round(cx + (x + 0.5 - gw / 2) * (cell / 2)), my = Math.round(cy + (y + 0.5 - gh / 2) * cell);
+        row += mx >= 0 && mx < R && my >= 0 && my < R && fig.mask[my * R + mx] > 0.5 ? '#' : '.';
+      }
+      rows.push(row);
+    }
+    return rows;
   }
 
   function requestDirection(text, itemId) {
@@ -193,7 +238,10 @@ async function boot() {
   // loop de versiones anteriores (FLAT + sponsors + UMBRAL) → nuevo loop de tres grupos de logos
   function migrate(s) {
     const old = (s.loop || []).some((st) => st && (st.contenido === 'loop/flat.png' || st.carpeta === 'public/loop/sponsors'));
-    return old ? { ...s, loop: structuredClone(DEFAULT_SETTINGS.loop) } : s;
+    if (old) s = { ...s, loop: structuredClone(DEFAULT_SETTINGS.loop) };
+    // v4: las ilustraciones pasan a ser grilla de texto (una sola vez; después se respeta lo elegido en el panel)
+    if (!s.imagenes_v4) s = { ...s, imagenes: 'grilla', imagenes_v4: true };
+    return s;
   }
 
   function setSettings(next, { persist = true } = {}) {
@@ -268,6 +316,7 @@ async function boot() {
       debug.setStatus({ backend: 'connected', ...(m.status || {}) });
       config.setMicStatus(m.status || {});
       config.setDefaultPrompt(m.default_prompt);
+      config.setDefaultPromptGrid(m.default_prompt_grilla);
       config.setUserDir(m.user_dir);
       if (m.key) {
         config.setKeyStatus(m.key);
@@ -285,6 +334,10 @@ async function boot() {
       }
     },
     key_status: (m) => config.setKeyStatus(m),
+    grid_test: (m) => {
+      config.setGridTest(m);
+      if (m.ok && m.direction) applyDirection({ ...m.direction, verso: m.text }); // verla también en la pared
+    },
     cadence: (m) => config.setCadence(m),
     status: (m) => {
       debug.setStatus(m.status || {});
@@ -319,6 +372,9 @@ async function boot() {
     requestDevices: () => socket.send({ type: 'list_devices' }),
     onSaveKey: (key) => socket.send({ type: 'set_api_key', key }),
     onOpenFolder: (que) => socket.send({ type: 'open_folder', que }),
+    onTestGrid: (text) => {
+      if (!socket.send({ type: 'test_grid', text })) config.setGridTest({ ok: false, error: 'sin conexión con el backend' });
+    },
     onPreviewStyle: (estilo) => {
       // vista previa con el último verso: fuerza el estilo una vez
       const prev = settings.estilos;
