@@ -312,7 +312,8 @@ export class TypeField {
   // ════════════════════════════════════════════════════════════════════════
   /** Familia a usar: la de la marca si está aplicada a todo. */
   _k(kind) {
-    return this.brandAll ? 'brand' : kind;
+    if (!this.brandAll) return kind;
+    return kind === 'serif' ? 'brandText' : 'brand'; // serif → Roboto · mono → Geist Mono
   }
 
   _u(text) {
@@ -475,6 +476,17 @@ export class TypeField {
     }
   }
 
+  /** El transcriptor descartó el segmento (era una anotación o una frase inventada): se desvanece. */
+  discardLine(itemId) {
+    if (this.line && this.line.itemId === itemId) {
+      const old = this.line;
+      this.line = null;
+      for (const row of old.rows) this._releaseEntries(row, true);
+    }
+    this.wordBufs.delete(itemId);
+    this.wordSeen.delete(itemId);
+  }
+
   releaseLine() {
     const line = this.line;
     if (!line) return;
@@ -500,7 +512,7 @@ export class TypeField {
   //  Caligramas
   // ════════════════════════════════════════════════════════════════════════
   _stream(text, skipSpaces) {
-    const src = (text && text.trim() ? text.trim() : this.corpus.slice(-400)).replace(/\s+/g, ' ') + ' · ';
+    const src = (text && text.trim() ? text.trim() : this.corpus.slice(-400)).replace(/\s+/g, ' ').replace(/ \/ /g, '  ') + '   ';
     const flags = new Uint8Array(src.length);
     if (this.keywords.size) {
       const re = /[\p{L}\p{N}]+/gu;
@@ -514,7 +526,7 @@ export class TypeField {
       for (let guard = 0; guard < src.length + 1; guard++) {
         const k = idx++ % src.length;
         const ch = src[k];
-        if (skipSpaces && (ch === ' ' || ch === '·')) continue;
+        if (skipSpaces && ch === ' ') continue;
         return [ch, flags[k]];
       }
       return ['·', 0];
@@ -539,7 +551,7 @@ export class TypeField {
     const typo = dir.tipografia || 'mixta';
     const brand = dir.estilo === 'marca' || this.brandAll;
     if (this.brandUpper) dir = { ...dir, mayusculas: true };
-    const kindC = brand ? 'brand' : typo === 'mono' ? 'mono' : 'serif';
+    const kindC = brand ? 'brandText' : typo === 'mono' ? 'mono' : 'serif';
     const kindI = brand ? 'brand' : typo === 'serif' ? 'serif' : 'mono';
     if (dir.mayusculas) dir = { ...dir, verso: (dir.verso || '').toUpperCase(), palabras_clave: (dir.palabras_clave || []).map((w) => w.toUpperCase()) };
     const fill = dir.relleno || 'ambos';
@@ -1168,7 +1180,7 @@ export class TypeField {
     const words = this._u(String(text || '')).trim().split(/\s+/).filter(Boolean);
     if (!words.length) return;
     const atlas = this.atlas;
-    const tk = this._k('serif');
+    const tk = this.brandAll ? 'brand' : 'serif'; // títulos y destacados: Geist Mono
     const slotsOf = (w) => [...w].map((ch) => atlas.slot(ch, tk));
     const widthOf = (w, S) => slotsOf(w).reduce((a, sl) => a + atlas.adv(sl) * S, 0);
     let S = clamp(this.H * maxSize, 40, 200);

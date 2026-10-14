@@ -141,9 +141,24 @@ Producción: `start_instalacion.bat` compila el frontend, abre el backend minimi
 
 Sólo se envía audio a OpenAI mientras se graba (`S` o `T`): el loop y los nombres no consumen la API.
 
+### Manual de marca FLAT (integrado)
+
+Tipografías **Geist Mono** (títulos, nombres, muro, figuras) y **Roboto** (texto), empaquetadas en el programa
+(sin internet). Acento por defecto: **rosa «Ciclo Umbral» `#ff9898`**; el panel C tiene la paleta completa del
+manual (Ciclo Refracción `#9999ff`, Cinema Liminal `#3333cb`, Talleres `#cccccc`, Espacio Inmersivo `#9900cc`,
+Blockchain `#30d618`, Hackatón `#0074ff`, Conexión Sonora `#ccff00`, Exposición `#e6005c`, Órbita `#8ecddd`).
+El glitch de los logos separa el color en rosa Umbral y lila Refracción.
+
+### Transcripción limpia
+
+Se eliminan anotaciones (`[música]`, `(risas)`, `♪`) y las frases que los modelos inventan en silencio
+(«Subtítulos realizados por la comunidad de Amara.org», «Gracias por ver»…). Un segmento que sólo era eso se
+descarta y se desvanece. Cada estrofa produce una imagen (nunca queda sólo en física).
+
 ### Loop de logos (hasta que empieza la noche)
 
-Los logos van en **Documentos/Umbral/logos/** (fuera del programa: actualizar o volver a descargar no los borra; los
+Los logos vienen **integrados en el programa** en `poesia-tipografica/logos/` (orden de la «Pirámide de logos»,
+ver `logos/LEEME.txt`). Para cambiar uno sin esperar una versión nueva, ponerlo en **Documentos/Umbral/logos/** (fuera del programa: actualizar o volver a descargar no los borra; los
 ajustes del panel C también viven ahí, en `Documentos/Umbral/ajustes.json`). El programa crea las carpetas solo:
 
 | Carpeta | Orden | Tiempo por página (por defecto) |

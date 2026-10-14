@@ -107,7 +107,12 @@ export class ConfigPanel {
           <button data-act="brand-font">Cargar tipografía de marca…</button>
           <span class="unit" data-brand-font>—</span>
         </div>
-        <p class="hint">Provisorio hasta tener el manual de marca: con él se ajustan colores, tipografía, grilla y reglas.</p>
+        <div class="swatches" title="colores del manual FLAT: clic = acento">
+          ${[['#ff9898', 'Ciclo Umbral'], ['#9999ff', 'Ciclo Refracción'], ['#3333cb', 'Cinema Liminal'], ['#cccccc', 'Talleres y charlas'], ['#9900cc', 'Espacio Inmersivo'], ['#30d618', 'Blockchain'], ['#0074ff', 'Hackatón'], ['#ccff00', 'Conexión Sonora'], ['#e6005c', 'Exposición'], ['#8ecddd', 'Órbita Performer']]
+            .map(([c, n]) => `<button data-act="swatch" data-color="${c}" title="${n} ${c}" style="background:${c}"></button>`).join('')}
+        </div>
+        <p class="hint">Manual de marca FLAT: Geist Mono (títulos, nombres, muro, figuras) y Roboto (texto). Acento por
+        defecto: rosa «Ciclo Umbral». Clic en un color = acento.</p>
         <h2>Cadencia: cada cuánto una imagen nueva</h2>
         <div class="row">
           <select data-cad="preset">
@@ -492,6 +497,7 @@ export class ConfigPanel {
     else if (act === 'down') this._commit((s) => move(s[list], +1));
     else if (act === 'del') this._commit((s) => s[list].splice(i, 1));
     else if (act === 'reset-prompt') this._commit((s) => (s.prompt_estetica = ''));
+    else if (act === 'swatch') this._commit((s) => (s.marca = { ...(s.marca || {}), acento: ev.target.dataset.color.toUpperCase() }));
     else if (act === 'open-logos') this.onOpenFolder?.('logos');
     else if (act === 'preview') this.onPreviewStyle?.(ev.target.dataset.stylePreview);
     else if (act === 'brand-font') {

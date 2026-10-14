@@ -1,0 +1,15 @@
+LOGOS INTEGRADOS AL PROGRAMA (funcionan sin internet)
+
+Orden de aparición (según «PIRÁMIDE DE LOGOS - Gráfica FLAT»):
+
+  organizadores/     FLAT · CEES · El Zorro Azul · Municipalidad · MMAMM
+  socio-cultural/    Universidad de Mendoza (FADUM y FI) · Bodega Riglos Wine Huarpe ·
+                     Colección Pampa · Fundación Norma y Leo Werthein      (más tiempo en pantalla)
+  patrocinadores/    Azcuy · Corralón Luján · Transporte Rodriguez · Bodega Mi Terruño ·
+                     Universidad Maza · Villa Victoria Lodge · Universidad Champagnat
+
+Dentro de cada carpeta se muestran en orden alfabético: numerar para fijar el orden
+(01-flat.png, 02-cees.png, …). PNG con fondo transparente ideal; JPG con fondo blanco también.
+
+Si en la Mac hay logos en Documentos/Umbral/logos/<grupo>, esos tienen prioridad
+(para cambiar un logo sin esperar una versión nueva del programa).

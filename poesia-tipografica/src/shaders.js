@@ -94,7 +94,7 @@ export const glyphVertex = /* glsl */ `
     // Las letras recién nacidas arden un instante (sólo ellas superan el umbral del bloom)
     vColor = c * (1.0 + pop * (0.6 + 1.6 * born) + uRms * fresh * 0.7);
     // banda glitcheada: separación de canales (rojo/cian) y sobreexposición puntual
-    vColor = mix(vColor, vColor * vec3(1.55, 0.55, 1.25) + vec3(0.05, 0.0, 0.08), glitchHit * 0.85);
+    vColor = mix(vColor, uAccent * 1.5 + vec3(0.04), glitchHit * 0.75); // banda glitcheada: color de acento del manual
   }
 `;
 

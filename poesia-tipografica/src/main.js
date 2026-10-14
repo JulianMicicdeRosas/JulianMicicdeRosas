@@ -9,6 +9,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import '@fontsource/cormorant-garamond/500.css';
 import '@fontsource/ibm-plex-mono/400.css';
+// Manual de marca FLAT: Geist Mono (títulos y destacados) y Roboto (texto). Empaquetadas: funcionan sin internet.
+import '@fontsource/geist-mono/500.css';
+import '@fontsource/roboto/400.css';
 import * as THREE from 'three';
 import { GlyphAtlas, loadFonts } from './glyphAtlas.js';
 import { TypeField } from './typeField.js';
@@ -34,7 +37,7 @@ const CONFIG = {
   // En Mac (pantallas Retina, equipos sin ventilador) se limita la resolución interna: en el
   // proyector (1x) no cambia nada y en la pantalla del portátil ahorra mucho calor.
   dpr: Math.min(window.devicePixelRatio || 1, num('dpr', /Macintosh|Mac OS X/.test(navigator.userAgent) ? 1.25 : 1.5)),
-  idleText: 'escucha la voz que todavía no ha llegado',
+  idleText: 'UMBRAL',
 };
 
 async function boot() {
@@ -113,6 +116,8 @@ async function boot() {
     field.setKeywords(dir.palabras_clave);
     field.setPalette(dir.paleta);
     field.setPhysics(dir.fisica);
+    // cada estrofa produce una imagen: si llegara «simbolico», se dibuja igual (más tenue)
+    if (dir.modo_visual === 'simbolico' && raw.source !== 'forzar-simbolico') dir = { ...dir, modo_visual: 'hibrido' };
     if (dir.modo_visual === 'concreto' || dir.modo_visual === 'hibrido') {
       const interiorTarget = Math.min(4200, CONFIG.pool * 0.32);
       let fig = null;
@@ -299,6 +304,7 @@ async function boot() {
     speech: (m) => show.recording && show.mode === 'poema' && field.setSpeaking(m.state === 'started'),
     word_delta: (m) => onDelta(m.item_id || 'voz', m.delta || ''),
     verse_completed: (m) => onCompleted(m.item_id || 'voz', m.text || ''),
+    verse_discard: (m) => field.discardLine(m.item_id || 'voz'),
     art_direction: (m) => {
       const d = m.data || m;
       // las direcciones del simulador siempre se aplican; las de la voz sólo grabando en modo poema

@@ -184,7 +184,9 @@ class Config:
                               "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview"),
             transcription_model=_env("TRANSCRIPTION_MODEL", "gpt-4o-transcribe"),
             transcription_language=_env("TRANSCRIPTION_LANGUAGE", "es"),
-            transcription_prompt=_env("TRANSCRIPTION_PROMPT", ""),
+            # la pista vieja por defecto se colaba en la transcripción: se ignora aunque siga en .env
+            transcription_prompt="" if _env("TRANSCRIPTION_PROMPT", "").startswith("Lectura de poesía")
+            else _env("TRANSCRIPTION_PROMPT", ""),
             vad_threshold=_env_float("VAD_THRESHOLD", 0.5),
             vad_silence_ms=_env_int("VAD_SILENCE_MS", 350),
             vad_prefix_ms=_env_int("VAD_PREFIX_PADDING_MS", 300),
@@ -683,6 +685,67 @@ class AudioEngine:
 #  OpenAI Realtime: transcripción pura
 # ════════════════════════════════════════════════════════════════════════════
 
+# ── Limpieza de la transcripción ─────────────────────────────────────────────
+# Fuera: anotaciones entre [] () {} ** ♪ y las "alucinaciones" típicas de los modelos de transcripción en
+# silencio o con música (créditos de subtítulos, saludos de video), y cualquier eco de la pista de contexto.
+HALLUCINATIONS = [
+    "subtitulos realizados por la comunidad de amara.org", "subtitulos por la comunidad de amara.org",
+    "subtitulos realizados por", "subtitulado por", "subtitulos por", "amara.org", "gracias por ver el video",
+    "gracias por ver", "gracias por mirar", "no olvides suscribirte", "suscribete", "dale like",
+    "lectura de poesia en espanol", "con pausas y versos", "transcripcion", "musica de fondo", "musica",
+    "aplausos", "risas", "silencio", "inaudible",
+]
+
+
+def _strip_hallucinations(text: str) -> str:
+    t = text
+    low = strip_accents(t.lower())
+    for h in sorted(HALLUCINATIONS, key=len, reverse=True):
+        i = low.find(h)
+        while i >= 0:
+            # sólo frases sueltas o completas, no partes de palabras ("musical", "silencios" del poema quedan)
+            before = low[i - 1] if i > 0 else " "
+            after = low[i + len(h)] if i + len(h) < len(low) else " "
+            if not before.isalnum() and not after.isalnum() and (len(h) > 12 or low.strip(" .,¡!¿?") == h):
+                t = t[:i] + " " * len(h) + t[i + len(h):]
+                low = low[:i] + " " * len(h) + low[i + len(h):]
+            i = low.find(h, i + 1)
+    return t
+
+
+def clean_transcript(text: str) -> str:
+    t = re.sub(r"\[[^\]]*\]|\([^)]*\)|\{[^}]*\}|\*[^*]*\*|[♪♫]+", " ", text or "")
+    t = _strip_hallucinations(t)
+    t = re.sub(r"\s+", " ", t).strip(" .,;:-–—")
+    return t
+
+
+class DeltaCleaner:
+    """Filtra anotaciones entre corchetes/paréntesis también en los fragmentos que llegan en vivo."""
+
+    OPEN, CLOSE = "[({*", "])}*"
+
+    def __init__(self) -> None:
+        self.depth = 0
+        self.closer = ""
+
+    def feed(self, delta: str) -> str:
+        out = []
+        for ch in delta:
+            if self.depth:
+                if ch == self.closer:
+                    self.depth = 0
+                continue
+            if ch in self.OPEN:
+                self.depth = 1
+                self.closer = self.CLOSE[self.OPEN.index(ch)]
+                continue
+            if ch in "♪♫":
+                continue
+            out.append(ch)
+        return "".join(out)
+
+
 class RealtimeTranscriber:
     """Sesión Realtime de sólo transcripción.
 
@@ -699,6 +762,7 @@ class RealtimeTranscriber:
         self.audio_q = audio_q
         self.on_completed = on_completed
         self.partials: dict[str, str] = {}
+        self.cleaners: dict[str, DeltaCleaner] = {}
         mode = cfg.realtime_api if cfg.realtime_api in ("ga", "beta") else "auto"
         self.protocols = ["ga", "beta"] if mode == "auto" else [mode]
         self.pi = 0
@@ -867,14 +931,20 @@ class RealtimeTranscriber:
             et = ev.get("type", "")
             if et == "conversation.item.input_audio_transcription.delta":
                 item_id = ev.get("item_id", "")
-                delta = ev.get("delta", "")
+                delta = self.cleaners.setdefault(item_id, DeltaCleaner()).feed(ev.get("delta", ""))
                 if delta:
                     self.partials[item_id] = self.partials.get(item_id, "") + delta
                     self.hub.emit("word_delta", item_id=item_id, delta=delta, t=_now_ms())
             elif et == "conversation.item.input_audio_transcription.completed":
                 item_id = ev.get("item_id", "")
-                text = (ev.get("transcript") or self.partials.get(item_id, "")).strip()
+                raw = (ev.get("transcript") or self.partials.get(item_id, "")).strip()
+                text = clean_transcript(raw)
                 self.partials.pop(item_id, None)
+                self.cleaners.pop(item_id, None)
+                if not text:
+                    if raw:
+                        log.info("Descartado (anotación / alucinación): %s", raw[:80])
+                    self.hub.emit("verse_discard", item_id=item_id)
                 if text:
                     log.info("Verso: %s", text)
                     self.hub.emit("verse_completed", item_id=item_id, text=text, t=_now_ms())
@@ -947,16 +1017,18 @@ Reglas técnicas de svg_paths: sólo comandos M L C Q Z en MAYÚSCULA, coordenad
 formas cerradas con Z, sin transformaciones."""
 
 # Cómo se generan las imágenes (se elige en el panel C).
-IMAGES_LIVE = """Imágenes EN VIVO: tú dibujas la figura. En modo "concreto" o "hibrido", svg_paths es OBLIGATORIO:
+IMAGES_LIVE = """Imágenes EN VIVO: cada estrofa DEBE producir una imagen. modo_visual es SIEMPRE "concreto" o "hibrido"
+(nunca "simbolico"): si la estrofa es abstracta, dibuja una metáfora visual de ella. svg_paths es OBLIGATORIO:
 1 a 4 paths que formen una silueta reconocible y sintética de lo que evoca el verso (no un ícono genérico: interpreta),
 con 60 comandos como máximo en total, ocupando buena parte del lienzo 512×512. Sé conciso: nada de texto extra."""
-IMAGES_LIBRARY = f"""Imágenes CURADAS: deja svg_paths como [] y elige "figura" EXACTAMENTE de esta lista: {FIGURES}."""
+IMAGES_LIBRARY = f"""Imágenes CURADAS: cada estrofa produce una imagen (modo_visual "concreto" o "hibrido", nunca
+"simbolico"). Deja svg_paths como [] y elige "figura" EXACTAMENTE de esta lista: {FIGURES}."""
 
 # Parte estética: editable en vivo desde el panel C del frontend (se guarda en settings.local.json).
-DEFAULT_AESTHETIC = """- "concreto": el verso nombra algo visible (luna, ojo, pájaro…). La figura se dibuja con las letras (caligrama).
-- "simbolico": el verso es abstracto (tiempo, olvido, deseo…). Sólo física, sin figura.
-- "hibrido": figura tenue mientras la física sigue alrededor.
-- Alterna: evita repetir el mismo modo_visual más de dos veces seguidas.
+DEFAULT_AESTHETIC = """- "concreto": la figura se dibuja nítida con las letras (caligrama, ASCII, glitch o marca).
+- "hibrido": figura más tenue mientras la física de las letras sigue alrededor; ideal para estrofas abstractas
+  (tiempo, olvido, deseo…): dibuja una metáfora visual, no un ícono literal.
+- Alterna entre concreto e hibrido.
 - lluvia_text_rain: caída, llanto, peso. enjambre_lozano: multitud, voces, nosotros. vortice_sandison: tiempo, vértigo,
   cosmos. dispersion_ceniza: olvido, muerte, memoria que se borra.
 - Estética de museo: base hueso, grises ceniza; el acento ámbar o carmín es muy puntual (uso_acento bajo)."""
@@ -1429,12 +1501,19 @@ class ArtDirector:
                 raw = await fn(text)
                 if self.hub.status.get("llm") != name:
                     self.hub.set_status(llm=name)
-                return sanitize_direction(raw, text, list(self.modes)), name
+                return self._always_image(sanitize_direction(raw, text, list(self.modes))), name
             except Exception as exc:
                 log.warning("LLM %s falló: %s", name, exc)
         if self.hub.status.get("llm") != "heuristic":
             self.hub.set_status(llm="heuristic")
-        return heuristic_direction(text, list(self.modes)), "heuristic"
+        return self._always_image(heuristic_direction(text, list(self.modes))), "heuristic"
+
+    @staticmethod
+    def _always_image(direction: dict[str, Any]) -> dict[str, Any]:
+        """Cada estrofa produce una imagen: «simbolico» pasa a «hibrido» (la biblioteca cubre si no hay dibujo)."""
+        if direction.get("modo_visual") not in ("concreto", "hibrido"):
+            direction["modo_visual"] = "hibrido"
+        return direction
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -1607,6 +1686,28 @@ async def run_check() -> None:
             print("    · 401: clave inválida o revocada → genera otra en platform.openai.com/api-keys")
             print("    · 429 / insufficient_quota: sin saldo → platform.openai.com/settings/organization/billing")
             print("    · model_not_found: cambia TRANSCRIPTION_MODEL (p. ej. gpt-4o-mini-transcribe)")
+
+    # ── Director de arte (imágenes) ──
+    print()
+    try:
+        ensure_user_dir()
+        st = SettingsStore(os.path.join(USER_DIR, "ajustes.json"))
+        director = ArtDirector(cfg, FrontendHub(cfg), st)
+        director.http = httpx.AsyncClient(timeout=httpx.Timeout(cfg.llm_timeout, connect=4.0))
+        t0 = time.perf_counter()
+        d, prov = await director.direct("la casa respira bajo el agua / y el silencio sube por la escalera")
+        await director.http.aclose()
+        ms = int((time.perf_counter() - t0) * 1000)
+        paths = len(d.get("svg_paths") or [])
+        dibujo = f"dibujó {paths} trazo(s) SVG" if paths else "sin dibujo propio (usa la biblioteca)"
+        mark = "✓" if prov != "heuristic" else "⚠"
+        print(f"{mark} Director de arte: {prov} · {ms / 1000:.1f} s · {d['modo_visual']} · {dibujo}")
+        if prov == "heuristic":
+            print("  ningún LLM respondió: se usan figuras de la biblioteca. Revisa la clave de OpenAI o abre Ollama.")
+        elif ms > 8000:
+            print("  lento para dibujar en vivo: prueba el director OpenAI o «Curadas» en el panel C.")
+    except Exception as exc:
+        print(f"✗ Director de arte: {exc}")
 
     # ── Micrófono ──
     print()

@@ -30,7 +30,8 @@ export const DEFAULT_SETTINGS = {
   glitch_ambiente: 0, // 0..1: glitch ocasional también en los otros estilos
   ascii_filas: 40, // resolución de la grilla ASCII
   // marca FLAT (completar con el manual de marca)
-  marca: { base: '#F4F1EA', secundario: '#8C8984', acento: '#E3A14B', fuente: '', fuente_nombre: '', mayusculas: true, global: true },
+  // Manual de marca FLAT: acento ROSA «Ciclo Umbral» #ff9898, gris #cccccc; Geist Mono + Roboto
+  marca: { base: '#FFFFFF', secundario: '#CCCCCC', acento: '#FF9898', fuente: '', fuente_nombre: '', mayusculas: true, global: true },
   // modo T: muro de palabras
   muro: { tipo: 'grilla', filas: 34, mayusculas: true }, // cada cuánto una imagen: verso | estrofa | contemplativa | personalizada
   pointcloud: true, // estética nube de puntos (TouchDesigner)

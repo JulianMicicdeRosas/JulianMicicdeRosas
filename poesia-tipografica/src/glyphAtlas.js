@@ -11,8 +11,10 @@ import * as THREE from 'three';
 export const FONTS = {
   serif: { family: '"Cormorant Garamond", "Bodoni Moda", "Bodoni 72", Georgia, serif', weight: 500, em: 0.72 },
   mono: { family: '"IBM Plex Mono", "JetBrains Mono", Consolas, monospace', weight: 400, em: 0.56 },
-  // tipografía de marca (FLAT): se carga desde el panel C; hasta entonces usa la mono
-  brand: { family: '"Marca FLAT", "IBM Plex Mono", Consolas, monospace', weight: 500, em: 0.6 },
+  // Manual de marca FLAT: Geist Mono para títulos y destacados, Roboto para texto.
+  // («Marca FLAT» = tipografía cargada a mano desde el panel C, si se quiere reemplazar)
+  brand: { family: '"Marca FLAT", "Geist Mono", "IBM Plex Mono", Consolas, monospace', weight: 500, em: 0.56 },
+  brandText: { family: '"Roboto", "Helvetica Neue", Arial, sans-serif', weight: 400, em: 0.62 },
 };
 
 // Rampa de densidad para el estilo ASCII (además de las letras del verso)
@@ -131,6 +133,8 @@ export async function loadFonts() {
   const probes = [
     `${FONTS.serif.weight} 64px "Cormorant Garamond"`,
     `${FONTS.mono.weight} 64px "IBM Plex Mono"`,
+    `500 64px "Geist Mono"`,
+    `400 64px "Roboto"`,
   ];
   try {
     await Promise.race([

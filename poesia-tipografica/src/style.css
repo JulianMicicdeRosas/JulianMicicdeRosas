@@ -476,3 +476,14 @@ body.hide-cursor * {
 #logostage.on {
   opacity: 1;
 }
+#config .swatches {
+  display: flex;
+  gap: 4px;
+  margin: 6px 0;
+}
+#config .swatches button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #222;
+}

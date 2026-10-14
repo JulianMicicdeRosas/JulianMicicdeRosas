@@ -220,7 +220,9 @@ export class LogoStage {
     cancelAnimationFrame(this.anim);
     const { ctx, canvas } = this;
     const W = canvas.width, H = canvas.height;
-    const layers = [prev, next].map((b) => (b ? { b, r: this._tint(b, '#ff2a3c'), c: this._tint(b, '#21e6ff') } : null));
+    // separación de color con la paleta FLAT: rosa «Ciclo Umbral» y lila «Ciclo Refracción»
+    const [ca, cb] = this.colors || ['#ff9898', '#9999ff'];
+    const layers = [prev, next].map((b) => (b ? { b, r: this._tint(b, ca), c: this._tint(b, cb) } : null));
     const t0 = performance.now();
     let lastShuffle = 0, slices = [];
     const step = (now) => {
