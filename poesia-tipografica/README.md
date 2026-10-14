@@ -213,16 +213,19 @@ la figura de la biblioteca. En modo palabras (T) las ilustraciones también se c
 
 ## Placa del artista · tamaños en grilla · tecla 0
 
-**Placa del artista (1–4, 6–9)**: primero se ve el nombre sobre el muro. Cuando la persona **empieza a hablar**
-(la voz supera el umbral ~0,35 s) o se aprieta S, **toda la placa se borra** con glitch, letra por letra, y empieza
-el muro del artista:
+**Placa del artista (1–4, 6–9)**: primero se ve el nombre sobre el muro. **Los primeros 3 s no se transcribe nada**
+(presentación, aplausos: ni la voz dispara ni ese audio llega a OpenAI). Después, cuando la persona **empieza a
+hablar** (o se aprieta S), arranca su animación. Las animaciones se alternan por número (6–9 repiten el ciclo) y en
+el panel C cada artista puede fijar la suya:
 
-- cada palabra dicha aparece en la grilla, en un lugar libre, en **tamaños muy distintos**: el módulo del muro es
-  el mínimo y algunas ocupan 2, 3, 5, 8 o 12 módulos (hasta un tercio del alto). Los tamaños grandes son para
-  palabras con peso; las cortas y de enlace (la, el, y, de…) quedan chicas. Las grandes pueden ir en el rosa de la marca.
-- cuando la pantalla se **satura** (~45 % ocupada), las más viejas se rompen con glitch hasta bajar a ~30 %.
-- **cada oración trae su dibujo** (composición del LLM + tratamiento) hecho con lo dicho, en positivo sobre negro;
-  las palabras que lo tapan se rompen para que se lea.
+| N.º | Animación | Qué se ve |
+| --- | --- | --- |
+| 1 | **Clásica** | el nombre se borra; muro de texto con la transcripción y dibujos calados en el muro |
+| 2 | **Muro** | toda la placa se borra; cada palabra dicha en la grilla en tamaños de 1× a 12× (las grandes sólo para palabras con peso); al saturar se rompen las más viejas; **un dibujo por oración** hecho con lo dicho |
+| 3 | **Cruce** | como Muro, pero la mitad de las palabras van en vertical, como un crucigrama |
+| 4 | **Constelación** | toda la placa se borra; hasta 14 palabras unidas por líneas finas que arman figuras y se rompen con glitch; un dibujo por oración |
+
+En las animaciones con dibujo, las palabras que lo tapan se rompen para que se lea.
 
 Se ajusta en panel C → Micrófono («Placa del artista…» y «Umbral de voz»); el comienzo de lo dicho no se pierde
 (el backend guarda el último segundo y medio de audio).

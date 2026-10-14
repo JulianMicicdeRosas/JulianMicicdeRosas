@@ -321,6 +321,7 @@ export class ConfigPanel {
         (a, i) => `<div class="item" data-i="${i}">
           <span class="num">${i < 9 ? i + 1 : i === 9 ? 0 : '–'}</span>
           <input data-field="artist" value="${esc(a.name)}" placeholder="Nombre del artista">
+          <select data-field="animacion" title="animación al hablar">${[['', 'animación: según el número'], ['clasica', 'clásica (muro + transcripción)'], ['muro', 'muro de tamaños + dibujo'], ['cruce', 'cruce (horizontal/vertical) + dibujo'], ['constelacion', 'constelación + dibujo']].map(([v, l]) => `<option value="${v}"${(a.animacion || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
           <button data-act="up" title="subir">↑</button><button data-act="down" title="bajar">↓</button>
           <button data-act="del" title="quitar">✕</button></div>`,
       )
@@ -851,6 +852,10 @@ export class ConfigPanel {
     const i = +item.dataset.i;
     if (field === 'artist') {
       this._commit((s) => (s.artists[i].name = t.value), false);
+      return;
+    }
+    if (field === 'animacion') {
+      if (ev.type === 'change') this._commit((s) => (s.artists[i].animacion = t.value || undefined), false);
       return;
     }
     if (ev.type === 'input' && (field === 'tipo' || field === 'render')) return; // los select llegan por change

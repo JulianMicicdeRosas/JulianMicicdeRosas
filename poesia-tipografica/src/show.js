@@ -10,8 +10,10 @@
 import { sampleText, sampleImage } from './svgSampler.js';
 import { processLogo, paginate, composeLogos, LogoStage } from './logos.js';
 
+export const ANIMS = ['clasica', 'muro', 'cruce', 'constelacion'];
+
 export const DEFAULT_SETTINGS = {
-  artists: [{ name: 'Nombre del artista 1' }, { name: 'Nombre del artista 2' }, { name: 'Nombre del artista 3' }],
+  artists: [{ name: 'Nombre del artista 1' }, { name: 'Nombre del artista 2' }, { name: 'Nombre del artista 3' }, { name: 'Nombre del artista 4' }],
   // Loop hasta que empieza la noche (categorías de flatfestival.org): organizadores → socio cultural (más
   // tiempo) → patrocinadores → acompañan → embajadas → media partner → UMBRAL. Carpeta vacía = se salta.
   // Las carpetas se leen de Documentos/Umbral/logos/… (fuera del programa: no se pierden al actualizar).
@@ -179,10 +181,24 @@ export class Show {
     else this.start(...this.nextRecording());
   }
 
-  /** Qué arranca S: en la placa del artista, el muro de palabras (borrando la placa); si no, lo que había. */
+  /**
+   * Animación de cada artista (se alternan): 1 clásica (muro de texto + transcripción + dibujos calados) ·
+   * 2 muro (palabras de muchos tamaños + un dibujo por oración) · 3 cruce (palabras horizontales y verticales,
+   * como un crucigrama) · 4 constelación (palabras unidas por líneas + un dibujo por oración). 6–9 repiten el ciclo.
+   * Cada artista puede fijar la suya en el panel C.
+   */
+  artistAnim(n) {
+    const a = this.artists[n - 1] || {};
+    return ANIMS.includes(a.animacion) ? a.animacion : ANIMS[(n - 1) % ANIMS.length];
+  }
+
+  /** Qué arranca S (o la voz): en la placa del artista, su animación; si no, lo que había. */
   nextRecording() {
-    if (this.state === 'artist') return ['muro', { dissolve: true }];
-    return [this.state === 'perform' ? this.mode : 'poema'];
+    if (this.state === 'artist') {
+      const anim = this.artistAnim(this.artistIdx + 1);
+      return anim === 'clasica' ? ['poema', { dissolve: true }] : ['muro', { dissolve: true, variante: anim }];
+    }
+    return [this.state === 'perform' ? this.mode : 'poema', { variante: this.variant }];
   }
 
   /** Detener la grabación (tecla S o P): la composición queda en pantalla; S reanuda. */
@@ -506,12 +522,18 @@ export class Show {
     f.wallFx = true; // en el muro del artista aparecen palabras grandes en grilla
     this.state = 'artist';
     this.artistIdx = n - 1;
+    this.artistAt = performance.now();
+    // 3 s de gracia: el audio previo (presentación, aplausos) no entra a la transcripción
+    const tok = this.loopToken;
+    setTimeout(() => tok === this.loopToken && this.state === 'artist' && this.onPrerollReset?.(), 3000);
     this.notify(`${n} · ${a.name} — S para comenzar`);
     return true;
   }
 
   // ── grabación ────────────────────────────────────────────────────────────
-  start(mode = 'poema', { dissolve = false } = {}) {
+  start(mode = 'poema', { dissolve = false, variante = null } = {}) {
+    const fromArtist = this.state === 'artist';
+    const v = mode === 'muro' ? variante || 'muro' : null;
     clearTimeout(this.loopTimer);
     this.loopToken++;
     this._hideImage();
@@ -523,8 +545,10 @@ export class Show {
       if (dissolve) f.dissolveTitle(2.6); // la persona empezó a hablar: el nombre se borra de a poco
       else f.clearTitle();
     }
-    f.sparseMode = mode === 'pocas';
-    f.artistWall = mode === 'muro';
+    f.sparseMode = mode === 'pocas' || v === 'constelacion';
+    f.sparseMax = v === 'constelacion' ? 14 : 9;
+    f.artistWall = v === 'muro' || v === 'cruce';
+    f.artistCross = v === 'cruce';
     f.backdropOnlyShape = mode === 'muro';
     f.wallFx = mode === 'poema' || mode === 'palabras';
     if (mode === 'pocas') {
@@ -544,6 +568,7 @@ export class Show {
       if (this.state !== 'perform' || dissolve) f.dissolveBackdrop(2.6);
       f.setShape(null);
       f.clearWords();
+      f.clearSparse();
       f.setBackdrop(true); // el telón queda para los dibujos (sólo se ve donde está la figura)
       f.wordsToBackdrop = false;
       f.cursorEnabled = false;
@@ -566,7 +591,14 @@ export class Show {
     }
     this.state = 'perform';
     this.mode = mode;
-    this._setRecording(true);
+    this.variant = v;
+    // al poner el número del artista, los primeros 3 s no se transcribe nada (presentación, aplausos)
+    const wait = fromArtist && this.artistAt ? 3000 - (performance.now() - this.artistAt) : 0;
+    if (wait > 0) {
+      const tok = ++this.recToken;
+      this.recording = false;
+      setTimeout(() => tok === this.recToken && this.state === 'perform' && this._setRecording(true), wait);
+    } else this._setRecording(true);
     this.notify(`● GRABANDO · ${{ palabras: 'palabras', pocas: 'pocas palabras', muro: 'artista' }[mode] || 'poema'}`);
   }
 
@@ -582,6 +614,7 @@ export class Show {
   }
 
   _setRecording(on) {
+    if (!on) this.recToken = (this.recToken || 0) + 1; // cancela un arranque demorado
     this.recording = on;
     this.onSession({ recording: on, mode: this.mode });
   }

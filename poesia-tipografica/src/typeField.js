@@ -143,6 +143,8 @@ export class TypeField {
     this.titleFade = null; // el nombre se borra de a poco: su hueco en el muro dura hasta que termina
     // placas de artista hablando (modo «muro»): palabras de muchos tamaños + sólo el dibujo del telón
     this.artistWall = false;
+    this.artistCross = false; // «cruce»: palabras horizontales y verticales, como un crucigrama
+    this.sparseMax = 9;
     this.backdropOnlyShape = false; // el telón sólo se ve donde está el dibujo
     this.fxVer = 0;
     this.fxNext = 0;
@@ -1841,10 +1843,12 @@ export class TypeField {
     if (STOP.has(nw) || nw.length <= 2) k = Math.min(k, 2);
     else if (nw.length <= 3) k = Math.min(k, 3);
     while (k > 1 && (len * k > W.colsN * 0.92 || k > W.rowsN * 0.4)) k--;
-    const wC = len * k;
+    // «cruce»: la mitad de las palabras van en vertical (letras de arriba abajo), si entran
+    const vert = this.artistCross && Math.random() < 0.5 && len * k <= W.rowsN;
+    const wC = vert ? k : len * k, hR = vert ? len * k : k;
     const free = (r, c) => {
-      if (r < 0 || c < 0 || r + k > W.rowsN || c + wC > W.colsN) return false;
-      for (let dr = -1; dr <= k; dr++) {
+      if (r < 0 || c < 0 || r + hR > W.rowsN || c + wC > W.colsN) return false;
+      for (let dr = -1; dr <= hR; dr++) {
         const rr = r + dr;
         if (rr < 0 || rr >= W.rowsN) continue;
         for (let dc = -1; dc <= wC; dc++) {
@@ -1858,7 +1862,7 @@ export class TypeField {
     let pos = null;
     for (let attempt = 0; attempt < 4 && !pos; attempt++) {
       for (let n = 0; n < 160; n++) {
-        const r = Math.floor(Math.random() * (W.rowsN - k + 1)), c = Math.floor(Math.random() * (W.colsN - wC + 1));
+        const r = Math.floor(Math.random() * (W.rowsN - hR + 1)), c = Math.floor(Math.random() * (W.colsN - wC + 1));
         if (free(r, c)) {
           pos = [r, c];
           break;
@@ -1869,7 +1873,7 @@ export class TypeField {
     }
     if (!pos) return;
     const [r0, c0] = pos, id = W.nextId++, cells = [];
-    for (let dr = 0; dr < k; dr++) for (let dc = 0; dc < wC; dc++) {
+    for (let dr = 0; dr < hR; dr++) for (let dc = 0; dc < wC; dc++) {
       const ci = (r0 + dr) * W.colsN + c0 + dc;
       W.occ[ci] = id;
       cells.push(ci);
@@ -1884,8 +1888,8 @@ export class TypeField {
       this.pslot[i] = this.atlas.slot(ch, this._k('mono'));
       this.ptint[i] = 0;
       this.paccent[i] = accent;
-      this.tx[i] = W.x0 + (c0 + n * k + k / 2) * W.cw;
-      this.ty[i] = W.y0 - (r0 + k / 2) * W.rh;
+      this.tx[i] = W.x0 + (c0 + (vert ? 0 : n * k) + k / 2) * W.cw;
+      this.ty[i] = W.y0 - (r0 + (vert ? n * k : 0) + k / 2) * W.rh;
       this.tz[i] = 0;
       this.trot[i] = this.rot[i] = 0;
       this.tsize[i] = this.size[i] = S;
@@ -1929,8 +1933,8 @@ export class TypeField {
 
   /** Al llegar un dibujo: las palabras que lo tapan se rompen (el dibujo se lee limpio). */
   breakWordsOverShape() {
-    const W = this.wall;
-    if (!W || !this.shape || !this.backdrop) return;
+    const W = this.wall || { words: new Map() };
+    if (!this.shape || !this.backdrop) return;
     // cada letra se revisa en su centro y en sus cuatro esquinas: si alguna cae sobre el dibujo, la palabra se rompe
     const over = (i) => {
       const h = this.tsize[i] * 0.32;
@@ -1939,6 +1943,10 @@ export class TypeField {
     };
     for (const [id, w] of [...W.words]) {
       if (w.idx.some((i) => this.state[i] === WORD && over(i))) this._wallBreak(id);
+    }
+    // constelación: las palabras sueltas que tapan el dibujo también se rompen
+    for (let k = this.sparse.length - 1; k >= 0; k--) {
+      if (this.sparse[k].idx.some((i) => this.state[i] === WORD && over(i))) this._breakSparse(this.sparse.splice(k, 1)[0], this.time);
     }
   }
 
@@ -2299,7 +2307,7 @@ export class TypeField {
     this.sparse.push({ idx, x, y, k, w: width, until: t + 7 + Math.random() * 5 });
     this.metaDirty = true;
     this.onTransition?.(0.18);
-    while (this.sparse.length > 9) this._breakSparse(this.sparse.shift(), t);
+    while (this.sparse.length > this.sparseMax) this._breakSparse(this.sparse.shift(), t);
   }
 
   _breakSparse(w, t) {

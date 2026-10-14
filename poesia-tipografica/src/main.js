@@ -154,7 +154,7 @@ async function boot() {
         preview = toneToText(t.tone, t.accent, gw, gh);
       }
       const origen = `${pick.origen} · ${kind}`;
-      const artistWall = show.mode === 'muro' && show.state === 'perform';
+      const artistWall = show.mode === 'muro' && show.state === 'perform'; // muro, cruce o constelación
       const pol = pick.chars || artistWall ? 'positivo' : choosePolarity(dir); // en las placas, el dibujo sobre negro
       lastGrid = { grid: preview, origen, pol };
       // el contorno de la forma va en el color de acento de la marca
@@ -305,7 +305,8 @@ async function boot() {
   function detectVoice(rms) {
     const now = performance.now(), dt = Math.min(0.1, (now - lastVoiceT) / 1000);
     lastVoiceT = now;
-    if (replayMode || show.state !== 'artist' || settings.inicio_por_voz === false) {
+    // los primeros 3 s de la placa no cuentan (presentación, aplausos)
+    if (replayMode || show.state !== 'artist' || settings.inicio_por_voz === false || now - (show.artistAt || 0) < 3000) {
       voiceFor = 0;
       return;
     }
@@ -314,7 +315,7 @@ async function boot() {
     if (voiceFor > 0.35) {
       voiceFor = 0;
       logUi({ action: 'voz' });
-      show.start('muro', { dissolve: true });
+      show.start(...show.nextRecording());
       config.setState(show.label());
     }
   }
@@ -415,6 +416,7 @@ async function boot() {
     notify: (t) => notify(t),
     interiorTarget: Math.min(4200, CONFIG.pool * 0.32),
     onSession: (st) => socket?.send({ type: 'session', ...st }),
+    onPrerollReset: () => socket?.send({ type: 'preroll_reset' }),
   });
   show.setSettings(settings);
   applyLiveSettings();
@@ -477,7 +479,7 @@ async function boot() {
         field.clearScene();
         show.goLoop();
       } else if (m.action === 'grabar') show.start(...show.nextRecording());
-      else if (m.action === 'voz') show.start('muro', { dissolve: true });
+      else if (m.action === 'voz') show.start(...show.nextRecording());
       else if (m.action === 'detener') show.stop();
       else if (m.key) doKey(m.key);
       config.setState(show.label());

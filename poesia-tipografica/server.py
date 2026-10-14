@@ -2364,7 +2364,10 @@ async def main_async(args: argparse.Namespace) -> None:
 
     async def on_frontend(msg: dict[str, Any], ws: ServerConnection) -> None:
         kind = msg.get("type")
-        if kind == "ui":  # tecla o botón del show: se guarda para re-proyectar
+        if kind == "preroll_reset":  # placa del artista: lo previo (presentación, aplausos) no se transcribe
+            if audio is not None:
+                audio.preroll.clear()
+        elif kind == "ui":  # tecla o botón del show: se guarda para re-proyectar
             if recorder is not None:
                 recorder.event("ui", **{k: v for k, v in msg.items() if k != "type"})
         elif kind == "inject_verse":  # modo debug del navegador
