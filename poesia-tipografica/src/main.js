@@ -308,6 +308,10 @@ async function boot() {
 
   // ── backend ──────────────────────────────────────────────────────────────
   let backendSettingsLoaded = false;
+  // grabación de la sesión: teclas y botones del show van al backend (eventos.jsonl) para re-proyectar
+  let replayMode = false;
+  let bootLogged = false;
+  const logUi = (ev) => !replayMode && socket?.send({ type: 'ui', ...ev });
   const socket = new BackendSocket(CONFIG.ws, {
     open: () => {
       debug.setStatus({ backend: 'connected' });
@@ -320,6 +324,13 @@ async function boot() {
       config.setBackend(false);
     },
     hello: (m) => {
+      replayMode = !!m.replay;
+      if (m.replay) notify(`RE-PROYECCIÓN · ${String(m.replay.carpeta || '').split(/[\\/]/).pop()}`);
+      else if (!bootLogged) {
+        bootLogged = true;
+        logUi({ action: 'arranque' }); // la escena empieza de cero (al re-proyectar se reinicia aquí)
+      }
+      config.setRecInfo(m.grabacion, m.replay);
       debug.setStatus({ backend: 'connected', ...(m.status || {}) });
       config.setMicStatus(m.status || {});
       config.setDefaultPrompt(m.default_prompt);
@@ -341,6 +352,19 @@ async function boot() {
       }
     },
     key_status: (m) => config.setKeyStatus(m),
+    grabacion: (m) => config.setRecInfo(m),
+    // ── re-proyección: el backend repite lo que pasó, en su segundo exacto ──
+    replay_ui: (m) => {
+      if (m.action === 'arranque') {
+        field.clearScene();
+        show.goLoop();
+      } else if (m.action === 'grabar') show.start(show.state === 'perform' ? show.mode : 'poema');
+      else if (m.action === 'detener') show.stop();
+      else if (m.key) doKey(m.key);
+      config.setState(show.label());
+    },
+    replay_settings: (m) => setSettings({ ...settings, ...(m.settings || {}) }, { persist: false }),
+    replay_end: () => notify('Fin de la re-proyección'),
     grid_test: (m) => {
       lastGrid = null;
       // verla también en la pared: si la grilla del LLM falló, se usa su silueta SVG o la biblioteca
@@ -393,10 +417,12 @@ async function boot() {
       settings = { ...settings, estilos: prev };
     },
     onRecord: () => {
+      logUi({ action: 'grabar' });
       show.start(show.state === 'perform' ? show.mode : 'poema');
       config.setState(show.label());
     },
     onStop: () => {
+      logUi({ action: 'detener' });
       show.stop();
       config.setState(show.label());
     },
@@ -472,6 +498,8 @@ async function boot() {
   debug.setStatus({ backend: 'offline' });
 
   // ── teclado del operador ─────────────────────────────────────────────────
+  // teclas que cambian lo que se ve: se graban y, al re-proyectar, las repite el backend
+  const SHOW_KEY = /^(arrowright|arrowleft|[0-9]|s|p|t|l)$/;
   window.addEventListener('keydown', (e) => {
     const tag = document.activeElement?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
@@ -480,8 +508,16 @@ async function boot() {
     }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key.toLowerCase();
-    if (k === 'arrowright' || k === 'arrowleft') {
+    if (SHOW_KEY.test(k)) {
+      if (replayMode) return; // re-proyectando: el show lo conduce la grabación
       e.preventDefault();
+      logUi({ key: k });
+    }
+    doKey(k, e);
+  });
+
+  function doKey(k, e = null) {
+    if (k === 'arrowright' || k === 'arrowleft') {
       show.step(k === 'arrowright' ? 1 : -1);
       config.setState(show.label());
       return;
@@ -500,11 +536,11 @@ async function boot() {
       config.toggle(false);
       debug.toggle(false);
     } else if (k === ' ' && debug.isOpen) {
-      e.preventDefault();
+      e?.preventDefault();
       debug.nextVerse();
     } else return;
     config.setState(show.label());
-  });
+  }
 
   let cursorTimer = 0;
   const showCursor = () => {

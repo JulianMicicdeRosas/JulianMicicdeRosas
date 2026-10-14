@@ -290,6 +290,7 @@ def ensure_user_dir() -> None:
                          "ajustes.json → artistas, curaduría, loop y demás opciones del panel C.\n")
     except OSError as exc:
         log.warning("No pude crear %s: %s", USER_DIR, exc)
+LOGO_ROOTS: list[str] = []  # re-proyección: los logos copiados en la grabación van primero
 LOGO_EXT = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
             ".svg": "image/svg+xml", ".gif": "image/gif"}
 _logo_cache: dict[str, tuple[float, int, str]] = {}
@@ -311,7 +312,7 @@ def _resolve_logo_folder(folder: str) -> str:
     «socio-cultural» / «socio_cultural» y mayúsculas. Sólo dentro de esas dos raíces."""
     folder = (folder or "").strip().strip("/\\")
     found: list[str] = []
-    for root in (USER_DIR, BASE_DIR):
+    for root in (*LOGO_ROOTS, USER_DIR, BASE_DIR):
         target = os.path.realpath(os.path.join(root, folder))
         if not (target == root or target.startswith(root + os.sep)):
             continue
@@ -396,6 +397,112 @@ def read_logo_folder(folder: str) -> list[dict[str, str]]:
 #  Hub WebSocket local (Three.js)
 # ════════════════════════════════════════════════════════════════════════════
 
+# ════════════════════════════════════════════════════════════════════════════
+#  Grabación de la sesión: audio continuo + todo lo que pasa, para re-proyectar otro día
+# ════════════════════════════════════════════════════════════════════════════
+
+RECORDINGS_DIR = os.path.join(USER_DIR, "grabaciones")
+# mensajes al frontend que no se guardan: el análisis del audio se recalcula desde audio.wav al re-proyectar
+_NO_RECORD = {"audio_reactive", "pong", "hello", "devices", "logos", "grabacion"}
+
+
+def _wav_header(sr: int, n_samples: int) -> bytes:
+    data = n_samples * 2
+    return (b"RIFF" + (36 + data).to_bytes(4, "little") + b"WAVEfmt " + (16).to_bytes(4, "little")
+            + (1).to_bytes(2, "little") + (1).to_bytes(2, "little") + sr.to_bytes(4, "little")
+            + (sr * 2).to_bytes(4, "little") + (2).to_bytes(2, "little") + (16).to_bytes(2, "little")
+            + b"data" + data.to_bytes(4, "little"))
+
+
+class SessionRecorder:
+    """Desde que arranca el programa: audio.wav (24 kHz mono, continuo) + eventos.jsonl con tiempos en segundos
+    desde el mismo instante. El audio se alinea al reloj: si el micrófono se corta se rellena con silencio, así cada
+    evento cae siempre en su lugar del audio. Todo se escribe a disco de inmediato (un corte de luz no pierde nada)."""
+
+    def __init__(self, sr: int) -> None:
+        self.sr = sr
+        self.dir = os.path.join(RECORDINGS_DIR, time.strftime("%Y-%m-%d_%H-%M-%S"))
+        os.makedirs(self.dir, exist_ok=True)
+        self.t0 = time.monotonic()
+        self.samples = 0
+        self.events = 0
+        self.wav = open(os.path.join(self.dir, "audio.wav"), "wb")
+        self.wav.write(_wav_header(sr, 0))
+        self.ev = open(os.path.join(self.dir, "eventos.jsonl"), "a", encoding="utf-8", buffering=1)
+        self._hdr_at = self.t0
+        self._lock = __import__("threading").Lock()
+        with open(os.path.join(self.dir, "sesion.json"), "w", encoding="utf-8") as fh:
+            json.dump({"inicio": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "sample_rate": sr, "version": 1,
+                       "programa": "poesia-tipografica"}, fh, ensure_ascii=False, indent=2)
+        log.info("Grabando la sesión en %s", self.dir)
+
+    def now(self) -> float:
+        return time.monotonic() - self.t0
+
+    def snapshot(self, settings_path: str) -> None:
+        """Copia de los ajustes y de los logos del arranque (la re-proyección no depende de cambios posteriores)."""
+        import shutil
+        try:
+            if os.path.exists(settings_path):
+                shutil.copy2(settings_path, os.path.join(self.dir, "ajustes.json"))
+            logos = os.path.join(USER_DIR, "logos")
+            size = sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(logos) for f in fs) if os.path.isdir(logos) else 0
+            if 0 < size < 300 * 2 ** 20:
+                shutil.copytree(logos, os.path.join(self.dir, "logos"), dirs_exist_ok=True)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("No pude copiar ajustes/logos a la grabación: %s", exc)
+
+    def audio(self, pcm: bytes) -> None:
+        with self._lock:
+            n = len(pcm) // 2
+            gap = int(self.now() * self.sr) - (self.samples + n)
+            if gap > 0.3 * self.sr:  # el micrófono se cortó: silencio para no desincronizar
+                self._write(bytes(gap * 2), gap)
+            elif gap < -0.3 * self.sr:  # el reloj de la placa adelanta: descartar lo que sobra
+                drop = min(n, -gap)
+                pcm, n = pcm[drop * 2:], n - drop
+            if n:
+                self._write(pcm, n)
+
+    def tick(self) -> None:
+        """Cada segundo: si no llega audio (sin micrófono), escribir silencio hasta el instante actual."""
+        with self._lock:
+            gap = int(self.now() * self.sr) - self.samples
+            if gap > 0.5 * self.sr:
+                self._write(bytes(gap * 2), gap)
+
+    def _write(self, data: bytes, n: int) -> None:
+        self.wav.write(data)
+        self.samples += n
+        t = time.monotonic()
+        if t - self._hdr_at > 5:
+            self._fix_header()
+            self._hdr_at = t
+
+    def _fix_header(self) -> None:
+        self.wav.seek(0)
+        self.wav.write(_wav_header(self.sr, self.samples))
+        self.wav.seek(0, os.SEEK_END)
+        self.wav.flush()
+
+    def event(self, kind: str, **data: Any) -> None:
+        try:
+            self.ev.write(json.dumps({"t": round(self.now(), 3), "k": kind, **data}, ensure_ascii=False,
+                                     separators=(",", ":")) + "\n")
+            self.events += 1
+        except Exception as exc:  # noqa: BLE001
+            log.warning("No pude registrar el evento: %s", exc)
+
+    def info(self) -> dict[str, Any]:
+        return {"carpeta": self.dir, "segundos": round(self.samples / self.sr, 1), "eventos": self.events}
+
+    def close(self) -> None:
+        with self._lock:
+            self._fix_header()
+            self.wav.close()
+            self.ev.close()
+
+
 class FrontendHub:
     """Servidor WebSocket local. Difunde sin backpressure (los clientes son locales)."""
 
@@ -407,11 +514,14 @@ class FrontendHub:
         # Estado del show dictado por el frontend: sólo se transcribe mientras recording=True.
         self.session: dict[str, Any] = {"recording": False, "mode": "poema"}
         self.hello_extra: Callable[[], dict[str, Any]] = lambda: {}
+        self.recorder: SessionRecorder | None = None
 
     async def handler(self, ws: ServerConnection) -> None:
         self.clients.add(ws)
         peer = getattr(ws, "remote_address", None)
         log.info("Frontend conectado %s (%d clientes)", peer, len(self.clients))
+        if self.recorder is not None:
+            self.recorder.event("frontend")  # el navegador arrancó (o recargó): la escena empieza de cero
         try:
             await ws.send(self._encode("hello", server="poesia-tipografica", version=2,
                                        sample_rate=self.cfg.sample_rate, status=self.status,
@@ -444,11 +554,15 @@ class FrontendHub:
         return json.dumps({"type": type_, **payload}, ensure_ascii=False, separators=(",", ":"))
 
     def emit(self, type_: str, **payload: Any) -> None:
+        if self.recorder is not None and type_ not in _NO_RECORD:
+            self.recorder.event("msg", m={"type": type_, **payload})
         if not self.clients:
             return
         broadcast(self.clients, self._encode(type_, **payload))
 
     async def reply(self, ws: ServerConnection | None, type_: str, **payload: Any) -> None:
+        if ws is not None and self.recorder is not None and type_ not in _NO_RECORD:
+            self.recorder.event("msg", m={"type": type_, **payload})
         if ws is None:
             self.emit(type_, **payload)
         else:
@@ -682,6 +796,8 @@ class AudioEngine:
             pcm = (np.clip(x, -1.0, 1.0) * 32767.0).astype(np.int16).tobytes()
         else:
             pcm = data
+        if self.hub.recorder is not None:
+            self.hub.recorder.audio(pcm)
 
         n = x.size
         if n >= self.fft_size:
@@ -1732,6 +1848,12 @@ async def main_async(args: argparse.Namespace) -> None:
     ensure_user_dir()
     await asyncio.to_thread(ensure_flat_logo)
     settings_path = args.settings or os.path.join(USER_DIR, "ajustes.json")
+    recorder = None
+    if not args.no_record:
+        try:
+            recorder = SessionRecorder(cfg.sample_rate)
+        except Exception as exc:  # noqa: BLE001
+            log.error("No pude crear la grabación de la sesión: %s", exc)
     legacy = os.path.join(BASE_DIR, "settings.local.json")
     if not args.settings and not os.path.exists(settings_path) and os.path.exists(legacy):
         try:  # migrar ajustes que quedaron dentro del proyecto
@@ -1743,6 +1865,9 @@ async def main_async(args: argparse.Namespace) -> None:
     settings = SettingsStore(settings_path)
     log.info("Carpeta de la muestra: %s", USER_DIR)
     hub = FrontendHub(cfg)
+    if recorder is not None:
+        recorder.snapshot(settings_path)
+        hub.recorder = recorder
     director = ArtDirector(cfg, hub, settings)
     use_openai = not args.no_openai
     oa_queue: asyncio.Queue[bytes] | None = asyncio.Queue(maxsize=300) if use_openai else None
@@ -1759,6 +1884,7 @@ async def main_async(args: argparse.Namespace) -> None:
     hub.hello_extra = lambda: {"settings": settings.data, "default_prompt": DEFAULT_AESTHETIC,
                                      "default_prompt_grilla": DEFAULT_GRID_AESTHETIC, "key": key_status(),
                                "user_dir": USER_DIR,
+                               "grabacion": recorder.info() if recorder else None,
                                "session": hub.session}
 
     def on_verse(text: str, item_id: str, source: str) -> None:
@@ -1770,7 +1896,10 @@ async def main_async(args: argparse.Namespace) -> None:
 
     async def on_frontend(msg: dict[str, Any], ws: ServerConnection) -> None:
         kind = msg.get("type")
-        if kind == "inject_verse":  # modo debug del navegador
+        if kind == "ui":  # tecla o botón del show: se guarda para re-proyectar
+            if recorder is not None:
+                recorder.event("ui", **{k: v for k, v in msg.items() if k != "type"})
+        elif kind == "inject_verse":  # modo debug del navegador
             director.add_verse(str(msg.get("text", ""))[:600], str(msg.get("item_id", "")), "debug")
         elif kind == "session":
             was = hub.session.get("recording")
@@ -1847,6 +1976,18 @@ async def main_async(args: argparse.Namespace) -> None:
 
     hub.on_message = on_frontend
     tasks: list[Awaitable[Any]] = [director.run()]
+
+    async def recorder_tick() -> None:
+        n = 0
+        while recorder is not None:
+            await asyncio.sleep(1.0)
+            recorder.tick()
+            n += 1
+            if n % 5 == 0:
+                hub.emit("grabacion", **recorder.info())
+
+    if recorder is not None:
+        tasks.append(recorder_tick())
     if audio is not None:
         tasks.append(audio.run())
     else:
@@ -1860,8 +2001,232 @@ async def main_async(args: argparse.Namespace) -> None:
     async with serve(hub.handler, cfg.ws_host, cfg.ws_port, max_size=16 * 2 ** 20,
                      ping_interval=20, ping_timeout=20, compression=None):
         log.info("WebSocket local en ws://%s:%d", cfg.ws_host, cfg.ws_port)
-        await asyncio.gather(*tasks)
-        await asyncio.Future()  # si todas las tareas terminan (p. ej. sin audio ni OpenAI), seguir sirviendo
+        try:
+            await asyncio.gather(*tasks)
+            await asyncio.Future()  # si todas las tareas terminan (p. ej. sin audio ni OpenAI), seguir sirviendo
+        finally:
+            if recorder is not None:
+                recorder.close()
+                log.info("Sesión guardada en %s (%.0f s de audio)", recorder.dir, recorder.samples / recorder.sr)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  Re-proyección: audio.wav por la salida de sonido + los eventos en su segundo exacto
+# ════════════════════════════════════════════════════════════════════════════
+
+def _parse_time(s: str) -> float:
+    try:
+        parts = [float(p) for p in str(s or "0").strip().split(":")]
+    except ValueError:
+        return 0.0
+    t = 0.0
+    for p in parts:
+        t = t * 60 + p
+    return max(0.0, t)
+
+
+def _session_summary(folder: str) -> str:
+    try:
+        meta = json.load(open(os.path.join(folder, "sesion.json"), encoding="utf-8"))
+        sr = int(meta.get("sample_rate", 24000))
+    except Exception:  # noqa: BLE001
+        sr = 24000
+    secs = max(0, os.path.getsize(os.path.join(folder, "audio.wav")) - 44) / 2 / sr if os.path.exists(
+        os.path.join(folder, "audio.wav")) else 0
+    with open(os.path.join(folder, "eventos.jsonl"), encoding="utf-8", errors="replace") as fh:
+        n = sum(1 for _ in fh)
+    return f"{int(secs // 3600)}:{int(secs % 3600 // 60):02d}:{int(secs % 60):02d} de audio · {n} eventos"
+
+
+def pick_session(arg: str) -> str | None:
+    arg = (arg or "").strip()
+    if arg and arg.lower() not in ("ultima", "última", "elegir"):
+        for cand in (arg, os.path.join(RECORDINGS_DIR, arg)):
+            if os.path.isfile(os.path.join(cand, "eventos.jsonl")):
+                return cand
+        print(f"No encuentro la grabación «{arg}» (busco en {RECORDINGS_DIR}).")
+        return None
+    names = sorted(d for d in (os.listdir(RECORDINGS_DIR) if os.path.isdir(RECORDINGS_DIR) else [])
+                   if os.path.isfile(os.path.join(RECORDINGS_DIR, d, "eventos.jsonl")))
+    if not names:
+        print(f"No hay sesiones grabadas en {RECORDINGS_DIR}.")
+        return None
+    if arg.lower() != "elegir":
+        return os.path.join(RECORDINGS_DIR, names[-1])
+    print(f"\nSesiones grabadas ({RECORDINGS_DIR}):\n")
+    for i, name in enumerate(names, 1):
+        print(f"  {i:>3}. {name}   {_session_summary(os.path.join(RECORDINGS_DIR, name))}")
+    try:
+        choice = input(f"\nNúmero de la sesión a re-proyectar [Enter = {len(names)}]: ").strip()
+    except EOFError:
+        choice = ""
+    k = int(choice) if choice.isdigit() and 1 <= int(choice) <= len(names) else len(names)
+    return os.path.join(RECORDINGS_DIR, names[k - 1])
+
+
+class PlaybackClock:
+    """Reproduce el audio grabado por la salida de sonido; su posición es el reloj de la re-proyección.
+    Sin salida de audio, avanza con el reloj del sistema (re-proyección sólo visual)."""
+
+    def __init__(self, audio: np.ndarray, sr: int, start_s: float, device: str = "") -> None:
+        self.audio, self.sr = audio, sr
+        self.fpos = float(int(start_s * sr))
+        self.start = self.fpos
+        self.t0 = time.monotonic()
+        self.paused_at: float | None = None
+        self.stream = None
+        if sd is None or not len(audio):
+            log.warning("Sin salida de audio: re-proyección sólo visual")
+            return
+        dev: int | str | None = int(device) if device.isdigit() else (device or None)
+        for out_sr in (sr, 48000, 44100):
+            try:
+                self.step = sr / out_sr
+                self.stream = sd.OutputStream(samplerate=out_sr, channels=1, dtype="int16", device=dev,
+                                              callback=self._cb, blocksize=512)
+                self.stream.start()
+                log.info("Audio de la sesión por %s a %d Hz", sd.query_devices(self.stream.device)["name"], out_sr)
+                return
+            except Exception as exc:  # noqa: BLE001
+                self.stream = None
+                log.warning("Salida de audio a %d Hz no disponible: %s", out_sr, exc)
+        log.warning("Sin salida de audio: re-proyección sólo visual")
+
+    def _cb(self, outdata, frames, time_info, status) -> None:  # noqa: ANN001
+        idx = (self.fpos + np.arange(frames) * self.step).astype(np.int64)
+        ok = idx < len(self.audio)
+        out = np.zeros(frames, dtype=np.int16)
+        if ok.any():
+            out[ok] = self.audio[idx[ok]]
+        outdata[:, 0] = out
+        self.fpos += frames * self.step
+
+    def position(self) -> int:
+        if self.stream is not None:
+            return int(self.fpos)
+        return int(self.start + (time.monotonic() - self.t0) * self.sr)
+
+    def stop(self) -> None:
+        if self.stream is not None:
+            try:
+                self.stream.stop()
+                self.stream.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+
+async def run_replay(args: argparse.Namespace) -> None:
+    import dataclasses
+    import shutil
+    import tempfile
+    folder = pick_session(args.replay)
+    if not folder:
+        return
+    try:
+        meta = json.load(open(os.path.join(folder, "sesion.json"), encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        meta = {}
+    sr = int(meta.get("sample_rate", 24000))
+    events: list[dict[str, Any]] = []
+    with open(os.path.join(folder, "eventos.jsonl"), encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError:  # última línea cortada por un apagón
+                continue
+    events.sort(key=lambda e: float(e.get("t", 0)))
+    wav = os.path.join(folder, "audio.wav")
+    nbytes = max(0, os.path.getsize(wav) - 44) if os.path.exists(wav) else 0
+    audio = (np.memmap(wav, dtype=np.int16, mode="r", offset=44, shape=(nbytes // 2,)) if nbytes >= 2
+             else np.zeros(0, dtype=np.int16))
+    duration = max(len(audio) / sr, float(events[-1]["t"]) if events else 0.0)
+    start = min(_parse_time(args.desde), max(0.0, duration - 1))
+
+    cfg = dataclasses.replace(Config.from_env(), sample_rate=sr)
+    tmp = tempfile.mkdtemp(prefix="umbral-replay-")
+    settings_path = os.path.join(tmp, "ajustes.json")
+    if os.path.exists(os.path.join(folder, "ajustes.json")):
+        shutil.copy2(os.path.join(folder, "ajustes.json"), settings_path)
+    settings = SettingsStore(settings_path)  # copia: lo que se toque en el panel no altera la grabación
+    if os.path.isdir(os.path.join(folder, "logos")):
+        LOGO_ROOTS.insert(0, folder)
+
+    hub = FrontendHub(cfg)
+    hub.status = {"mic": "re-proyección", "openai": "re-proyección", "llm": "re-proyección"}
+    info = {"carpeta": folder, "duracion": round(duration, 1), "desde": round(start, 1)}
+    hub.hello_extra = lambda: {"settings": settings.data, "default_prompt": DEFAULT_AESTHETIC,
+                               "default_prompt_grilla": DEFAULT_GRID_AESTHETIC, "user_dir": USER_DIR,
+                               "key": {"has_key": True, "masked": "(re-proyección)", "source": "grabación"},
+                               "replay": info}
+
+    async def on_frontend(msg: dict[str, Any], ws: ServerConnection) -> None:
+        kind = msg.get("type")
+        if kind == "list_logos":
+            folder_ = str(msg.get("carpeta", ""))[:200]
+            logos = await asyncio.to_thread(read_logo_folder, folder_)
+            await hub.reply(ws, "logos", id=msg.get("id"), carpeta=folder_, logos=logos)
+        elif kind == "get_settings":
+            await hub.reply(ws, "settings", settings=settings.data, default_prompt=DEFAULT_AESTHETIC,
+                            default_prompt_grilla=DEFAULT_GRID_AESTHETIC)
+        # lo demás (grabar, ajustes, micrófono…) no aplica: la sesión ya está escrita
+
+    hub.on_message = on_frontend
+    loop = asyncio.get_running_loop()
+    analyzer = AudioEngine(cfg, hub, None, loop)  # recalcula la reactividad desde el audio grabado
+    analyzer._check_digital_silence = lambda data: None  # type: ignore[method-assign]
+
+    def dispatch(ev: dict[str, Any], catch_up: bool = False) -> None:
+        k = ev.get("k")
+        if k == "ui":
+            hub.emit("replay_ui", **{a: b for a, b in ev.items() if a not in ("t", "k")})
+        elif k == "msg":
+            m = dict(ev.get("m") or {})
+            typ = m.pop("type", None)
+            if typ == "settings":
+                hub.emit("replay_settings", settings=m.get("settings") or {})
+            elif typ and not catch_up:
+                hub.emit(typ, **m)
+
+    async with serve(hub.handler, cfg.ws_host, cfg.ws_port, max_size=16 * 2 ** 20,
+                     ping_interval=20, ping_timeout=20, compression=None):
+        print(f"\n== Re-proyección: {os.path.basename(folder)} ({_session_summary(folder)}) ==")
+        print("Esperando al navegador del show (http://127.0.0.1:5173/)…")
+        while not hub.clients:
+            await asyncio.sleep(0.2)
+        await asyncio.sleep(2.5)  # que el show termine de arrancar
+        idx = 0
+        # estado previo al punto de inicio: teclas y ajustes (sin palabras ni imágenes viejas)
+        while idx < len(events) and float(events[idx].get("t", 0)) < start:
+            dispatch(events[idx], catch_up=True)
+            idx += 1
+        clock = PlaybackClock(audio, sr, start, os.environ.get("AUDIO_OUTPUT_DEVICE", ""))
+        analyzed = int(start * sr)
+        block = analyzer.block
+        print(f"▶ Reproduciendo desde {int(start // 60)}:{int(start % 60):02d} "
+              f"(dura {int(duration // 60)}:{int(duration % 60):02d}). Ctrl+C para detener.")
+        last_print = -1
+        try:
+            while True:
+                pos = clock.position()
+                end = min(pos, len(audio))
+                while analyzed + block <= end:
+                    analyzer._process(np.asarray(audio[analyzed:analyzed + block]).tobytes())
+                    analyzed += block
+                tsec = pos / sr
+                while idx < len(events) and float(events[idx].get("t", 0)) <= tsec:
+                    dispatch(events[idx])
+                    idx += 1
+                if int(tsec) // 60 != last_print:
+                    last_print = int(tsec) // 60
+                    print(f"  {last_print}:00 / {int(duration // 60)}:{int(duration % 60):02d}", flush=True)
+                if tsec >= duration + 0.5 and idx >= len(events):
+                    break
+                await asyncio.sleep(0.01)
+        finally:
+            clock.stop()
+        hub.emit("replay_end")
+        print("■ Fin de la re-proyección.")
+        await asyncio.sleep(1.5)
 
 
 async def run_check() -> None:
@@ -1872,6 +2237,18 @@ async def run_check() -> None:
     ensure_user_dir()
     flat = ensure_flat_logo()
     print(f"{'✗' if flat.startswith('falta') else '✓'} Logo de FLAT: {flat}")
+    try:
+        os.makedirs(RECORDINGS_DIR, exist_ok=True)
+        probe = os.path.join(RECORDINGS_DIR, ".prueba")
+        with open(probe, "w") as fh:
+            fh.write("ok")
+        os.remove(probe)
+        n = len([d for d in os.listdir(RECORDINGS_DIR) if os.path.isfile(os.path.join(RECORDINGS_DIR, d, "eventos.jsonl"))])
+        import shutil
+        free = shutil.disk_usage(RECORDINGS_DIR).free / 2 ** 30
+        print(f"✓ Grabación de sesiones: {RECORDINGS_DIR} ({n} grabada(s), {free:.0f} GB libres ≈ {free * 6:.0f} h de audio)")
+    except OSError as exc:
+        print(f"✗ Grabación de sesiones: no puedo escribir en {RECORDINGS_DIR}: {exc}")
 
     # ── OpenAI ──
     key = cfg.openai_api_key
@@ -2010,6 +2387,10 @@ def main() -> None:
     parser.add_argument("--no-audio", action="store_true", help="no abrir el micrófono")
     parser.add_argument("--no-openai", action="store_true", help="no conectar a OpenAI Realtime")
     parser.add_argument("--env", default=".env", help="ruta del archivo .env")
+    parser.add_argument("--no-record", action="store_true", help="no grabar la sesión (audio + eventos)")
+    parser.add_argument("--replay", default="", metavar="CARPETA",
+                        help="re-proyectar una sesión grabada: carpeta, «ultima» o «elegir»")
+    parser.add_argument("--desde", default="0", help="re-proyección: empezar en este punto (segundos o mm:ss)")
     parser.add_argument("--settings", default="",
                         help="ajustes del show (micrófono, artistas, loop, prompt) escritos desde el panel C")
     args = parser.parse_args()
@@ -2022,6 +2403,12 @@ def main() -> None:
         return
     if args.check:
         asyncio.run(run_check())
+        return
+    if args.replay:
+        try:
+            asyncio.run(run_replay(args))
+        except KeyboardInterrupt:
+            log.info("Re-proyección detenida.")
         return
     try:
         asyncio.run(main_async(args))

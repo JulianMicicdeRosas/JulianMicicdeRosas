@@ -26,6 +26,7 @@ poesia-tipografica/
 ├── index.html
 ├── start_mac.command     Arranque completo en macOS (doble clic)
 ├── start_instalacion.bat Arranque completo en Windows (backend + frontend + Chrome kiosk)
+├── reproyectar.bat      Re-proyección de una sesión grabada (también reproyectar_mac.command)
 ├── public/loop/          Imágenes del loop (flat.png) y public/loop/sponsors/ (todos los logos)
 └── src/
     ├── main.js           Escena, cámara orbital, bucle, conexión al backend, simulador, teclado
@@ -161,6 +162,32 @@ queda negro. El muro de palabras, el título, los nombres y la transcripción qu
 El servidor la limpia (acepta otros caracteres, la recentra y la escala) y, si igual falla, hace un segundo pedido
 corto sólo de la grilla. Si eso también falla, se usa la silueta SVG que el modelo manda de respaldo, y si no hay,
 la figura de la biblioteca. En modo palabras (T) las ilustraciones también se calan en el muro.
+
+## Grabación de la sesión y re-proyección
+
+**Todo se graba desde que arranca el programa** (no hace falta apretar nada), en
+`Documentos/Umbral/grabaciones/AAAA-MM-DD_HH-MM-SS/`:
+
+| Archivo | Qué es |
+| --- | --- |
+| `audio.wav` | el micrófono, continuo, 24 kHz mono (≈ 170 MB por hora). Si el micrófono se corta, se rellena con silencio: el audio nunca se corre respecto de los eventos |
+| `eventos.jsonl` | todo lo que pasa, con su segundo exacto en el audio: teclas y botones del show, palabras transcriptas, versos, imágenes del director de arte (grillas incluidas), ajustes cambiados en el panel, estado de micrófono/OpenAI |
+| `ajustes.json`, `logos/` | copia de los ajustes y los logos del arranque (la re-proyección no depende de lo que se cambie después) |
+| `sesion.json` | fecha y hora de inicio |
+
+Se escribe a disco en el momento: un corte de luz no pierde la sesión. El panel C (sección Micrófono) muestra la
+carpeta, los minutos grabados y la cantidad de eventos; el diagnóstico verifica que se pueda escribir y el espacio libre.
+
+**Re-proyectar otro día:** doble clic en **`reproyectar.bat`** (Windows) o **`reproyectar_mac.command`** (Mac).
+Muestra la lista de sesiones, se elige una y el show se repite solo: el audio sale por la salida de sonido
+(`AUDIO_OUTPUT_DEVICE` en `.env` para elegir otra) y su posición es el reloj, así que cada palabra, imagen y tecla
+cae sincronizada con la voz. La reactividad al sonido se recalcula desde el audio grabado. Durante la re-proyección
+las teclas del show no hacen nada (sólo C, D, F) y nada se graba ni se envía a OpenAI. Para empezar en otro punto:
+`python server.py --replay ultima --desde 12:30`.
+
+Lo que se repite es la secuencia completa (qué palabra, qué imagen, qué estado, en qué segundo); el movimiento fino de
+cada letra tiene azar propio en cada función, así que no es un video cuadro por cuadro sino la misma obra otra vez.
+Para un video fijo, grabar la pantalla durante la re-proyección (OBS).
 
 ## Operación de la noche
 

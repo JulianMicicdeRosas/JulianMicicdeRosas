@@ -176,6 +176,7 @@ export class ConfigPanel {
         <div class="vu"><i data-vu></i><b data-peak></b></div>
         <div class="vu-info"><span data-db>—</span><span data-signal>—</span></div>
         <div class="vu-info"><span>Transcripción (OpenAI)</span><span data-openai>—</span></div>
+        <p class="hint" data-recinfo>Grabación de la sesión: —</p>
         <p class="hint">Habla al micrófono: la barra debe moverse. Verde = señal, rojo = saturación. El micrófono lo abre el
         backend (server.py); si aparece «backend desconectado», arráncalo.</p>
       </section>
@@ -514,6 +515,17 @@ export class ConfigPanel {
     const falta = Math.max(0, (m.min_s || 0) - (m.desde_imagen || 0));
     el.textContent = `${m.palabras}/${m.objetivo} palabras` + (falta > 0.5 ? ` · faltan ${Math.ceil(falta)} s de mínimo` : ' · al cerrar la estrofa');
     el.className = '';
+  }
+
+  /** Dónde se está grabando la sesión (audio + eventos) y cuánto lleva; o la sesión que se re-proyecta. */
+  setRecInfo(info, replay = null) {
+    if (replay) this.recText = `RE-PROYECTANDO ${replay.carpeta} (${Math.round(replay.duracion / 60)} min). Nada se graba.`;
+    else if (info && info.carpeta) {
+      const s = Math.round(info.segundos || 0);
+      this.recText = `● Grabando la sesión desde que arrancó: ${info.carpeta} · ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} de audio · ${info.eventos || 0} eventos`;
+    } else if (info === null) this.recText = 'La sesión no se está grabando (backend con --no-record o sin permiso de escritura).';
+    const el = this.$('[data-recinfo]');
+    if (el && this.recText) el.textContent = this.recText;
   }
 
   setUserDir(dir) {
