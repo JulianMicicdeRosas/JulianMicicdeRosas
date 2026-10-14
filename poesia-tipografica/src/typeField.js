@@ -15,6 +15,7 @@
 import * as THREE from 'three';
 import { glyphVertex, glyphFragment } from './shaders.js';
 import { pointAt, RES } from './svgSampler.js';
+import { ASCII_SYMBOLS } from './glyphAtlas.js';
 
 const FREE = 0;
 const LINE = 1;
@@ -116,6 +117,14 @@ export class TypeField {
     this.words = [];
     this.wordRects = [];
     this.wordBufs = new Map();
+    // muro de palabras (modo T): grilla monoespaciada estricta
+    this.wallMode = true;
+    // marca aplicada a todo (tipografía y mayúsculas del manual)
+    this.brandAll = false;
+    this.brandUpper = false;
+    this.wallRows = 34;
+    this.wallUpper = true;
+    this.wall = null;
     this.wordSeen = new Set();
     this.idleText = (idleText || 'la voz escribe en la oscuridad').trim();
 
@@ -149,10 +158,14 @@ export class TypeField {
       uAtlas: { value: this.atlas.texture },
       uCols: { value: this.atlas.cols },
       uRows: { value: this.atlas.rows },
+      uCell: { value: this.atlas.cell / this.atlas.size },
       uTime: { value: 0 },
       uRms: { value: 0 },
       uFreq: { value: 0 },
       uFreshness: { value: 0.85 },
+      uGlitch: { value: 0 },
+      uGlitchSeed: { value: 0 },
+      uSlots: { value: 1 },
       uGlobalAlpha: { value: 1 },
       uBase: { value: new THREE.Color('#F4F1EA') },
       uSecond: { value: new THREE.Color('#8C8984') },
@@ -288,7 +301,7 @@ export class TypeField {
 
   _recycleGlyph(i) {
     const ch = this._nextCorpusChar();
-    this.slot[i] = this.atlas.slot(ch, this.seed[i] < 0.64 ? 'serif' : 'mono');
+    this.slot[i] = this.atlas.slot(this._u(ch), this._k(this.seed[i] < 0.64 ? 'serif' : 'mono'));
     this.tint[i] = fract(this.seed[i] * 7.31) * 0.85;
     this.accent[i] = Math.random() < this.accentUse * 0.22 ? 1 : 0;
     this.metaDirty = true;
@@ -297,6 +310,15 @@ export class TypeField {
   // ════════════════════════════════════════════════════════════════════════
   //  Verso en vivo (subtítulo): las letras nacen donde se pronuncian
   // ════════════════════════════════════════════════════════════════════════
+  /** Familia a usar: la de la marca si está aplicada a todo. */
+  _k(kind) {
+    return this.brandAll ? 'brand' : kind;
+  }
+
+  _u(text) {
+    return this.brandUpper ? String(text).toUpperCase() : text;
+  }
+
   _allocParticle(preferVisible = false) {
     const N = this.N;
     let pick = -1, fallback = -1;
@@ -359,7 +381,7 @@ export class TypeField {
       }
       const i = this._allocParticle();
       if (i < 0) break;
-      const slot = this.atlas.slot(ch, 'serif');
+      const slot = this.atlas.slot(this._u(ch), this._k('serif'));
       this.slot[i] = slot;
       this.pslot[i] = -1;
       this.tint[i] = 0;
@@ -515,8 +537,11 @@ export class TypeField {
     const cx = 0;
     const cy = Number.isFinite(dir.cy) ? dir.cy * this.H : this.H * 0.055;
     const typo = dir.tipografia || 'mixta';
-    const kindC = typo === 'mono' ? 'mono' : 'serif';
-    const kindI = typo === 'serif' ? 'serif' : 'mono';
+    const brand = dir.estilo === 'marca' || this.brandAll;
+    if (this.brandUpper) dir = { ...dir, mayusculas: true };
+    const kindC = brand ? 'brand' : typo === 'mono' ? 'mono' : 'serif';
+    const kindI = brand ? 'brand' : typo === 'serif' ? 'serif' : 'mono';
+    if (dir.mayusculas) dir = { ...dir, verso: (dir.verso || '').toUpperCase(), palabras_clave: (dir.palabras_clave || []).map((w) => w.toUpperCase()) };
     const fill = dir.relleno || 'ambos';
     const useKeys = this.accentUse > 0;
 
@@ -528,7 +553,9 @@ export class TypeField {
     const T = [];
     let contourCount = 0;
 
-    if (fill !== 'volumen' || fig.interior.length === 0) {
+    if (dir.estilo === 'ascii' && fig.mask) {
+      contourCount = this._asciiTargets(T, fig, dir, k, ox, oy, cx, cy, capacity);
+    } else if (fill !== 'volumen' || fig.interior.length === 0) {
       const next = this._stream(dir.verso, false);
       const S = clamp(this.H * 0.027, 16, 36);
       const spaceAdvPx = (S * 0.28) / k;
@@ -570,7 +597,7 @@ export class TypeField {
     }
     const contourTargets = T.length / 11;
 
-    if (fill !== 'contorno') {
+    if (fill !== 'contorno' && dir.estilo !== 'ascii') {
       const pts = fig.interior;
       const count = pts.length / 3;
       const budget = capacity - contourTargets;
@@ -636,9 +663,11 @@ export class TypeField {
       this.paccent[i] = T[j + 8];
       const r = Math.hypot(T[j] - cx, T[j + 1] - cy) / maxR;
       // el contorno se "dibuja" en el orden del trazo; el volumen florece desde el centro
-      this.delay[i] = T[j + 9] === 0
-        ? t + 0.9 + 2.6 * (T[j + 10] / Math.max(1, contourCount))
-        : t + 1.4 + 2.2 * r + Math.random() * 0.4;
+      this.delay[i] = T[j + 9] === 2
+        ? t + 0.5 + 3.2 * (T[j + 10] / Math.max(1, contourCount)) // ASCII: se escribe de arriba abajo
+        : T[j + 9] === 0
+          ? t + 0.9 + 2.6 * (T[j + 10] / Math.max(1, contourCount))
+          : t + 1.4 + 2.2 * r + Math.random() * 0.4;
     }
     this.metaDirty = true;
 
@@ -653,6 +682,46 @@ export class TypeField {
     };
     this._recomputeFloor();
     this.onFigure?.(fig, this.figure);
+  }
+
+  /**
+   * Estilo ASCII de densidad: grilla monoespaciada estricta; cada celda toma el glifo cuya tinta
+   * corresponde a la luz de la figura (rampa hecha con las letras de la estrofa + signos).
+   */
+  _asciiTargets(T, fig, dir, k, ox, oy, cx, cy, capacity) {
+    const atlas = this.atlas;
+    const kind = dir.estilo === 'marca' || this.brandAll ? 'brand' : 'mono';
+    // rampa: letras del verso + signos, ordenadas por tinta
+    const chars = [...new Set(((dir.verso || '') + ASCII_SYMBOLS).replace(/\s/g, ''))];
+    const ramp = chars.map((ch) => atlas.slot(ch, kind)).sort((a, b) => atlas.ink[a] - atlas.ink[b]);
+    const R = fig.res;
+    const bb = fig.bbox;
+    const rows = Math.round(clamp(+dir.ascii_filas || 40, 20, 110));
+    const cellH = bb.h / rows; // en px del lienzo
+    const cellW = cellH * 0.62; // proporción monoespaciada
+    const cols = Math.max(1, Math.floor(bb.w / cellW));
+    const S = cellH * k * 1.7; // lado del quad en mundo (la mono ocupa ~el alto de la celda)
+    const { mask, lum } = fig;
+    let n = 0;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (T.length / 11 >= capacity) return n;
+        const x0 = bb.x + (bb.w - cols * cellW) / 2 + c * cellW, y0 = bb.y + r * cellH;
+        // promedio de la celda (4 muestras): densidad = cobertura × luz
+        let m = 0, l = 0;
+        for (const [fx, fy] of [[0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]]) {
+          const ix = Math.min(R - 1, Math.max(0, Math.round(x0 + fx * cellW)));
+          const iy = Math.min(R - 1, Math.max(0, Math.round(y0 + fy * cellH)));
+          m += mask[iy * R + ix] / 4;
+          l += lum[iy * R + ix] / 4;
+        }
+        if (m < 0.12 && Math.random() > 0.015) continue; // fondo: casi vacío (alguna mota suelta)
+        const v = clamp(m * (0.3 + 0.7 * l) + (Math.random() - 0.5) * 0.08, 0, 1);
+        const slot = ramp[Math.min(ramp.length - 1, Math.floor(v * ramp.length))];
+        T.push((x0 + cellW / 2 - ox) * k + cx, (oy - (y0 + cellH / 2)) * k + cy, 0, 0, S, 0.55 + 0.45 * v, 0, slot, 0, 2, n++);
+      }
+    }
+    return n;
   }
 
   releaseFigure(impulse = true) {
@@ -746,6 +815,7 @@ export class TypeField {
     this.time = t;
     const U = this.uniforms;
     U.uTime.value = t;
+    U.uSlots.value = this.atlas.next;
     const kp = 1 - Math.exp(-dt * 0.9);
     U.uBase.value.lerp(this.paletteTarget.base, kp);
     U.uSecond.value.lerp(this.paletteTarget.second, kp);
@@ -847,7 +917,7 @@ export class TypeField {
         }
         const title = st === TITLE;
         const w = title ? 3 + s * 1.4 : 2.6, w2 = w * w, c2 = 2 * w;
-        const amp = title ? 0.8 : 2.5; // las palabras sueltas derivan apenas
+        const amp = title ? 0.8 : this.wallMode ? 0 : 2.5; // en el muro, grilla estricta
         const g = this.grp[i];
         const bx = Math.sin(t * (title ? 0.6 : 0.17) + g * 40) * amp, by = Math.cos(t * (title ? 0.5 : 0.13) + g * 23) * amp;
         vx[i] += (w2 * (this.tx[i] + bx - px[i]) - c2 * vx[i]) * dt;
@@ -1095,10 +1165,11 @@ export class TypeField {
   /** Nombre de artista (o cualquier título) compuesto con letras que vuelan desde el campo. */
   showTitle(text, { cy = 0.03, maxSize = 0.13 } = {}) {
     this.clearTitle();
-    const words = String(text || '').trim().split(/\s+/).filter(Boolean);
+    const words = this._u(String(text || '')).trim().split(/\s+/).filter(Boolean);
     if (!words.length) return;
     const atlas = this.atlas;
-    const slotsOf = (w) => [...w].map((ch) => atlas.slot(ch, 'serif'));
+    const tk = this._k('serif');
+    const slotsOf = (w) => [...w].map((ch) => atlas.slot(ch, tk));
     const widthOf = (w, S) => slotsOf(w).reduce((a, sl) => a + atlas.adv(sl) * S, 0);
     let S = clamp(this.H * maxSize, 40, 200);
     let rows = [];
@@ -1129,7 +1200,7 @@ export class TypeField {
     let n = 0;
     rows.forEach((row, r) => {
       const text2 = row.join(' ');
-      const slots = [...text2].map((ch) => (ch === ' ' ? -1 : atlas.slot(ch, 'serif')));
+      const slots = [...text2].map((ch) => (ch === ' ' ? -1 : atlas.slot(ch, tk)));
       const total = slots.reduce((a, sl) => a + (sl < 0 ? S * 0.3 : atlas.adv(sl) * S), 0);
       let x = -total / 2;
       for (const sl of slots) {
@@ -1197,14 +1268,152 @@ export class TypeField {
     this.addCorpus(text);
   }
 
+  // ── muro en grilla ───────────────────────────────────────────────────────
+  _wallInit() {
+    const rowsN = Math.round(clamp(this.wallRows, 12, 90));
+    const rh = (this.H * 0.94) / rowsN; // alto de módulo (mundo)
+    const cw = this.atlas.adv(this.atlas.slot('M', this._k('mono'))) * rh * 1.62; // = avance real de la mono: interletrado natural
+    const colsN = Math.floor((this.W * 0.96) / cw);
+    this.wall = {
+      rowsN, colsN, rh, cw,
+      x0: -(colsN * cw) / 2,
+      y0: (rowsN * rh) / 2,
+      occ: new Int32Array(rowsN * colsN).fill(-1), // id de palabra que ocupa cada celda
+      cursor: 0,
+      words: new Map(), // id → {cells, idx}
+      nextId: 0,
+    };
+  }
+
+  /**
+   * Palabra al muro: ocupa k módulos de alto (1, 2 o 3) y largo×k de ancho, siempre alineada a la grilla.
+   * Llena la pared en orden de lectura; cuando se completa, reescribe desde arriba (las viejas se disuelven).
+   */
+  _placeWallWord(word, big) {
+    if (!this.wall) this._wallInit();
+    const W = this.wall;
+    const text = this.wallUpper ? word.toUpperCase() : word;
+    const len = [...text].length;
+    const roll = Math.random();
+    let kk = roll < 0.72 ? 1 : roll < 0.93 ? 2 : 3;
+    if (big) kk = Math.max(kk, this.rms > 0.6 ? 3 : 2);
+    while (kk > 1 && (len + 1) * kk > W.colsN) kk--;
+    const wCells = Math.min(W.colsN, len * kk), gap = kk; // separación de un "espacio" del mismo tamaño
+    const fits = (r, c) => {
+      if (r + kk > W.rowsN || c + wCells > W.colsN) return false;
+      for (let dr = 0; dr < kk; dr++) {
+        for (let dc = -1; dc < wCells + gap && c + dc < W.colsN; dc++) {
+          if (c + dc < 0) continue;
+          if (W.occ[(r + dr) * W.colsN + c + dc] !== -1) return false;
+        }
+      }
+      return true;
+    };
+    const total = W.rowsN * W.colsN;
+    let pos = -1;
+    for (let n = 0; n < total; n++) {
+      const p = (W.cursor + n) % total;
+      if (fits((p / W.colsN) | 0, p % W.colsN)) {
+        pos = p;
+        break;
+      }
+    }
+    if (pos < 0) {
+      // muro lleno: escribir encima en el cursor (al inicio de renglón si no entra)
+      let r = (W.cursor / W.colsN) | 0, c = W.cursor % W.colsN;
+      if (c + wCells > W.colsN) {
+        r++;
+        c = 0;
+      }
+      if (r + kk > W.rowsN) r = 0;
+      pos = r * W.colsN + c;
+    }
+    const r0 = (pos / W.colsN) | 0, c0 = pos % W.colsN;
+    // desalojar lo que haya debajo
+    const evict = new Set();
+    for (let dr = 0; dr < kk; dr++) {
+      for (let dc = 0; dc < wCells + gap && c0 + dc < W.colsN; dc++) {
+        const id = W.occ[(r0 + dr) * W.colsN + c0 + dc];
+        if (id !== -1) evict.add(id);
+      }
+    }
+    for (const id of evict) this._wallEvict(id);
+    const id = W.nextId++;
+    const cells = [];
+    for (let dr = 0; dr < kk; dr++) {
+      for (let dc = 0; dc < wCells && c0 + dc < W.colsN; dc++) {
+        const ci = (r0 + dr) * W.colsN + c0 + dc;
+        W.occ[ci] = id;
+        cells.push(ci);
+      }
+    }
+    W.cursor = (pos + wCells + gap) % total;
+
+    const t = this.time;
+    const alphaW = 0.5 + Math.random() * 0.5;
+    const born = clamp(Math.max(0.15, this.rms), 0, 1);
+    const S = W.rh * kk * 1.62; // lado del quad para que la mono ocupe el módulo
+    const idx = [];
+    [...text].forEach((ch, n) => {
+      if (n * kk >= wCells) return;
+      const i = this._allocParticle();
+      if (i < 0) return;
+      this.state[i] = WORD;
+      this.grp[i] = 0;
+      this.slot[i] = this.atlas.slot(ch, this._k('mono'));
+      this.pslot[i] = -1;
+      this.tint[i] = Math.random() * 0.3;
+      this.accent[i] = 0;
+      this.tx[i] = W.x0 + (c0 + n * kk + kk / 2) * W.cw;
+      this.ty[i] = W.y0 - (r0 + kk / 2) * W.rh;
+      this.tz[i] = 0;
+      this.trot[i] = 0;
+      this.tsize[i] = S;
+      this.talpha[i] = alphaW;
+      this.px[i] = this.tx[i];
+      this.py[i] = this.ty[i];
+      this.pz[i] = 0;
+      this.vx[i] = this.vy[i] = this.vz[i] = 0;
+      this.rot[i] = 0;
+      this.size[i] = S;
+      this.alpha[i] = 0;
+      this.delay[i] = t + n * 0.03;
+      this.birth[i] = this.delay[i];
+      this.level[i] = born * 0.5;
+      this.words.push(i);
+      idx.push(i);
+    });
+    W.words.set(id, { cells, idx });
+    this.metaDirty = true;
+  }
+
+  _wallEvict(id) {
+    const W = this.wall;
+    const w = W.words.get(id);
+    if (!w) return;
+    for (const ci of w.cells) if (W.occ[ci] === id) W.occ[ci] = -1;
+    for (const i of w.idx) {
+      if (this.state[i] !== WORD) continue;
+      this.state[i] = FREE;
+      this.vy[i] = -10 - Math.random() * 20;
+      this.life[i] = 0;
+    }
+    W.words.delete(id);
+  }
+
   /** Coloca una palabra en un lugar poco ocupado, con tamaño y brillo levemente variables. */
   placeWord(raw) {
     const word = String(raw).replace(/^[^\p{L}\p{N}¿¡]+|[^\p{L}\p{N}?!]+$/gu, '');
     if (!word) return;
+    if (this.wallMode) {
+      const big = this.keywords.has(normalizeWord(word)) || this.rms > 0.55 || (word.length >= 9 && Math.random() < 0.3);
+      this._placeWallWord(word, big);
+      return;
+    }
     const atlas = this.atlas;
     const base = clamp(this.H * 0.034, 20, 52);
     const S = base * (0.72 + Math.pow(Math.random(), 1.8) * 1.05);
-    const slots = [...word].map((ch) => atlas.slot(ch, 'serif'));
+    const slots = [...this._u(word)].map((ch) => atlas.slot(ch, this._k('serif')));
     const width = slots.reduce((a, sl) => a + atlas.adv(sl) * S, 0);
     const mX = this.W * 0.05, mY = this.H * 0.07;
     const pad = S * 0.35;
@@ -1279,6 +1488,7 @@ export class TypeField {
     }
     this.words = [];
     this.wordRects = [];
+    this.wall = null;
     this.wordBufs.clear();
     this.wordSeen.clear();
   }

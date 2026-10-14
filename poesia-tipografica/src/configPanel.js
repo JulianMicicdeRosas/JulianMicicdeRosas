@@ -24,7 +24,9 @@ export const CADENCE_PRESETS = {
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 export class ConfigPanel {
-  constructor({ getSettings, onChange, onDevice, requestDevices, onScanLogos, onSaveKey, onRecord, onStop, defaultPrompt }) {
+  constructor({ getSettings, onChange, onDevice, requestDevices, onScanLogos, onSaveKey, onRecord, onStop, onPreviewStyle, defaultPrompt }) {
+    this.onPreviewStyle = onPreviewStyle;
+    this.onOpenFolder = arguments[0].onOpenFolder;
     this.onRecord = onRecord;
     this.onStop = onStop;
     this.onSaveKey = onSaveKey;
@@ -72,6 +74,40 @@ export class ConfigPanel {
           </select>
         </div>
         <div class="vu-info"><span>Última imagen</span><span data-last>—</span></div>
+        <h2>Estilos de imagen (oscilan entre los activos)</h2>
+        <div class="styles">
+          <label><input type="checkbox" data-style="caligrama"> Caligrama + nube de puntos</label>
+          <button data-act="preview" data-style-preview="caligrama">ver</button>
+          <label><input type="checkbox" data-style="ascii"> ASCII de densidad (grilla mono)</label>
+          <button data-act="preview" data-style-preview="ascii">ver</button>
+          <label><input type="checkbox" data-style="glitch"> Glitch azaroso</label>
+          <button data-act="preview" data-style-preview="glitch">ver</button>
+          <label><input type="checkbox" data-style="marca"> Manual de marca FLAT</label>
+          <button data-act="preview" data-style-preview="marca">ver</button>
+        </div>
+        <div class="row">
+          <span>Quién elige el estilo:</span>
+          <select data-estmodo>
+            <option value="llm">el LLM, según la estrofa y la curaduría</option>
+            <option value="azar">azar</option>
+            <option value="secuencia">secuencia</option>
+          </select>
+        </div>
+        <div class="slider"><span>Glitch ambiente</span><input type="range" min="0" max="1" step="0.01" data-opt="glitch_ambiente"><output></output></div>
+        <div class="slider"><span>Filas del ASCII</span><input type="range" min="24" max="100" step="1" data-opt="ascii_filas"><output></output></div>
+        <h2>Marca FLAT</h2>
+        <div class="row brand">
+          <label>base <input type="color" data-marca="base"></label>
+          <label>secundario <input type="color" data-marca="secundario"></label>
+          <label>acento <input type="color" data-marca="acento"></label>
+          <label><input type="checkbox" data-marca="mayusculas"> MAYÚSCULAS</label>
+        </div>
+        <label><input type="checkbox" data-marca="global"> Aplicar la marca a todo (subtítulos, nombres, muro, figuras, colores)</label>
+        <div class="row">
+          <button data-act="brand-font">Cargar tipografía de marca…</button>
+          <span class="unit" data-brand-font>—</span>
+        </div>
+        <p class="hint">Provisorio hasta tener el manual de marca: con él se ajustan colores, tipografía, grilla y reglas.</p>
         <h2>Cadencia: cada cuánto una imagen nueva</h2>
         <div class="row">
           <select data-cad="preset">
@@ -93,6 +129,19 @@ export class ConfigPanel {
         (o el triple de palabras). Entre imágenes las letras siguen vivas con la física.</p>
         <p class="hint">Si las imágenes en vivo tardan demasiado (más de ~6 s), prueba OpenAI como director o pasa a «Curadas».
         Si el director falla, se usa el siguiente disponible y, al final, la biblioteca.</p>
+      </section>
+      <section>
+        <h2>Muro de palabras (modo T)</h2>
+        <div class="row">
+          <select data-muro="tipo">
+            <option value="grilla">Muro en grilla (monoespaciado, tamaños por módulo)</option>
+            <option value="disperso">Palabras dispersas</option>
+          </select>
+          <label class="unit"><input type="checkbox" data-muro="mayusculas"> MAYÚSCULAS</label>
+        </div>
+        <div class="slider"><span>Filas del muro</span><input type="range" min="16" max="70" step="1" data-muro="filas"><output></output></div>
+        <p class="hint">Cada palabra dicha ocupa 1, 2 o 3 módulos de alto (las palabras clave y las dichas con más voz,
+        más grandes), siempre alineada a la grilla. Llena la pared en orden de lectura; al completarla reescribe desde arriba.</p>
       </section>
       <section>
         <h2>Clave de OpenAI</h2>
@@ -126,6 +175,10 @@ export class ConfigPanel {
         <p class="hint">Cada paso: texto (p. ej. UMBRAL) o imagen (ruta dentro de <code>public/</code>, p. ej.
         <code>loop/flat.png</code>, o subir archivo). «letras» = la figura se forma con letras; «imagen» = se muestra tal cual;
         «título» = texto compuesto en tipografía.</p>
+        <div class="row">
+          <button data-act="open-logos">Abrir carpeta de logos</button>
+          <span class="unit" data-userdir>Documentos/Umbral/logos</span>
+        </div>
         <div data-loop></div>
         <button data-act="add-step">+ Agregar paso</button>
       </section>
@@ -209,6 +262,24 @@ export class ConfigPanel {
     if (document.activeElement !== cur) cur.value = s.curaduria || '';
     for (const r of this.el.querySelectorAll('input[data-sopt="imagenes"]')) r.checked = r.value === (s.imagenes || 'llm');
     this.$('select[data-sopt="director"]').value = s.director || 'openai';
+    const est = s.estilos || { activos: ['caligrama'], modo: 'llm' };
+    for (const el of this.el.querySelectorAll('[data-style]')) el.checked = (est.activos || []).includes(el.dataset.style);
+    this.$('[data-estmodo]').value = est.modo || 'llm';
+    const marca = s.marca || {};
+    for (const el of this.el.querySelectorAll('[data-marca]')) {
+      if (el.type === 'checkbox') el.checked = el.dataset.marca === 'global' ? marca.global === true : marca[el.dataset.marca] !== false;
+      else el.value = marca[el.dataset.marca] || '#F4F1EA';
+    }
+    this.$('[data-brand-font]').textContent = marca.fuente_nombre || '(sin cargar: usa la mono)';
+    const muro = s.muro || {};
+    for (const el of this.el.querySelectorAll('[data-muro]')) {
+      const k = el.dataset.muro;
+      if (el.type === 'checkbox') el.checked = muro[k] !== false;
+      else {
+        el.value = muro[k] ?? (k === 'filas' ? 34 : 'grilla');
+        if (el.type === 'range') el.nextElementSibling.textContent = el.value;
+      }
+    }
     const cad = this._cadence(s);
     for (const el of this.el.querySelectorAll('[data-cad]')) {
       if (document.activeElement !== el) el.value = cad[el.dataset.cad];
@@ -321,7 +392,7 @@ export class ConfigPanel {
     const origen = d.origen === 'llm' ? `dibujada por el LLM («${d.figura_libre || d.figura}»)`
       : d.origen === 'biblioteca' ? (d.pidio === 'llm' ? `biblioteca (el dibujo del LLM no sirvió) · ${d.figura}` : `biblioteca · ${d.figura}`)
       : 'sin figura (modo simbólico)';
-    el.textContent = `${secs} · ${origen} · ${d.provider || ''}`;
+    el.textContent = `${secs} · ${d.estiloVisto ? d.estiloVisto + ' · ' : ''}${origen} · ${d.provider || ''}`;
     el.className = d.latencia_ms > 6000 ? 'bad' : 'ok';
   }
 
@@ -342,6 +413,10 @@ export class ConfigPanel {
     const falta = Math.max(0, (m.min_s || 0) - (m.desde_imagen || 0));
     el.textContent = `${m.palabras}/${m.objetivo} palabras` + (falta > 0.5 ? ` · faltan ${Math.ceil(falta)} s de mínimo` : ' · al cerrar la estrofa');
     el.className = '';
+  }
+
+  setUserDir(dir) {
+    if (dir) this.$('[data-userdir]').textContent = `${dir}/logos  (organizadores · socio-cultural · patrocinadores)`;
   }
 
   setBackend(on) {
@@ -417,7 +492,19 @@ export class ConfigPanel {
     else if (act === 'down') this._commit((s) => move(s[list], +1));
     else if (act === 'del') this._commit((s) => s[list].splice(i, 1));
     else if (act === 'reset-prompt') this._commit((s) => (s.prompt_estetica = ''));
-    else if (act === 'record') this.onRecord?.();
+    else if (act === 'open-logos') this.onOpenFolder?.('logos');
+    else if (act === 'preview') this.onPreviewStyle?.(ev.target.dataset.stylePreview);
+    else if (act === 'brand-font') {
+      const input = Object.assign(document.createElement('input'), { type: 'file', accept: '.woff2,.woff,.ttf,.otf' });
+      input.onchange = () => {
+        const f = input.files?.[0];
+        if (!f) return;
+        const r = new FileReader();
+        r.onload = () => this._commit((s) => (s.marca = { ...(s.marca || {}), fuente: r.result, fuente_nombre: f.name }));
+        r.readAsDataURL(f);
+      };
+      input.click();
+    } else if (act === 'record') this.onRecord?.();
     else if (act === 'stop') this.onStop?.();
     else if (act === 'save-key') {
       const input = this.$('[data-key]');
@@ -481,6 +568,33 @@ export class ConfigPanel {
       const k = t.dataset.opt;
       if (t.type !== 'checkbox') t.nextElementSibling.textContent = (+t.value).toFixed(2);
       this._commit((s) => (s[k] = t.type === 'checkbox' ? t.checked : +t.value), false);
+      return;
+    }
+    if (t.dataset.style) {
+      this._commit((s) => {
+        const est = { activos: [], modo: 'llm', ...(s.estilos || {}) };
+        const set = new Set(est.activos);
+        if (t.checked) set.add(t.dataset.style);
+        else set.delete(t.dataset.style);
+        s.estilos = { ...est, activos: [...set] };
+      }, false);
+      return;
+    }
+    if (t.matches('[data-estmodo]')) {
+      if (ev.type === 'input') return;
+      this._commit((s) => (s.estilos = { ...(s.estilos || {}), modo: t.value }), false);
+      return;
+    }
+    if (t.dataset.marca) {
+      if (ev.type === 'input' && t.type === 'checkbox') return;
+      this._commit((s) => (s.marca = { ...(s.marca || {}), [t.dataset.marca]: t.type === 'checkbox' ? t.checked : t.value }), false);
+      return;
+    }
+    if (t.dataset.muro) {
+      const k = t.dataset.muro;
+      if (t.type === 'range') t.nextElementSibling.textContent = t.value;
+      if (ev.type === 'input' && t.tagName === 'SELECT') return;
+      this._commit((s) => (s.muro = { ...(s.muro || {}), [k]: t.type === 'checkbox' ? t.checked : t.type === 'range' ? +t.value : t.value }), false);
       return;
     }
     if (t.dataset.cad) {

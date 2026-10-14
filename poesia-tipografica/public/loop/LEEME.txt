@@ -1,10 +1,10 @@
-LOOP
+Los logos del loop ya NO van acá (se perderían al actualizar el programa).
 
-  flat.png              → logo FLAT (paso «imagen»)
-  sponsors/             → TODOS los logos de sponsors (paso «logos»)
+Van en tu carpeta de Documentos:
 
-Para los sponsors basta con copiar los archivos (PNG transparente ideal; JPG con fondo
-blanco también sirve: el fondo se quita solo) dentro de "sponsors/". La grilla se adapta a
-la cantidad y, si son muchos, los reparte en páginas. No hace falta reiniciar nada.
+  Documentos/Umbral/logos/organizadores     → primero
+  Documentos/Umbral/logos/socio-cultural    → segundo (más tiempo)
+  Documentos/Umbral/logos/patrocinadores    → tercero
 
-Las rutas y opciones se configuran en el panel C → Loop. También se puede subir con «Subir…».
+El programa crea esas carpetas solo la primera vez que arranca.
+Panel C → Loop → «Abrir carpeta de logos» las abre en el Finder.

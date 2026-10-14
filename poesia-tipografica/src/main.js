@@ -72,9 +72,44 @@ async function boot() {
 
   // ── dirección de arte ────────────────────────────────────────────────────
   let pendingDirection = null;
+  // ── estilos de imagen que oscilan: caligrama · ascii · glitch · marca ─────
+  const STYLES = ['caligrama', 'ascii', 'glitch', 'marca'];
+  let styleSeq = 0, lastStyle = '', currentStyle = 'caligrama';
+  function chooseStyle(suggested) {
+    const est = settings.estilos || {};
+    const act = (est.activos || []).filter((x) => STYLES.includes(x));
+    const pool = act.length ? act : ['caligrama'];
+    let st;
+    if (est.modo === 'secuencia') st = pool[styleSeq++ % pool.length];
+    else if (est.modo !== 'azar' && pool.includes(suggested)) st = suggested; // lo eligió el LLM
+    else {
+      const others = pool.length > 1 ? pool.filter((x) => x !== lastStyle) : pool;
+      st = others[(Math.random() * others.length) | 0];
+    }
+    lastStyle = st;
+    return st;
+  }
+
   function applyDirection(raw) {
     clearTimeout(pendingDirection);
-    const dir = normalizeDirection(raw);
+    let dir = normalizeDirection(raw);
+    const estilo = chooseStyle(raw.estilo);
+    currentStyle = estilo;
+    const marca = settings.marca || {};
+    if (estilo === 'glitch') dir = { ...dir, estilo: Math.random() < 0.5 ? 'ascii' : 'caligrama' };
+    else if (estilo === 'marca') {
+      dir = {
+        ...dir,
+        estilo: 'marca',
+        mayusculas: marca.mayusculas !== false,
+        paleta: { base: marca.base || '#F4F1EA', secundario: marca.secundario || '#8C8984', acento: marca.acento || '#E3A14B', uso_acento: 0.18 },
+      };
+    } else dir = { ...dir, estilo };
+    if (marca.global) {
+      // la marca manda sobre la paleta del LLM (conserva cuánto acento pidió)
+      dir.paleta = { base: marca.base || '#F4F1EA', secundario: marca.secundario || '#8C8984', acento: marca.acento || '#E3A14B', uso_acento: dir.paleta?.uso_acento ?? 0.08 };
+    }
+    dir.ascii_filas = settings.ascii_filas || 40;
     field.setKeywords(dir.palabras_clave);
     field.setPalette(dir.paleta);
     field.setPhysics(dir.fisica);
@@ -88,7 +123,7 @@ async function boot() {
       }
       if (!fig) fig = sampleFigure(SHAPES[dir.figura], { interiorTarget }); // biblioteca de respaldo
       if (fig) field.formFigure(fig, { ...dir, figura: dir.figura_libre || dir.figura });
-      config.setLastDirection({ ...dir, origen, pidio: dir.imagenes });
+      config.setLastDirection({ ...dir, origen, pidio: dir.imagenes, estiloVisto: estilo });
     } else {
       field.releaseFigure(true);
       config.setLastDirection({ ...dir, origen: 'sin figura' });
@@ -136,9 +171,30 @@ async function boot() {
     /* sin localStorage: se usan los valores por defecto */
   }
   let saveTimer = 0;
+  let brandFontLoaded = '';
+  function applyLiveSettings() {
+    field.wallMode = (settings.muro?.tipo || 'grilla') === 'grilla';
+    field.brandAll = settings.marca?.global === true;
+    field.brandUpper = field.brandAll && settings.marca?.mayusculas !== false;
+    field.wallRows = settings.muro?.filas || 34;
+    field.wallUpper = settings.muro?.mayusculas !== false;
+    const fuente = settings.marca?.fuente || '';
+    if (fuente && fuente !== brandFontLoaded) {
+      brandFontLoaded = fuente;
+      atlas.setBrandFont(fuente);
+    }
+  }
+
+  // loop de versiones anteriores (FLAT + sponsors + UMBRAL) → nuevo loop de tres grupos de logos
+  function migrate(s) {
+    const old = (s.loop || []).some((st) => st && (st.contenido === 'loop/flat.png' || st.carpeta === 'public/loop/sponsors'));
+    return old ? { ...s, loop: structuredClone(DEFAULT_SETTINGS.loop) } : s;
+  }
+
   function setSettings(next, { persist = true } = {}) {
-    settings = { ...structuredClone(DEFAULT_SETTINGS), ...next };
+    settings = migrate({ ...structuredClone(DEFAULT_SETTINGS), ...next });
     show.setSettings(settings);
+    applyLiveSettings();
     if (!persist) return;
     try {
       localStorage.setItem(LS_KEY, JSON.stringify(settings));
@@ -157,7 +213,15 @@ async function boot() {
   // pedir al backend los logos de una carpeta (responde con data URLs)
   const logoRequests = new Map();
   let logoReqId = 0;
-  function fetchLogos(carpeta) {
+  // al arrancar, el loop puede pedir logos antes de que el backend conecte: esperar hasta 5 s
+  const waitBackend = (ms = 5000) =>
+    new Promise((res) => {
+      const t0 = performance.now();
+      const tick = () => (socket?.open || performance.now() - t0 > ms ? res() : setTimeout(tick, 100));
+      tick();
+    });
+  async function fetchLogos(carpeta) {
+    await waitBackend();
     return new Promise((resolve, reject) => {
       const id = ++logoReqId;
       if (!socket?.send({ type: 'list_logos', carpeta, id })) return reject(new Error('backend desconectado'));
@@ -180,6 +244,7 @@ async function boot() {
     onSession: (st) => socket?.send({ type: 'session', ...st }),
   });
   show.setSettings(settings);
+  applyLiveSettings();
 
   // ── backend ──────────────────────────────────────────────────────────────
   let backendSettingsLoaded = false;
@@ -198,6 +263,7 @@ async function boot() {
       debug.setStatus({ backend: 'connected', ...(m.status || {}) });
       config.setMicStatus(m.status || {});
       config.setDefaultPrompt(m.default_prompt);
+      config.setUserDir(m.user_dir);
       if (m.key) {
         config.setKeyStatus(m.key);
         if (!m.key.has_key) config.toggle(true); // sin clave: abrir el panel para pegarla
@@ -246,6 +312,14 @@ async function boot() {
     onDevice: (dev) => socket.send({ type: 'set_device', device: dev }),
     requestDevices: () => socket.send({ type: 'list_devices' }),
     onSaveKey: (key) => socket.send({ type: 'set_api_key', key }),
+    onOpenFolder: (que) => socket.send({ type: 'open_folder', que }),
+    onPreviewStyle: (estilo) => {
+      // vista previa con el último verso: fuerza el estilo una vez
+      const prev = settings.estilos;
+      settings = { ...settings, estilos: { activos: [estilo], modo: 'azar' } };
+      applyDirection({ ...localArtDirection(field.corpus.slice(-120) || 'umbral'), modo_visual: 'concreto', verso: field.corpus.slice(-160) });
+      settings = { ...settings, estilos: prev };
+    },
     onRecord: () => {
       show.start(show.state === 'perform' ? show.mode : 'poema');
       config.setState(show.label());
@@ -386,6 +460,33 @@ async function boot() {
   }
   let orbit = 0;
 
+  // ── glitch azaroso: ráfagas de duración e intensidad al azar (la voz fuerte las provoca) ──
+  const glitch = { level: 0, burst: 0, amp: 0, wait: 1, frame: 0 };
+  function updateGlitch(dt) {
+    const active = currentStyle === 'glitch' && field.figure;
+    const ambient = settings.glitch_ambiente ?? 0; // glitch ocasional en todos los estilos
+    const rate = active ? 1 : ambient * 0.25;
+    glitch.wait -= dt;
+    if (glitch.burst > 0) {
+      glitch.burst -= dt;
+      glitch.level = glitch.amp * (0.6 + 0.4 * Math.random());
+      if (++glitch.frame % 2 === 0) {
+        field.uniforms.uGlitchSeed.value = Math.random() * 1000;
+        fx.film.uniforms.uGlitchSeed.value = Math.random() * 1000;
+      }
+    } else {
+      glitch.level = 0;
+      const voice = field.rms > 0.55 && Math.random() < dt * 4 * rate;
+      if (rate > 0 && (glitch.wait <= 0 || voice)) {
+        glitch.burst = 0.05 + Math.random() ** 2 * (active ? 0.7 : 0.25);
+        glitch.amp = (active ? 0.35 : 0.15) + Math.random() * (active ? 0.65 : 0.3);
+        glitch.wait = (-Math.log(1 - Math.random()) * (active ? 1.4 : 9)) / Math.max(rate, 0.05);
+      }
+    }
+    field.uniforms.uGlitch.value = glitch.level;
+    fx.film.uniforms.uGlitch.value = glitch.level;
+  }
+
   // ── calidad adaptativa ───────────────────────────────────────────────────
   // Pensada para portátiles sin ventilador (MacBook Air): tras horas de show el chip
   // baja su frecuencia por temperatura. Si los FPS caen, se baja la resolución interna
@@ -442,11 +543,13 @@ async function boot() {
     const pitch = Math.sin(t * 0.037) * 0.16 * orbit + Math.sin(t * 0.031) * 0.008;
     camera.position.set(Math.sin(yaw) * Math.cos(pitch) * camDist, Math.sin(pitch) * camDist, Math.cos(yaw) * Math.cos(pitch) * camDist);
     camera.lookAt(0, field.figure ? field.figure.cy * orbit : 0, 0);
+    updateGlitch(dt);
     field.update(dt, t);
     cloud.setPalette(field.uniforms.uBase.value, field.uniforms.uSecond.value);
     // sin nube en nombres, modo palabras y logos mostrados como imagen (que se lean limpios)
-    const quiet = show.state === 'artist' || (show.state === 'perform' && show.mode === 'palabras') || show.logoBox.classList.contains('on');
-    cloud.update(dt, t, field.rms, { visible: pc && !quiet, intensity: settings.nube ?? 1 });
+    const quiet = show.state === 'artist' || (show.state === 'perform' && show.mode === 'palabras') || show.stage.visible;
+    const styleCloud = !field.figure ? 1 : currentStyle === 'ascii' ? 0.1 : currentStyle === 'marca' ? 0.5 : 1;
+    cloud.update(dt, t, field.rms, { visible: pc && !quiet, intensity: (settings.nube ?? 1) * styleCloud });
     fx.render(t);
     frames++;
     fpsT += dt;
@@ -463,7 +566,12 @@ async function boot() {
   requestAnimationFrame(() => document.getElementById('boot')?.classList.add('gone'));
 
   // acceso desde consola para calibración
-  window.poesia = { field, show, config, applyDirection, simulateVerse, simulatePoem, advance, CONFIG };
+  window.poesia = {
+    field, show, config, applyDirection, simulateVerse, simulatePoem, advance, CONFIG,
+    // pruebas / calibración: forzar un estilo
+    setStyleForTest: (e) => (settings = { ...settings, estilos: { activos: [e], modo: 'azar' } }),
+    glitchNow: (secs = 0.6, amp = 0.9) => Object.assign(glitch, { burst: secs, amp }),
+  };
 
   show.goLoop(); // la noche empieza en el loop
 }

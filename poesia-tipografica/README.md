@@ -141,6 +141,30 @@ Producción: `start_instalacion.bat` compila el frontend, abre el backend minimi
 
 Sólo se envía audio a OpenAI mientras se graba (`S` o `T`): el loop y los nombres no consumen la API.
 
+### Loop de logos (hasta que empieza la noche)
+
+Los logos van en **Documentos/Umbral/logos/** (fuera del programa: actualizar o volver a descargar no los borra; los
+ajustes del panel C también viven ahí, en `Documentos/Umbral/ajustes.json`). El programa crea las carpetas solo:
+
+| Carpeta | Orden | Tiempo por página (por defecto) |
+| --- | --- | --- |
+| `organizadores` | 1º | 8 s |
+| `socio-cultural` (también vale «socio cultural») | 2º | 16 s |
+| `patrocinadores` | 3º | 8 s |
+
+Luego UMBRAL en letras, y vuelve a empezar hasta que se aprieta un número de artista. Cada carpeta se muestra en grilla
+adaptativa (o «de a uno»); entre logo y logo hay una transición de **glitch** (cortes, separación rojo/cian, bloques).
+Se muestran en orden alfabético: para forzar un orden, numerar los archivos (`01-flat.png`, `02-…`).
+
+### Estilos de imagen y muro de palabras
+
+Las figuras oscilan entre los estilos activos (panel C → Estilos de imagen; elige el LLM según la estrofa, o azar,
+o secuencia): **caligrama + nube de puntos**, **ASCII de densidad** (grilla mono, el glifo según la luz), **glitch
+azaroso** (ráfagas: bandas desplazadas, letras sustituidas, separación de color) y **marca FLAT**. Con «Aplicar la
+marca a todo», subtítulos, nombres, muro, figuras y colores usan la tipografía, paleta y mayúsculas de la marca
+(provisorio hasta tener el manual). El modo `T` es un **muro en grilla monoespaciada**: palabras de 1, 2 o 3 módulos
+de alto (las clave y las dichas con más voz, más grandes), alineadas, que llenan la pared en orden de lectura.
+
 ### Curaduría, imágenes en vivo y cadencia
 
 - **Curaduría** (panel C): texto libre, en tus palabras, sobre la muestra. El director de arte lo recibe antes de

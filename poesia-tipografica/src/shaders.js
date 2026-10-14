@@ -22,10 +22,14 @@ export const glyphVertex = /* glsl */ `
   uniform float uFreq;
   uniform float uCols;
   uniform float uRows;
+  uniform float uCell;        // lado de celda / lado del atlas (las celdas no tienen por qué llenar la textura)
   uniform float uFreshness;
   uniform vec3  uBase;
   uniform vec3  uSecond;
   uniform vec3  uAccent;
+  uniform float uGlitch;      // 0..1 intensidad de la ráfaga de glitch en curso
+  uniform float uGlitchSeed;  // cambia cada pocos frames durante la ráfaga
+  uniform float uSlots;       // glifos usados en el atlas (para sustituciones)
 
   varying vec2  vUv;
   varying vec3  vColor;
@@ -59,21 +63,38 @@ export const glyphVertex = /* glsl */ `
     // Eje Z: la voz empuja las letras recién nacidas hacia el público
     pos.z += uRms * fresh * 190.0 * (0.35 + seed) + pop * born * 70.0;
 
+    // Glitch azaroso: bandas horizontales que se desplazan y letras que se sustituyen
+    float slot = iData.z;
+    float glitchHit = 0.0;
+    if (uGlitch > 0.001) {
+      float band = floor(pos.y / (14.0 + 40.0 * hash(uGlitchSeed)));
+      float hb = hash(band * 13.17 + uGlitchSeed * 7.1);
+      if (hb < uGlitch * 0.45) {
+        glitchHit = 1.0;
+        pos.x += (hash(band + uGlitchSeed) - 0.5) * 420.0 * uGlitch;
+        pos.z += (hash(band * 3.1 + uGlitchSeed) - 0.5) * 120.0 * uGlitch;
+      }
+      if (hash(seed * 51.3 + uGlitchSeed) < uGlitch * 0.22) {
+        slot = mod(slot + floor(hash(seed + uGlitchSeed * 3.3) * 23.0) + 1.0, max(uSlots, 1.0));
+      }
+    }
+
     float r = iPosRot.w;
     vec2 q = position.xy * size;
     q = mat2(cos(r), sin(r), -sin(r), cos(r)) * q;
 
     gl_Position = projectionMatrix * modelViewMatrix * vec4(pos + vec3(q, 0.0), 1.0);
 
-    float slot = iData.z;
     float col = mod(slot, uCols);
     float row = floor(slot / uCols);
-    vUv = vec2((col + uv.x) / uCols, 1.0 - (row + 1.0 - uv.y) / uRows);
+    vUv = vec2((col + uv.x) * uCell, 1.0 - (row + 1.0 - uv.y) * uCell);
 
     vec3 c = mix(uBase, uSecond, clamp(iData.w, 0.0, 1.0));
     c = mix(c, uAccent, iMeta.z);
     // Las letras recién nacidas arden un instante (sólo ellas superan el umbral del bloom)
     vColor = c * (1.0 + pop * (0.6 + 1.6 * born) + uRms * fresh * 0.7);
+    // banda glitcheada: separación de canales (rojo/cian) y sobreexposición puntual
+    vColor = mix(vColor, vColor * vec3(1.55, 0.55, 1.25) + vec3(0.05, 0.0, 0.08), glitchHit * 0.85);
   }
 `;
 
@@ -100,6 +121,8 @@ export const FilmShader = {
     uTime: { value: 0 },
     uGrain: { value: 0.055 },
     uAberration: { value: 0.0022 },
+    uGlitch: { value: 0 },
+    uGlitchSeed: { value: 0 },
     uResolution: { value: null },
   },
   vertexShader: /* glsl */ `
@@ -114,17 +137,26 @@ export const FilmShader = {
     uniform float uTime;
     uniform float uGrain;
     uniform float uAberration;
+    uniform float uGlitch;
+    uniform float uGlitchSeed;
     varying vec2 vUv;
 
     float rand(vec2 co) { return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453); }
 
     void main() {
-      vec2 d = vUv - 0.5;
+      vec2 uv = vUv;
+      // desgarro horizontal durante las ráfagas de glitch
+      if (uGlitch > 0.001) {
+        float row = floor(uv.y * (24.0 + 60.0 * rand(vec2(uGlitchSeed, 1.7))));
+        float h = rand(vec2(row, uGlitchSeed));
+        if (h < uGlitch * 0.35) uv.x += (rand(vec2(row * 1.3, uGlitchSeed + 4.0)) - 0.5) * 0.12 * uGlitch;
+      }
+      vec2 d = uv - 0.5;
       float r2 = dot(d, d);
-      vec2 off = d * r2 * uAberration * 4.0;            // sólo crece hacia los bordes
-      vec4 g = texture2D(tDiffuse, vUv);
-      float rC = texture2D(tDiffuse, vUv + off).r;
-      float bC = texture2D(tDiffuse, vUv - off).b;
+      vec2 off = d * r2 * uAberration * 4.0 * (1.0 + uGlitch * 10.0) + vec2(uGlitch * 0.006, 0.0);
+      vec4 g = texture2D(tDiffuse, uv);
+      float rC = texture2D(tDiffuse, uv + off).r;
+      float bC = texture2D(tDiffuse, uv - off).b;
       vec3 col = vec3(rC, g.g, bC);
 
       float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));

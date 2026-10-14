@@ -223,7 +223,8 @@ class SettingsStore:
     """settings.local.json junto a server.py. Lo escribe el panel C del frontend."""
 
     KEYS = ("device", "artists", "loop", "prompt_estetica", "avisos", "pointcloud", "profundidad", "nube", "orbita",
-            "curaduria", "imagenes", "director", "cadencia")
+            "curaduria", "imagenes", "director", "cadencia", "estilos", "glitch_ambiente", "ascii_filas",
+            "marca", "muro")
 
     def __init__(self, path: str) -> None:
         self.path = path
@@ -252,17 +253,78 @@ class SettingsStore:
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Carpeta del usuario, FUERA del proyecto: actualizar o volver a descargar el programa no borra
+# los logos ni los ajustes. macOS/Windows: Documentos/Umbral (se puede cambiar con UMBRAL_DIR).
+_docs = os.path.join(os.path.expanduser("~"), "Documents")
+USER_DIR = os.path.realpath(os.environ.get("UMBRAL_DIR") or os.path.join(_docs if os.path.isdir(_docs) else os.path.expanduser("~"), "Umbral"))
+LOGO_GROUPS = ("organizadores", "socio-cultural", "patrocinadores")
+
+
+def ensure_user_dir() -> None:
+    """Crea Documentos/Umbral/logos/{organizadores,socio-cultural,patrocinadores} con un LEEME."""
+    try:
+        logos = os.path.join(USER_DIR, "logos")
+        os.makedirs(logos, exist_ok=True)
+        existing = {_norm_folder(e) for e in os.listdir(logos)}
+        for g in LOGO_GROUPS:
+            if _norm_folder(g) not in existing:  # no duplicar «socio cultural» / «Socio_Cultural»…
+                os.makedirs(os.path.join(logos, g), exist_ok=True)
+        readme = os.path.join(USER_DIR, "LEEME.txt")
+        if not os.path.exists(readme):
+            with open(readme, "w", encoding="utf-8") as fh:
+                fh.write("Umbral · carpeta de la muestra (no se borra al actualizar el programa)\n\n"
+                         "logos/organizadores    → primero\n"
+                         "logos/socio-cultural   → segundo (más tiempo en pantalla)\n"
+                         "logos/patrocinadores   → tercero\n\n"
+                         "Copia los archivos (PNG transparente ideal; JPG con fondo blanco también) en cada carpeta.\n"
+                         "Se muestran en orden alfabético: para forzar un orden, numéralos (01-flat.png, 02-...).\n"
+                         "No hace falta reiniciar: el loop relee las carpetas en cada vuelta.\n\n"
+                         "ajustes.json → artistas, curaduría, loop y demás opciones del panel C.\n")
+    except OSError as exc:
+        log.warning("No pude crear %s: %s", USER_DIR, exc)
 LOGO_EXT = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
             ".svg": "image/svg+xml", ".gif": "image/gif"}
 _logo_cache: dict[str, tuple[float, int, str]] = {}
 
 
+def _norm_folder(name: str) -> str:
+    return re.sub(r"[\s_\-]+", "", strip_accents(name.lower()))
+
+
+def _has_images(path: str) -> bool:
+    try:
+        return any(os.path.splitext(n)[1].lower() in LOGO_EXT for n in os.listdir(path))
+    except OSError:
+        return False
+
+
+def _resolve_logo_folder(folder: str) -> str:
+    """Busca la carpeta en Documentos/Umbral y luego en el proyecto, tolerando «socio cultural» /
+    «socio-cultural» / «socio_cultural» y mayúsculas. Sólo dentro de esas dos raíces."""
+    folder = (folder or "").strip().strip("/\\")
+    found: list[str] = []
+    for root in (USER_DIR, BASE_DIR):
+        target = os.path.realpath(os.path.join(root, folder))
+        if not (target == root or target.startswith(root + os.sep)):
+            continue
+        parent, name = os.path.split(target)
+        if not os.path.isdir(parent):
+            continue
+        # mismo nombre ignorando mayúsculas, tildes, espacios, guiones y guiones bajos
+        for entry in sorted(os.listdir(parent)):
+            full = os.path.join(parent, entry)
+            if os.path.isdir(full) and _norm_folder(entry) == _norm_folder(name):
+                found.append(full)
+    with_images = [f for f in found if _has_images(f)]
+    return (with_images or found or [""])[0]
+
+
 def read_logo_folder(folder: str) -> list[dict[str, str]]:
     """Lee todos los logos de una carpeta (relativa al proyecto) como data URLs, en orden alfabético.
     Así basta con soltar archivos en la carpeta: el loop se adapta a la cantidad."""
-    path = os.path.realpath(os.path.join(BASE_DIR, folder or ""))
-    if not (path == BASE_DIR or path.startswith(BASE_DIR + os.sep)) or not os.path.isdir(path):
-        return []  # sólo carpetas dentro del proyecto
+    path = _resolve_logo_folder(folder)
+    if not path:
+        return []
     out = []
     for name in sorted(os.listdir(path), key=str.lower):
         ext = os.path.splitext(name)[1].lower()
@@ -900,9 +962,22 @@ DEFAULT_AESTHETIC = """- "concreto": el verso nombra algo visible (luna, ojo, p�
 - Estética de museo: base hueso, grises ceniza; el acento ámbar o carmín es muy puntual (uso_acento bajo)."""
 
 
-def build_system_prompt(aesthetic: str | None, curaduria: str | None = None, imagenes: str = "llm") -> str:
+STYLE_HELP = {
+    "caligrama": "las letras del verso recorren el contorno y rellenan el volumen; lírico, orgánico",
+    "ascii": "grilla monoespaciada estricta donde la densidad de los signos modela la luz; seco, documental",
+    "glitch": "la imagen se rompe en ráfagas: bandas desplazadas, letras sustituidas; error, interferencia, crisis",
+    "marca": "identidad gráfica de FLAT: ordenada, plana, tipográfica; para versos afirmativos o institucionales",
+}
+
+
+def build_system_prompt(aesthetic: str | None, curaduria: str | None = None, imagenes: str = "llm",
+                        estilos: list[str] | None = None) -> str:
     text = (aesthetic or "").strip() or DEFAULT_AESTHETIC
     parts = [SCHEMA_PROMPT, IMAGES_LIBRARY if imagenes == "biblioteca" else IMAGES_LIVE]
+    est = [e for e in (estilos or []) if e in STYLE_HELP]
+    if len(est) > 1:
+        parts.append('Agrega la clave "estilo" con uno de ' + str(est) + ". Elige el que la estrofa pida y alterna:\n"
+                     + "\n".join(f"- {e}: {STYLE_HELP[e]}" for e in est))
     cur = (curaduria or "").strip()
     if cur:
         parts.append("TEXTO CURATORIAL de la muestra, escrito por el curador. Es la guía principal: cada figura, "
@@ -1060,6 +1135,9 @@ def sanitize_direction(raw: Any, text: str, last_modes: list[str]) -> dict[str, 
     mode = strip_accents(mode)
     if mode in MODES:
         out["modo_visual"] = mode
+    estilo = strip_accents(str(raw.get("estilo", "")).lower().strip())
+    if estilo in STYLE_HELP:
+        out["estilo"] = estilo
     fig_raw = str(raw.get("figura", "")).strip()
     fig = strip_accents(fig_raw.lower())
     if fig in FIGURES:
@@ -1278,8 +1356,10 @@ class ArtDirector:
                 f"Estrofa actual (versos separados por /): «{text}»\nUna sola imagen para toda la estrofa. "
                 f"Devuelve sólo el JSON.")
         st = self.settings
+        est = (st.get("estilos") or {}) if st else {}
+        allowed = est.get("activos") if est.get("modo", "llm") == "llm" else None
         prompt = build_system_prompt(st.get("prompt_estetica") if st else None, st.get("curaduria") if st else None,
-                                     self._images_mode())
+                                     self._images_mode(), allowed)
         return [{"role": "system", "content": prompt}, {"role": "user", "content": user}]
 
     def _images_mode(self) -> str:
@@ -1364,7 +1444,18 @@ class ArtDirector:
 async def main_async(args: argparse.Namespace) -> None:
     cfg = Config.from_env()
     loop = asyncio.get_running_loop()
-    settings = SettingsStore(args.settings)
+    ensure_user_dir()
+    settings_path = args.settings or os.path.join(USER_DIR, "ajustes.json")
+    legacy = os.path.join(BASE_DIR, "settings.local.json")
+    if not args.settings and not os.path.exists(settings_path) and os.path.exists(legacy):
+        try:  # migrar ajustes que quedaron dentro del proyecto
+            import shutil
+            shutil.copyfile(legacy, settings_path)
+            log.info("Ajustes migrados a %s", settings_path)
+        except OSError:
+            settings_path = legacy
+    settings = SettingsStore(settings_path)
+    log.info("Carpeta de la muestra: %s", USER_DIR)
     hub = FrontendHub(cfg)
     director = ArtDirector(cfg, hub, settings)
     use_openai = not args.no_openai
@@ -1378,6 +1469,7 @@ async def main_async(args: argparse.Namespace) -> None:
                 "source": cfg.openai_key_source}
 
     hub.hello_extra = lambda: {"settings": settings.data, "default_prompt": DEFAULT_AESTHETIC, "key": key_status(),
+                               "user_dir": USER_DIR,
                                "session": hub.session}
 
     def on_verse(text: str, item_id: str, source: str) -> None:
@@ -1427,6 +1519,18 @@ async def main_async(args: argparse.Namespace) -> None:
             if transcriber is not None:
                 transcriber.set_key(key)
             hub.emit("key_status", ok=True, **key_status())
+        elif kind == "open_folder":
+            target = os.path.join(USER_DIR, "logos") if msg.get("que") == "logos" else USER_DIR
+            ensure_user_dir()
+            try:
+                if sys.platform == "darwin":
+                    subprocess.Popen(["open", target])
+                elif sys.platform == "win32":
+                    os.startfile(target)  # type: ignore[attr-defined]
+                else:
+                    subprocess.Popen(["xdg-open", target])
+            except Exception as exc:
+                log.warning("No pude abrir %s: %s", target, exc)
         elif kind == "list_logos":
             folder = str(msg.get("carpeta", ""))[:200]
             logos = await asyncio.to_thread(read_logo_folder, folder)
@@ -1511,7 +1615,7 @@ async def run_check() -> None:
         ok = False
     else:
         try:
-            settings = SettingsStore("settings.local.json")
+            settings = SettingsStore(os.path.join(USER_DIR, "ajustes.json"))
             dev = settings.get("device") or cfg.audio_device or None
             dev = int(dev) if isinstance(dev, str) and dev.isdigit() else dev
             info = sd.query_devices(dev, "input")
@@ -1559,7 +1663,7 @@ def main() -> None:
     parser.add_argument("--no-audio", action="store_true", help="no abrir el micrófono")
     parser.add_argument("--no-openai", action="store_true", help="no conectar a OpenAI Realtime")
     parser.add_argument("--env", default=".env", help="ruta del archivo .env")
-    parser.add_argument("--settings", default="settings.local.json",
+    parser.add_argument("--settings", default="",
                         help="ajustes del show (micrófono, artistas, loop, prompt) escritos desde el panel C")
     args = parser.parse_args()
 

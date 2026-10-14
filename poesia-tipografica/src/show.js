@@ -8,21 +8,31 @@
 //  Sólo se transcribe (y se paga OpenAI) mientras recording = true.
 // ─────────────────────────────────────────────────────────────────────────────
 import { sampleText, sampleImage } from './svgSampler.js';
-import { processLogo, layoutLogos, paginate, composeLogos } from './logos.js';
+import { processLogo, paginate, composeLogos, LogoStage } from './logos.js';
 
 export const DEFAULT_SETTINGS = {
   artists: [{ name: 'Nombre del artista 1' }, { name: 'Nombre del artista 2' }, { name: 'Nombre del artista 3' }],
+  // Loop hasta que empieza la noche: organizadores → socio cultural (más tiempo) → patrocinadores → UMBRAL.
+  // Las carpetas se leen de Documentos/Umbral/logos/… (fuera del programa: no se pierden al actualizar).
   loop: [
-    { tipo: 'imagen', contenido: 'loop/flat.png', render: 'letras', duracion: 10, letras: 'FLAT', alt: 'FLAT' },
-    // «logos»: todos los archivos de la carpeta (+ los subidos), en una grilla que se adapta a la cantidad
-    { tipo: 'logos', carpeta: 'public/loop/sponsors', imagenes: [], render: 'imagen', duracion: 8, por_pagina: 8, monocromo: true, letras: '', alt: 'SPONSORS' },
+    { tipo: 'logos', carpeta: 'logos/organizadores', imagenes: [], render: 'imagen', duracion: 8, por_pagina: 6, de_a_uno: false, monocromo: true, letras: '', alt: 'ORGANIZAN' },
+    { tipo: 'logos', carpeta: 'logos/socio-cultural', imagenes: [], render: 'imagen', duracion: 16, por_pagina: 6, de_a_uno: false, monocromo: true, letras: '', alt: 'SOCIO CULTURAL' },
+    { tipo: 'logos', carpeta: 'logos/patrocinadores', imagenes: [], render: 'imagen', duracion: 8, por_pagina: 8, de_a_uno: false, monocromo: true, letras: '', alt: 'PATROCINAN' },
     { tipo: 'texto', contenido: 'UMBRAL', render: 'letras', duracion: 12, letras: 'UMBRAL' },
   ],
   prompt_estetica: '',
   curaduria: '', // texto curatorial en lenguaje normal (guía principal del director de arte)
   imagenes: 'llm', // 'llm' = el LLM dibuja cada figura en vivo · 'biblioteca' = figuras curadas
   director: 'openai', // openai | ollama | deepseek
-  cadencia: { preset: 'estrofa' }, // cada cuánto una imagen: verso | estrofa | contemplativa | personalizada
+  cadencia: { preset: 'estrofa' },
+  // estilos de imagen que oscilan; el LLM elige entre los activos (o azar / secuencia)
+  estilos: { activos: ['caligrama', 'ascii', 'glitch'], modo: 'llm' },
+  glitch_ambiente: 0, // 0..1: glitch ocasional también en los otros estilos
+  ascii_filas: 40, // resolución de la grilla ASCII
+  // marca FLAT (completar con el manual de marca)
+  marca: { base: '#F4F1EA', secundario: '#8C8984', acento: '#E3A14B', fuente: '', fuente_nombre: '', mayusculas: true, global: true },
+  // modo T: muro de palabras
+  muro: { tipo: 'grilla', filas: 34, mayusculas: true }, // cada cuánto una imagen: verso | estrofa | contemplativa | personalizada
   pointcloud: true, // estética nube de puntos (TouchDesigner)
   profundidad: 0.45, // extrusión en Z de las figuras
   nube: 1, // intensidad de la nube
@@ -72,9 +82,13 @@ export class Show {
     this.overlayImg = document.createElement('img');
     this.overlay.appendChild(this.overlayImg);
     document.body.appendChild(this.overlay);
-    this.logoBox = document.createElement('div');
-    this.logoBox.id = 'logos';
-    document.body.appendChild(this.logoBox);
+    this.stage = new LogoStage(); // logos con transición glitch
+  }
+
+  /** Paleta de base: la de la marca si está aplicada a todo. */
+  basePalette() {
+    const m = this.settings.marca || {};
+    return m.global ? { base: m.base, secundario: m.secundario, acento: m.acento, uso_acento: 0.08 } : {};
   }
 
   setSettings(settings) {
@@ -109,7 +123,7 @@ export class Show {
     f.resetCorpus(this._loopCorpus());
     f.cursorEnabled = false;
     f.setSceneDensity(0.55);
-    f.setPalette({});
+    f.setPalette(this.basePalette());
     f.setPhysics({ modo: 'dispersion_ceniza', intensidad: 0.35, velocidad: 0.3, turbulencia: 0.35, densidad: 0.55 });
     this.state = 'loop';
     this.loopIndex = -1;
@@ -133,7 +147,14 @@ export class Show {
     let secs = Math.min(600, Math.max(2, +step.duracion || 10));
     try {
       const custom = await this._playStep(step, token);
-      if (Number.isFinite(custom) && custom > 0) secs = custom; // p. ej. varias páginas de logos
+      if (custom === -1) {
+        // carpeta vacía: saltar sin dejar la pared en negro (si todo está vacío, esperar un poco)
+        this.emptySkips = (this.emptySkips || 0) + 1;
+        secs = this.emptySkips >= steps.length ? 4 : 0.05;
+      } else {
+        this.emptySkips = 0;
+        if (Number.isFinite(custom) && custom > 0) secs = custom; // p. ej. varias páginas de logos
+      }
     } catch (e) {
       console.warn('[loop]', e);
     }
@@ -143,13 +164,13 @@ export class Show {
 
   async _playStep(step, token) {
     const f = this.field;
-    this._hideImage();
+    this._hideImage(step.tipo === 'logos'); // entre grupos de logos: glitch de logo a logo, sin pasar por negro
     f.clearTitle();
     if (step.tipo === 'logos') {
       const total = await this._playLogos(step, token);
-      if (total !== null) return total;
-      step = { ...step, tipo: 'texto', contenido: step.alt || 'SPONSORS', render: 'letras' }; // sin logos: su nombre
+      return total === null ? -1 : total; // -1: carpeta vacía → saltar
     }
+    this.stage.hide();
     let kind = step.tipo === 'imagen' ? 'imagen' : 'texto';
     let content = String(step.contenido || '');
     let img = null;
@@ -204,40 +225,28 @@ export class Show {
       logos.push(this.logoCache.get(key));
     });
     if (!logos.length) return null;
-    const pages = paginate(logos, +step.por_pagina || 8);
+    // de a uno: cada logo es su propia «página»; si no, grilla adaptativa paginada
+    const pages = step.de_a_uno ? logos.map((l) => [l]) : paginate(logos, +step.por_pagina || 8);
     const per = Math.min(600, Math.max(2, +step.duracion || 8));
     pages.forEach((page, p) => {
-      const t = setTimeout(() => token === this.loopToken && this._showLogoPage(page, step, p > 0), p * per * 1000);
+      const t = setTimeout(() => token === this.loopToken && this._showLogoPage(page, step), p * per * 1000);
       this.pageTimers.push(t);
     });
     return per * pages.length;
   }
 
-  _showLogoPage(page, step, crossfade) {
+  _showLogoPage(page, step) {
     const f = this.field;
     if (step.render === 'letras') {
-      this.logoBox.classList.remove('on');
+      this.stage.hide();
       const fig = sampleImage(composeLogos(page), { interiorTarget: this.interiorTarget });
       if (fig) {
-        f.formFigure(fig, { modo_visual: 'concreto', relleno: 'volumen', tipografia: 'mono', verso: step.letras || step.alt || 'SPONSORS', permanente: true, figura: 'logos' });
+        f.formFigure(fig, { modo_visual: 'concreto', relleno: 'volumen', tipografia: 'mono', verso: step.letras || step.alt || 'LOGOS', permanente: true, figura: 'logos' });
         return;
       }
     }
     f.releaseFigure(true);
-    const place = () => {
-      const W = window.innerWidth * 0.8, H = window.innerHeight * 0.62;
-      const x0 = (window.innerWidth - W) / 2, y0 = (window.innerHeight - H) / 2;
-      const rects = layoutLogos(page.map((c) => c.width / c.height), W, H);
-      this.logoBox.replaceChildren(...page);
-      page.forEach((c, i) => {
-        Object.assign(c.style, { left: `${x0 + rects[i].x}px`, top: `${y0 + rects[i].y}px`, width: `${rects[i].w}px`, height: `${rects[i].h}px` });
-      });
-      this.logoBox.classList.add('on');
-    };
-    if (crossfade && this.logoBox.classList.contains('on')) {
-      this.logoBox.classList.remove('on');
-      this.pageTimers.push(setTimeout(place, 900));
-    } else place();
+    this.stage.show(page); // glitch entre el logo anterior y éste
   }
 
   _showImage(src) {
@@ -245,9 +254,9 @@ export class Show {
     this.overlay.classList.add('on');
   }
 
-  _hideImage() {
+  _hideImage(keepStage = false) {
     this.overlay.classList.remove('on');
-    this.logoBox.classList.remove('on');
+    if (!keepStage) this.stage.hide();
     this.pageTimers.forEach(clearTimeout);
     this.pageTimers = [];
   }
@@ -268,7 +277,7 @@ export class Show {
     f.resetCorpus(a.name);
     f.cursorEnabled = false;
     f.setSceneDensity(0.5);
-    f.setPalette({});
+    f.setPalette(this.basePalette());
     f.setPhysics({ modo: 'dispersion_ceniza', intensidad: 0.3, velocidad: 0.25, turbulencia: 0.3, densidad: 0.5 });
     f.showTitle(a.name);
     this.state = 'artist';
