@@ -213,7 +213,9 @@ export class Show {
     }
     const n = this._loopSteps().length;
     if (dir > 0 && this.loopIndex >= n - 1) {
-      this.goTitle();
+      const cur = this._loopSteps()[this.loopIndex];
+      if (cur && cur.tipo === 'texto') this._holdTitle(cur.contenido || 'UMBRAL');
+      else this.goTitle();
       return;
     }
     this.loopIndex = dir > 0 ? this.loopIndex : Math.max(-1, this.loopIndex - 2);
@@ -368,6 +370,16 @@ export class Show {
 
   // ── título ───────────────────────────────────────────────────────────────
   /** UMBRAL fijo, calado en el telón de palabras, hasta que se aprieta T. */
+  /** La placa UMBRAL del loop queda fija como título (sin una segunda placa igual) hasta T. */
+  _holdTitle(name) {
+    clearTimeout(this.loopTimer);
+    this.loopToken++;
+    for (const t of this.pageTimers) clearTimeout(t);
+    this.pageTimers = [];
+    this.state = 'title';
+    this.notify(`${name} — T para comenzar`);
+  }
+
   goTitle() {
     this._setRecording(false);
     clearTimeout(this.loopTimer);

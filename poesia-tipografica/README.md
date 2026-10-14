@@ -98,7 +98,12 @@ clave contra OpenAI, graba 2 s del micrófono y dice qué falla. En los paneles 
 
 ## Puesta en marcha (Windows 10/11)
 
-Requisitos: Python 3.10+, Node.js 18+, Google Chrome, y opcionalmente [Ollama](https://ollama.com).
+Lo más simple: descomprimir el ZIP y hacer doble clic en **`start_instalacion.bat`**. Si faltan Python o Node.js
+los instala con winget (luego pide cerrar y volver a abrirlo); después prepara todo, compila y abre Chrome en kiosk.
+La clave de OpenAI se pega en el panel C (tecla C) y queda fuera del programa. El logo de FLAT se copia solo desde
+Descargas (`FLAT-Logo*.png`). Si algo falla: **`diagnostico_windows.bat`**.
+
+Requisitos (manual): Python 3.10+, Node.js 18+, Google Chrome, y opcionalmente [Ollama](https://ollama.com).
 
 ```bat
 copy .env.example .env          :: opcional: el arranque lo crea solo. La clave se pega en el panel C
