@@ -5,3 +5,4 @@ __pycache__/
 *.pyc
 .venv/
 .chrome-kiosk/
+settings.local.json*

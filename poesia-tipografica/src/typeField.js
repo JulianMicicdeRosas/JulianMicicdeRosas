@@ -19,6 +19,8 @@ import { pointAt, RES } from './svgSampler.js';
 const FREE = 0;
 const LINE = 1;
 const FIGURE = 2;
+const TITLE = 3;  // nombre del artista / títulos tipográficos
+const WORD = 4;   // modo palabras (T): palabras dispersas por la pared
 const CURSOR = 9;
 
 export const PHYSICS_MODES = ['lluvia_text_rain', 'enjambre_lozano', 'vortice_sandison', 'dispersion_ceniza'];
@@ -73,6 +75,7 @@ export class TypeField {
     this.delay = F(); this.life = F();
     // glifo pendiente: se aplica cuando la letra parte hacia su lugar en el caligrama
     this.pslot = F().fill(-1); this.ptint = F(); this.paccent = F();
+    this.grp = F(); // semilla compartida por palabra/título: respiran como un bloque
     this.rest = F(); this.restY = F(); this.restH = F();
     this.restCol = new Int16Array(N);
     this.state = new Uint8Array(N);
@@ -104,6 +107,17 @@ export class TypeField {
     this.speakingUntil = 0;
     this.line = null;
     this.allocCursor = 1;
+    this.depth = 220;          // extrusión Z de las figuras (compartida con la nube de puntos)
+    this.onFigure = null;      // (fig, mapping) → nube de puntos
+    this.onRelease = null;
+    this.cursorEnabled = true;
+    this.sceneDensity = 1;
+    this.title = null;
+    this.words = [];
+    this.wordRects = [];
+    this.wordBufs = new Map();
+    this.wordSeen = new Set();
+    this.idleText = (idleText || 'la voz escribe en la oscuridad').trim();
 
     this._buildMesh();
     this._seedParticles();
@@ -283,14 +297,14 @@ export class TypeField {
   // ════════════════════════════════════════════════════════════════════════
   //  Verso en vivo (subtítulo): las letras nacen donde se pronuncian
   // ════════════════════════════════════════════════════════════════════════
-  _allocParticle() {
+  _allocParticle(preferVisible = false) {
     const N = this.N;
     let pick = -1, fallback = -1;
     for (let k = 0; k < 900; k++) {
       const i = 1 + ((this.allocCursor + k) % (N - 1));
       const st = this.state[i];
       if (st === FREE) {
-        if (this.alpha[i] < 0.12) {
+        if (preferVisible ? this.alpha[i] > 0.15 : this.alpha[i] < 0.12) {
           pick = i;
           break;
         }
@@ -303,7 +317,7 @@ export class TypeField {
     if (pick < 0) {
       for (let k = 0; k < N - 1; k++) {
         const i = 1 + ((this.allocCursor + k) % (N - 1));
-        if (this.state[i] !== LINE && this.state[i] !== CURSOR) {
+        if (this.state[i] !== LINE && this.state[i] !== CURSOR && this.state[i] !== TITLE) {
           pick = i;
           break;
         }
@@ -494,10 +508,12 @@ export class TypeField {
     const t = this.time;
     this.releaseFigure(true);
     const atlas = this.atlas;
-    const worldSize = Math.min(this.H * 0.74, this.W * 0.8);
-    const k = worldSize / RES;
+    // escala por la caja real de la figura: una palabra o un logo apaisado ocupa el ancho
+    const bb = fig.bbox || { x: 0, y: 0, w: RES, h: RES };
+    const k = Math.min((this.H * 0.74) / bb.h, (this.W * 0.84) / bb.w) * clamp(+dir.escala || 1, 0.2, 1.5);
+    const ox = bb.x + bb.w / 2, oy = bb.y + bb.h / 2; // centro de la figura en el lienzo
     const cx = 0;
-    const cy = this.H * 0.055;
+    const cy = Number.isFinite(dir.cy) ? dir.cy * this.H : this.H * 0.055;
     const typo = dir.tipografia || 'mixta';
     const kindC = typo === 'mono' ? 'mono' : 'serif';
     const kindI = typo === 'serif' ? 'serif' : 'mono';
@@ -530,8 +546,25 @@ export class TypeField {
           if (mid > pl.length) break;
           const p = pointAt(pl, mid, hint);
           hint = p.index;
-          T.push((p.x - RES / 2) * k + cx, (RES / 2 - p.y) * k + cy, 8, Math.atan2(-p.ty, p.tx), S, 1, 0, slot, useKeys && key ? 1 : 0, 0, contourCount++);
+          T.push((p.x - ox) * k + cx, (oy - p.y) * k + cy, 8, Math.atan2(-p.ty, p.tx), S, 1, 0, slot, useKeys && key ? 1 : 0, 0, contourCount++);
           s += advPx * 1.04;
+        }
+      }
+      // figuras sin path (texto, logos): bordes aclarados en una rejilla del tamaño de la letra
+      const E = fig.edges;
+      if (E && E.length) {
+        const g = (S * 0.8) / k;
+        const seen = new Set();
+        for (let e = 0; e < E.length && T.length / 11 < capacity; e += 4) {
+          const key2 = ((E[e] / g) | 0) * 100000 + ((E[e + 1] / g) | 0);
+          if (seen.has(key2)) continue;
+          seen.add(key2);
+          let [ch, key] = next();
+          while (ch === ' ') [ch, key] = next();
+          let ang = Math.atan2(-E[e + 3], E[e + 2]);
+          if (ang > Math.PI / 2) ang -= Math.PI; // sin letras cabeza abajo en bordes desordenados
+          else if (ang < -Math.PI / 2) ang += Math.PI;
+          T.push((E[e] - ox) * k + cx, (oy - E[e + 1]) * k + cy, 8, ang, S * 0.9, 1, 0, atlas.slot(ch, kindC), useKeys && key ? 1 : 0, 0, contourCount++);
         }
       }
     }
@@ -550,9 +583,9 @@ export class TypeField {
         const [ch, key] = next();
         const slot = atlas.slot(ch, kindI);
         T.push(
-          (pts[j * 3] - RES / 2) * k + cx,
-          (RES / 2 - pts[j * 3 + 1]) * k + cy,
-          (lum - 0.5) * 80,
+          (pts[j * 3] - ox) * k + cx,
+          (oy - pts[j * 3 + 1]) * k + cy,
+          (lum - 0.5) * this.depth * 0.85,
           (Math.random() - 0.5) * 0.12,
           cell * (0.95 + 1.45 * lum),
           0.16 + 0.66 * lum,
@@ -613,16 +646,18 @@ export class TypeField {
     this.figureDensity = concrete ? 0.18 : 0.62;
     this.figureAlpha = concrete ? 1 : 0.78;
     this.figure = {
-      k, cx, cy, top: fig.top,
-      until: t + clamp(+dir.duracion_s || 14, 6, 40) + 3.5,
+      k, cx, cy, ox, oy, top: fig.top,
+      until: dir.permanente ? Infinity : t + clamp(+dir.duracion_s || 14, 6, 40) + 3.5,
       name: dir.figura || '',
       count: nT,
     };
     this._recomputeFloor();
+    this.onFigure?.(fig, this.figure);
   }
 
   releaseFigure(impulse = true) {
     if (!this.figure) return;
+    this.onRelease?.(this.figure);
     const { cx, cy } = this.figure;
     for (let i = 1; i < this.N; i++) {
       if (this.state[i] !== FIGURE) continue;
@@ -655,8 +690,8 @@ export class TypeField {
       const x = -this.W / 2 + (c + 0.5) * this.colW;
       let f = -this.H / 2 + 4 + 5 * Math.sin(c * 0.11) + 3 * Math.sin(c * 0.37);
       if (fig) {
-        const fx = Math.round((x - fig.cx) / fig.k + RES / 2);
-        if (fx >= 0 && fx < RES && fig.top[fx] >= 0) f = Math.max(f, fig.cy + (RES / 2 - fig.top[fx]) * fig.k);
+        const fx = Math.round((x - fig.cx) / fig.k + fig.ox);
+        if (fx >= 0 && fx < RES && fig.top[fx] >= 0) f = Math.max(f, fig.cy + (fig.oy - fig.top[fx]) * fig.k);
       }
       if (shelf && x >= shelf.x0 && x <= shelf.x1) f = Math.max(f, shelf.y);
       this.floorBase[c] = f;
@@ -736,7 +771,7 @@ export class TypeField {
 
     const { intensidad: inten, velocidad: vel, turbulencia: turb, densidad: dens } = this.phys;
     const corpusFactor = clamp(0.1 + this.corpusChars / 2600, 0.1, 1);
-    const density = corpusFactor * (0.3 + 0.7 * dens) * this.figureDensity * (wR > 0.5 ? 0.75 : 1);
+    const density = corpusFactor * (0.3 + 0.7 * dens) * this.figureDensity * this.sceneDensity * (wR > 0.5 ? 0.75 : 1);
     const ambient = 0.42 + 0.4 * inten;
     const W = this.W, H = this.H, halfW = W / 2, halfH = H / 2;
 
@@ -802,9 +837,30 @@ export class TypeField {
         size[i] += (this.tsize[i] - size[i]) * kSize;
         alphaT[i] = this.talpha[i] * this.figureAlpha;
         alpha[i] += (alphaT[i] - alpha[i]) * kAlpha;
+      } else if ((st === TITLE || st === WORD) && t >= this.delay[i]) {
+        if (this.pslot[i] >= 0) {
+          this.slot[i] = this.pslot[i];
+          this.tint[i] = this.ptint[i];
+          this.accent[i] = this.paccent[i];
+          this.pslot[i] = -1;
+          this.metaDirty = true;
+        }
+        const title = st === TITLE;
+        const w = title ? 3 + s * 1.4 : 2.6, w2 = w * w, c2 = 2 * w;
+        const amp = title ? 0.8 : 2.5; // las palabras sueltas derivan apenas
+        const g = this.grp[i];
+        const bx = Math.sin(t * (title ? 0.6 : 0.17) + g * 40) * amp, by = Math.cos(t * (title ? 0.5 : 0.13) + g * 23) * amp;
+        vx[i] += (w2 * (this.tx[i] + bx - px[i]) - c2 * vx[i]) * dt;
+        vy[i] += (w2 * (this.ty[i] + by - py[i]) - c2 * vy[i]) * dt;
+        vz[i] += (w2 * (this.tz[i] - pz[i]) - c2 * vz[i]) * dt;
+        px[i] += vx[i] * dt; py[i] += vy[i] * dt; pz[i] += vz[i] * dt;
+        rot[i] += angDiff(this.trot[i], rot[i]) * kRot;
+        size[i] += (this.tsize[i] - size[i]) * kSize;
+        alphaT[i] = this.talpha[i];
+        alpha[i] += (alphaT[i] - alpha[i]) * (title ? kAlpha : 1 - Math.exp(-dt * 1.4));
       } else {
         // ── FREE (o FIGURE esperando su turno) ─────────────────────────────
-        const awaiting = st === FIGURE;
+        const awaiting = st !== FREE; // reclutada (figura, título o palabra) esperando su turno
         const vis = awaiting || seed2[i] < density;
         if (!vis && alpha[i] < 0.004) {
           if (this.rest[i] > 0) this._unrest(i);
@@ -1002,19 +1058,238 @@ export class TypeField {
     this.py[i] += (y - this.py[i]) * k;
     this.pz[i] = 0;
     this.rot[i] = 0;
-    const active = this.speaking || t < this.speakingUntil || (line && !line.completed);
+    const active = this.cursorEnabled && (this.speaking || t < this.speakingUntil || (line && !line.completed));
     const blink = 0.5 + 0.5 * Math.sin(t * 5.5);
     this.alphaT[i] = active ? clamp(0.18 + blink * 0.15 + this.rms * 1.3, 0, 0.95) : 0;
     this.alpha[i] += (this.alphaT[i] - this.alpha[i]) * (1 - Math.exp(-dt * 10));
     this.size[i] = this.lineSize * (0.92 + this.rms * 0.5);
   }
 
+  // ════════════════════════════════════════════════════════════════════════
+  //  Escenas del show: título de artista, modo palabras, limpieza
+  // ════════════════════════════════════════════════════════════════════════
+  resetCorpus(text) {
+    this.corpus = (text || this.idleText).trim() || this.idleText;
+    this.corpusChars = 0;
+    this.cursorC = 0;
+  }
+
+  setSceneDensity(v) {
+    this.sceneDensity = clamp(v, 0, 1);
+  }
+
+  /** Disuelve todo lo compuesto (verso, figura, título, palabras) de vuelta al campo. */
+  clearScene() {
+    if (this.line) {
+      const old = this.line;
+      this.line = null;
+      for (const row of old.rows) this._releaseEntries(row);
+    }
+    this.releaseFigure(true);
+    this.clearTitle();
+    this.clearWords();
+    this.speaking = false;
+    this.speakingUntil = 0;
+  }
+
+  /** Nombre de artista (o cualquier título) compuesto con letras que vuelan desde el campo. */
+  showTitle(text, { cy = 0.03, maxSize = 0.13 } = {}) {
+    this.clearTitle();
+    const words = String(text || '').trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return;
+    const atlas = this.atlas;
+    const slotsOf = (w) => [...w].map((ch) => atlas.slot(ch, 'serif'));
+    const widthOf = (w, S) => slotsOf(w).reduce((a, sl) => a + atlas.adv(sl) * S, 0);
+    let S = clamp(this.H * maxSize, 40, 200);
+    let rows = [];
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const maxW = this.W * 0.86, space = S * 0.3;
+      rows = [];
+      let cur = [], cw = 0, fits = true;
+      for (const w of words) {
+        const ww = widthOf(w, S);
+        if (ww > maxW) fits = false;
+        if (cur.length && cw + space + ww > maxW) {
+          rows.push(cur);
+          cur = [];
+          cw = 0;
+        }
+        cw += (cur.length ? space : 0) + ww;
+        cur.push(w);
+      }
+      if (cur.length) rows.push(cur);
+      if (fits && rows.length * S * 1.05 <= this.H * 0.62) break;
+      S *= 0.86;
+    }
+    const t = this.time;
+    const idx = [];
+    const g = Math.random();
+    const lineH = S * 1.02;
+    const y0 = cy * this.H + ((rows.length - 1) * lineH) / 2;
+    let n = 0;
+    rows.forEach((row, r) => {
+      const text2 = row.join(' ');
+      const slots = [...text2].map((ch) => (ch === ' ' ? -1 : atlas.slot(ch, 'serif')));
+      const total = slots.reduce((a, sl) => a + (sl < 0 ? S * 0.3 : atlas.adv(sl) * S), 0);
+      let x = -total / 2;
+      for (const sl of slots) {
+        const adv = sl < 0 ? S * 0.3 : atlas.adv(sl) * S;
+        if (sl >= 0) {
+          const i = this._allocParticle(true);
+          if (i < 0) break;
+          this.state[i] = TITLE;
+          this.grp[i] = g;
+          this.tx[i] = x + adv / 2;
+          this.ty[i] = y0 - r * lineH;
+          this.tz[i] = 0;
+          this.trot[i] = 0;
+          this.tsize[i] = S;
+          this.talpha[i] = 1;
+          this.pslot[i] = sl;
+          this.ptint[i] = 0;
+          this.paccent[i] = 0;
+          this.delay[i] = t + 0.15 + n * 0.05;
+          this.birth[i] = this.delay[i] + 0.7; // destello al llegar
+          this.level[i] = 0.35;
+          idx.push(i);
+          n++;
+        }
+        x += adv;
+      }
+    });
+    this.title = { text, idx };
+    this.metaDirty = true;
+  }
+
+  clearTitle() {
+    if (!this.title) return;
+    for (const i of this.title.idx) {
+      if (this.state[i] !== TITLE) continue;
+      this.state[i] = FREE;
+      this.pslot[i] = -1;
+      this.vx[i] = (Math.random() - 0.5) * 60;
+      this.vy[i] = 10 + Math.random() * 50;
+      this.life[i] = 0;
+    }
+    this.title = null;
+  }
+
+  // ── modo palabras ───────────────────────────────────────────────────────
+  wordsDelta(itemId, delta) {
+    if (!delta) return;
+    this.wordSeen.add(itemId);
+    const buf = (this.wordBufs.get(itemId) || '') + delta;
+    const parts = buf.split(/\s+/);
+    const rest = /\s$/.test(buf) ? '' : parts.pop();
+    for (const w of parts) if (w) this.placeWord(w);
+    this.wordBufs.set(itemId, rest);
+  }
+
+  completeWords(itemId, text) {
+    if (this.wordSeen.has(itemId)) {
+      const rest = this.wordBufs.get(itemId);
+      if (rest) this.placeWord(rest);
+    } else {
+      for (const w of String(text || '').split(/\s+/)) if (w) this.placeWord(w);
+    }
+    this.wordBufs.delete(itemId);
+    this.wordSeen.delete(itemId);
+    this.addCorpus(text);
+  }
+
+  /** Coloca una palabra en un lugar poco ocupado, con tamaño y brillo levemente variables. */
+  placeWord(raw) {
+    const word = String(raw).replace(/^[^\p{L}\p{N}¿¡]+|[^\p{L}\p{N}?!]+$/gu, '');
+    if (!word) return;
+    const atlas = this.atlas;
+    const base = clamp(this.H * 0.034, 20, 52);
+    const S = base * (0.72 + Math.pow(Math.random(), 1.8) * 1.05);
+    const slots = [...word].map((ch) => atlas.slot(ch, 'serif'));
+    const width = slots.reduce((a, sl) => a + atlas.adv(sl) * S, 0);
+    const mX = this.W * 0.05, mY = this.H * 0.07;
+    const pad = S * 0.35;
+    let best = null, bestScore = Infinity;
+    for (let c = 0; c < 56 && bestScore > 0; c++) {
+      const x = -this.W / 2 + mX + width / 2 + Math.random() * Math.max(1, this.W - 2 * mX - width);
+      const y = -this.H / 2 + mY + Math.random() * (this.H - 2 * mY);
+      const r = { x0: x - width / 2 - pad, x1: x + width / 2 + pad, y0: y - S * 0.45 - pad, y1: y + S * 0.45 + pad };
+      let score = 0;
+      for (const q of this.wordRects) {
+        const ox2 = Math.min(r.x1, q.x1) - Math.max(r.x0, q.x0);
+        const oy2 = Math.min(r.y1, q.y1) - Math.max(r.y0, q.y0);
+        if (ox2 > 0 && oy2 > 0) score += ox2 * oy2 * q.w;
+      }
+      if (score < bestScore) {
+        bestScore = score;
+        best = { x, y, r };
+      }
+    }
+    // las palabras viejas pesan menos: con el tiempo se aceptan superposiciones
+    for (const q of this.wordRects) q.w *= 0.995;
+    this.wordRects.push({ ...best.r, w: 1 });
+    if (this.wordRects.length > 700) this.wordRects.shift();
+
+    const t = this.time;
+    const rotW = (Math.random() - 0.5) * 0.06;
+    const alphaW = 0.42 + Math.random() * 0.45;
+    const born = clamp(Math.max(0.15, this.rms), 0, 1);
+    const g = Math.random();
+    const zW = (g - 0.5) * 40;
+    let x = best.x - width / 2;
+    slots.forEach((sl, n) => {
+      const adv = atlas.adv(sl) * S;
+      const i = this._allocParticle();
+      if (i < 0) return;
+      this.state[i] = WORD;
+      this.grp[i] = g;
+      this.slot[i] = sl;
+      this.pslot[i] = -1;
+      this.tint[i] = Math.random() * 0.25;
+      this.accent[i] = 0;
+      const off = x + adv / 2 - best.x; // letras sobre la línea base inclinada de la palabra
+      this.tx[i] = best.x + off * Math.cos(rotW);
+      this.ty[i] = best.y + off * Math.sin(rotW);
+      this.tz[i] = zW;
+      this.trot[i] = rotW;
+      this.tsize[i] = S;
+      this.talpha[i] = alphaW;
+      this.px[i] = this.tx[i];
+      this.py[i] = this.ty[i] - S * 0.25; // asoma subiendo un poco
+      this.pz[i] = this.tz[i];
+      this.vx[i] = this.vy[i] = this.vz[i] = 0;
+      this.rot[i] = rotW;
+      this.size[i] = S;
+      this.alpha[i] = 0;
+      this.delay[i] = t + n * 0.035;
+      this.birth[i] = this.delay[i];
+      this.level[i] = born * 0.6;
+      this.words.push(i);
+      x += adv;
+    });
+    this.metaDirty = true;
+  }
+
+  clearWords() {
+    for (const i of this.words) {
+      if (this.state[i] !== WORD) continue;
+      this.state[i] = FREE;
+      this.vx[i] = (Math.random() - 0.5) * 40;
+      this.vy[i] = (Math.random() - 0.5) * 40;
+      this.life[i] = 0;
+    }
+    this.words = [];
+    this.wordRects = [];
+    this.wordBufs.clear();
+    this.wordSeen.clear();
+  }
+
   stats() {
-    let line = 0, fig = 0;
+    let line = 0, fig = 0, other = 0;
     for (let i = 0; i < this.N; i++) {
       if (this.state[i] === LINE) line++;
       else if (this.state[i] === FIGURE) fig++;
+      else if (this.state[i] === TITLE || this.state[i] === WORD) other++;
     }
-    return { total: this.N, visible: this.visible || 0, line, figure: fig, mode: this.phys.modo, figureName: this.figure?.name || '—', atlas: `${this.atlas.next}/${this.atlas.capacity}` };
+    return { total: this.N, visible: this.visible || 0, line, figure: fig, words: other, mode: this.phys.modo, figureName: this.figure?.name || '—', atlas: `${this.atlas.next}/${this.atlas.capacity}` };
   }
 }

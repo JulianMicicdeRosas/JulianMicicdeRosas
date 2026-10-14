@@ -151,6 +151,41 @@ def _now_ms() -> int:
 
 
 # ════════════════════════════════════════════════════════════════════════════
+#  Ajustes persistentes del show (micrófono, artistas, loop, prompt estético)
+# ════════════════════════════════════════════════════════════════════════════
+
+class SettingsStore:
+    """settings.local.json junto a server.py. Lo escribe el panel C del frontend."""
+
+    KEYS = ("device", "artists", "loop", "prompt_estetica", "avisos", "pointcloud", "profundidad", "nube", "orbita")
+
+    def __init__(self, path: str) -> None:
+        self.path = path
+        self.data: dict[str, Any] = {}
+        try:
+            with open(path, encoding="utf-8") as fh:
+                loaded = json.load(fh)
+            if isinstance(loaded, dict):
+                self.data = {k: v for k, v in loaded.items() if k in self.KEYS}
+        except FileNotFoundError:
+            pass
+        except Exception as exc:
+            log.warning("No pude leer %s: %s", path, exc)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self.data.get(key, default)
+
+    def update(self, patch: dict[str, Any]) -> None:
+        for k, v in patch.items():
+            if k in self.KEYS:
+                self.data[k] = v
+        tmp = self.path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(self.data, fh, ensure_ascii=False, indent=1)
+        os.replace(tmp, self.path)  # escritura atómica: un corte de luz no corrompe el archivo
+
+
+# ════════════════════════════════════════════════════════════════════════════
 #  Hub WebSocket local (Three.js)
 # ════════════════════════════════════════════════════════════════════════════
 
@@ -160,16 +195,20 @@ class FrontendHub:
     def __init__(self, cfg: Config) -> None:
         self.cfg = cfg
         self.clients: set[ServerConnection] = set()
-        self.on_message: Callable[[dict[str, Any]], Awaitable[None]] | None = None
+        self.on_message: Callable[[dict[str, Any], ServerConnection], Awaitable[None]] | None = None
         self.status: dict[str, Any] = {"mic": "init", "openai": "init", "llm": cfg.llm_provider}
+        # Estado del show dictado por el frontend: sólo se transcribe mientras recording=True.
+        self.session: dict[str, Any] = {"recording": False, "mode": "poema"}
+        self.hello_extra: Callable[[], dict[str, Any]] = lambda: {}
 
     async def handler(self, ws: ServerConnection) -> None:
         self.clients.add(ws)
         peer = getattr(ws, "remote_address", None)
         log.info("Frontend conectado %s (%d clientes)", peer, len(self.clients))
         try:
-            await ws.send(self._encode("hello", server="poesia-tipografica", version=1,
-                                       sample_rate=self.cfg.sample_rate, status=self.status))
+            await ws.send(self._encode("hello", server="poesia-tipografica", version=2,
+                                       sample_rate=self.cfg.sample_rate, status=self.status,
+                                       **self.hello_extra()))
             async for raw in ws:
                 if isinstance(raw, bytes):
                     continue
@@ -184,7 +223,7 @@ class FrontendHub:
                     continue
                 if self.on_message is not None:
                     try:
-                        await self.on_message(msg)
+                        await self.on_message(msg, ws)
                     except Exception:  # un mensaje malformado nunca tumba el servidor
                         log.exception("Error procesando mensaje del frontend")
         except ConnectionClosed:
@@ -201,6 +240,15 @@ class FrontendHub:
         if not self.clients:
             return
         broadcast(self.clients, self._encode(type_, **payload))
+
+    async def reply(self, ws: ServerConnection | None, type_: str, **payload: Any) -> None:
+        if ws is None:
+            self.emit(type_, **payload)
+        else:
+            try:
+                await ws.send(self._encode(type_, **payload))
+            except ConnectionClosed:
+                pass
 
     def set_status(self, **changes: Any) -> None:
         self.status.update(changes)
@@ -267,6 +315,31 @@ class AudioEngine:
         self.pcm_acc = bytearray()
         self.overflows = 0
         self.resampler: LinearResampler | None = None
+        self.device_override: str | None = None  # elegido desde el panel C (tiene prioridad sobre .env)
+        self._restart = False
+        self.device_name = ""
+
+    def request_device(self, device: str | int | None) -> None:
+        """Cambia de micrófono en caliente: el bucle cierra el stream y reabre con el nuevo."""
+        self.device_override = "" if device in (None, "") else str(device)
+        self._restart = True
+
+    @staticmethod
+    def list_devices() -> list[dict[str, Any]]:
+        if sd is None:
+            return []
+        out = []
+        try:
+            default_in = sd.default.device[0] if sd.default.device else None
+            for idx, info in enumerate(sd.query_devices()):
+                if info.get("max_input_channels", 0) > 0:
+                    out.append({"index": idx, "name": info["name"],
+                                "hostapi": sd.query_hostapis(info["hostapi"])["name"],
+                                "samplerate": int(info["default_samplerate"]),
+                                "default": idx == default_in})
+        except Exception as exc:
+            log.warning("No pude listar dispositivos: %s", exc)
+        return out
 
     # --- hilo de PortAudio → bucle asyncio --------------------------------
     def _callback(self, indata, frames, time_info, status) -> None:  # noqa: ANN001
@@ -285,7 +358,7 @@ class AudioEngine:
             self.raw_q.put_nowait(data)
 
     def _resolve_device(self) -> int | str | None:
-        dev = self.cfg.audio_device
+        dev = self.cfg.audio_device if self.device_override is None else self.device_override
         if not dev:
             return None
         if dev.lstrip("-").isdigit():
@@ -300,6 +373,7 @@ class AudioEngine:
     def _open_stream(self):  # noqa: ANN202
         device = self._resolve_device()
         try:
+            self.device_name = sd.query_devices(device, "input")["name"]
             stream = sd.RawInputStream(samplerate=self.sr, channels=1, dtype="int16",
                                        blocksize=self.block, device=device, latency="low",
                                        callback=self._callback)
@@ -327,19 +401,22 @@ class AudioEngine:
         while True:
             stream = None
             try:
+                self._restart = False
                 stream = self._open_stream()
                 stream.start()
-                self.hub.set_status(mic="ok")
+                self.hub.set_status(mic="ok", mic_device=self.device_name)
                 backoff = 1.0
-                while True:
+                while not self._restart:
                     # Watchdog: si el driver deja de entregar bloques (USB desconectado), reabrir.
                     data = await asyncio.wait_for(self.raw_q.get(), timeout=2.5)
                     self._process(data)
+                log.info("Cambio de micrófono solicitado")
+                backoff = 0.05
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
                 log.error("Fallo de audio: %s — reintento en %.0fs", exc, backoff)
-                self.hub.set_status(mic="error")
+                self.hub.set_status(mic="error", mic_device=str(exc)[:120])
             finally:
                 if stream is not None:
                     try:
@@ -347,8 +424,10 @@ class AudioEngine:
                         stream.close()
                     except Exception:
                         pass
+            while not self.raw_q.empty():
+                self.raw_q.get_nowait()
             await asyncio.sleep(backoff)
-            backoff = min(backoff * 2, 15.0)
+            backoff = min(max(backoff, 0.5) * 2, 15.0)
 
     # --- análisis --------------------------------------------------------
     def _process(self, data: bytes) -> None:
@@ -407,7 +486,9 @@ class AudioEngine:
                       db=round(db, 1), freq=round(self.freq_smooth, 1), centroid=round(centroid, 1),
                       bands=bands)
 
-        if self.openai_queue is not None:
+        if self.openai_queue is not None and not self.hub.session.get("recording"):
+            self.pcm_acc.clear()  # fuera de grabación no se envía nada (ni se paga) a OpenAI
+        elif self.openai_queue is not None:
             self.pcm_acc.extend(pcm)
             while len(self.pcm_acc) >= self.chunk_bytes:
                 chunk = bytes(self.pcm_acc[:self.chunk_bytes])
@@ -510,6 +591,9 @@ class RealtimeTranscriber:
     async def _sender(self, ws) -> None:  # noqa: ANN001
         while True:
             chunk = await self.audio_q.get()
+            if not chunk:  # centinela: fin de grabación → descartar el audio pendiente en OpenAI
+                await ws.send(json.dumps({"type": "input_audio_buffer.clear"}))
+                continue
             await ws.send(json.dumps({"type": "input_audio_buffer.append",
                                       "audio": base64.b64encode(chunk).decode("ascii")}))
 
@@ -565,7 +649,8 @@ TYPES = ["serif", "mono", "mixta"]
 ACCENTS = {"ambar": "#E3A14B", "carmin": "#B3122E", "ninguno": "#C9C4BA"}
 DEFAULT_PALETTE = {"base": "#F4F1EA", "secundario": "#8C8984", "acento": "#C9C4BA", "uso_acento": 0.0}
 
-SYSTEM_PROMPT = f"""Eres el director de arte de una instalación de poesía proyectada en un museo de arte contemporáneo
+# Parte técnica fija (contrato JSON): no editable desde el panel para que el frontend nunca reciba basura.
+SCHEMA_PROMPT = f"""Eres el director de arte de una instalación de poesía proyectada en un museo de arte contemporáneo
 (herencia de Camille Utterback "Text Rain", Rafael Lozano-Hemmer "Subtitled Public", Charles Sandison, Jeffrey Shaw).
 Recibes un verso recién leído en voz alta. Decides cómo sus propias letras deben moverse y qué figura formar.
 Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional, con estas claves:
@@ -586,16 +671,23 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional, con est
   "duracion_s": 8..30
 }}
 
-Reglas:
-- "concreto": el verso nombra algo visible (luna, ojo, pájaro…). La figura se dibuja con las letras (caligrama).
+Reglas técnicas:
+- svg_paths es opcional: déjalo [] si no estás seguro; la figura de la biblioteca se usará. Si lo das: máximo 3 paths,
+  sólo comandos M L C Q A Z con coordenadas absolutas dentro de 0..512, formas cerradas y simples."""
+
+# Parte estética: editable en vivo desde el panel C del frontend (se guarda en settings.local.json).
+DEFAULT_AESTHETIC = """- "concreto": el verso nombra algo visible (luna, ojo, pájaro…). La figura se dibuja con las letras (caligrama).
 - "simbolico": el verso es abstracto (tiempo, olvido, deseo…). Sólo física, sin figura.
 - "hibrido": figura tenue mientras la física sigue alrededor.
 - Alterna: evita repetir el mismo modo_visual más de dos veces seguidas.
-- svg_paths es opcional: déjalo [] si no estás seguro; la figura de la biblioteca se usará. Si lo das: máximo 3 paths,
-  sólo comandos M L C Q A Z con coordenadas absolutas dentro de 0..512, formas cerradas y simples.
 - lluvia_text_rain: caída, llanto, peso. enjambre_lozano: multitud, voces, nosotros. vortice_sandison: tiempo, vértigo,
   cosmos. dispersion_ceniza: olvido, muerte, memoria que se borra.
 - Estética de museo: base hueso, grises ceniza; el acento ámbar o carmín es muy puntual (uso_acento bajo)."""
+
+
+def build_system_prompt(aesthetic: str | None) -> str:
+    text = (aesthetic or "").strip() or DEFAULT_AESTHETIC
+    return f"{SCHEMA_PROMPT}\n\nDirección estética (prioritaria sobre tus gustos por defecto):\n{text}"
 
 
 def strip_accents(text: str) -> str:
@@ -665,7 +757,7 @@ def valid_svg_path(d: Any) -> bool:
     if not (6 <= len(d) <= 12000) or not SVG_RE.match(d) or d[0] not in "Mm":
         return False
     numbers = re.findall(r"-?\d*\.?\d+(?:[eE][-+]?\d+)?", d)
-    return len(numbers) >= 6
+    return len(numbers) >= 4
 
 
 def tokenize(text: str) -> list[str]:
@@ -824,9 +916,10 @@ def extract_json(text: str) -> Any:
 
 
 class ArtDirector:
-    def __init__(self, cfg: Config, hub: FrontendHub) -> None:
+    def __init__(self, cfg: Config, hub: FrontendHub, settings: SettingsStore | None = None) -> None:
         self.cfg = cfg
         self.hub = hub
+        self.settings = settings
         self.queue: asyncio.Queue[tuple[str, str, str]] = asyncio.Queue(maxsize=16)
         self.history: deque[str] = deque(maxlen=4)
         self.modes: deque[str] = deque(maxlen=4)
@@ -869,7 +962,8 @@ class ArtDirector:
         recent = ", ".join(self.modes) if self.modes else "ninguno"
         user = (f"Versos anteriores: {context}\nModos visuales recientes: {recent}\n"
                 f"Verso actual: «{text}»\nDevuelve sólo el JSON.")
-        return [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user}]
+        aesthetic = self.settings.get("prompt_estetica") if self.settings else None
+        return [{"role": "system", "content": build_system_prompt(aesthetic)}, {"role": "user", "content": user}]
 
     async def _ollama(self, text: str) -> Any:
         assert self.http is not None
@@ -922,29 +1016,67 @@ class ArtDirector:
 async def main_async(args: argparse.Namespace) -> None:
     cfg = Config.from_env()
     loop = asyncio.get_running_loop()
+    settings = SettingsStore(args.settings)
     hub = FrontendHub(cfg)
-    director = ArtDirector(cfg, hub)
+    director = ArtDirector(cfg, hub, settings)
     use_openai = not args.no_openai and bool(cfg.openai_api_key)
     oa_queue: asyncio.Queue[bytes] | None = asyncio.Queue(maxsize=300) if use_openai else None
+    audio = AudioEngine(cfg, hub, oa_queue, loop) if not args.no_audio else None
+    if audio is not None and settings.get("device") not in (None, ""):
+        audio.device_override = str(settings.get("device"))
 
-    async def on_frontend(msg: dict[str, Any]) -> None:
-        if msg.get("type") == "inject_verse":  # modo debug del navegador
+    hub.hello_extra = lambda: {"settings": settings.data, "default_prompt": DEFAULT_AESTHETIC,
+                               "session": hub.session}
+
+    def on_verse(text: str, item_id: str, source: str) -> None:
+        # Sólo se dirige arte si se está grabando en modo poema (en modo palabras no hace falta el LLM).
+        if hub.session.get("recording") and hub.session.get("mode") == "poema":
+            director.submit(text, item_id, source)
+
+    async def on_frontend(msg: dict[str, Any], ws: ServerConnection) -> None:
+        kind = msg.get("type")
+        if kind == "inject_verse":  # modo debug del navegador
             director.submit(str(msg.get("text", ""))[:600], str(msg.get("item_id", "")), "debug")
+        elif kind == "session":
+            was = hub.session.get("recording")
+            hub.session = {"recording": bool(msg.get("recording")),
+                           "mode": "palabras" if msg.get("mode") == "palabras" else "poema"}
+            log.info("Sesión: %s", hub.session)
+            if oa_queue is not None and was and not hub.session["recording"]:
+                while not oa_queue.empty():
+                    oa_queue.get_nowait()
+                oa_queue.put_nowait(b"")  # centinela → input_audio_buffer.clear
+        elif kind == "list_devices":
+            current = audio.device_override if audio and audio.device_override is not None else cfg.audio_device
+            await hub.reply(ws, "devices", devices=AudioEngine.list_devices(), current=current or "",
+                            active=audio.device_name if audio else "")
+        elif kind == "set_device":
+            dev = msg.get("device")
+            dev = "" if dev in (None, "") else str(dev)
+            settings.update({"device": dev})
+            if audio is not None:
+                audio.request_device(dev)
+        elif kind == "save_settings" and isinstance(msg.get("settings"), dict):
+            settings.update(msg["settings"])
+            hub.emit("settings", settings=settings.data)
+        elif kind == "get_settings":
+            await hub.reply(ws, "settings", settings=settings.data, default_prompt=DEFAULT_AESTHETIC)
 
     hub.on_message = on_frontend
     tasks: list[Awaitable[Any]] = [director.run()]
-    if not args.no_audio:
-        tasks.append(AudioEngine(cfg, hub, oa_queue, loop).run())
+    if audio is not None:
+        tasks.append(audio.run())
     else:
         hub.status["mic"] = "disabled"
     if oa_queue is not None:
-        tasks.append(RealtimeTranscriber(cfg, hub, oa_queue, director.submit).run())
+        tasks.append(RealtimeTranscriber(cfg, hub, oa_queue, on_verse).run())
     else:
         hub.status["openai"] = "disabled"
         if not args.no_openai:
             log.warning("OPENAI_API_KEY vacío: sin transcripción. Usa la tecla D en el navegador.")
 
-    async with serve(hub.handler, cfg.ws_host, cfg.ws_port, max_size=2 ** 20,
+    # 16 MB: el panel C puede subir logos del loop como data URL
+    async with serve(hub.handler, cfg.ws_host, cfg.ws_port, max_size=16 * 2 ** 20,
                      ping_interval=20, ping_timeout=20, compression=None):
         log.info("WebSocket local en ws://%s:%d", cfg.ws_host, cfg.ws_port)
         await asyncio.gather(*tasks)
@@ -969,6 +1101,8 @@ def main() -> None:
     parser.add_argument("--no-audio", action="store_true", help="no abrir el micrófono")
     parser.add_argument("--no-openai", action="store_true", help="no conectar a OpenAI Realtime")
     parser.add_argument("--env", default=".env", help="ruta del archivo .env")
+    parser.add_argument("--settings", default="settings.local.json",
+                        help="ajustes del show (micrófono, artistas, loop, prompt) escritos desde el panel C")
     args = parser.parse_args()
 
     load_dotenv(args.env)

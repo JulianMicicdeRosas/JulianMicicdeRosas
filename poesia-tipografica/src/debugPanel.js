@@ -30,7 +30,7 @@ export class DebugPanel {
     el.id = 'debug';
     el.innerHTML = `
       <h1>Poesía Tipográfica</h1>
-      <div class="keys">D panel · F pantalla completa · 1-4 físicas · C figura · X disolver · Espacio siguiente verso</div>
+      <div class="keys">Panel técnico. Espacio = siguiente verso de prueba · C = panel de operación</div>
       <h2>Estado</h2>
       <div class="status" data-status></div>
       <div class="meter"><i data-meter></i></div>

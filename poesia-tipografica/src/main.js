@@ -11,18 +11,22 @@ import '@fontsource/cormorant-garamond/500.css';
 import '@fontsource/ibm-plex-mono/400.css';
 import * as THREE from 'three';
 import { GlyphAtlas, loadFonts } from './glyphAtlas.js';
-import { TypeField, PHYSICS_MODES } from './typeField.js';
+import { TypeField } from './typeField.js';
 import { createPostFX } from './postfx.js';
 import { BackendSocket } from './socket.js';
 import { DebugPanel } from './debugPanel.js';
 import { localArtDirection, normalizeDirection } from './localDirector.js';
 import { sampleFigure } from './svgSampler.js';
-import { SHAPES, SHAPE_NAMES } from './shapeLibrary.js';
+import { SHAPES } from './shapeLibrary.js';
+import { Show, DEFAULT_SETTINGS } from './show.js';
+import { ConfigPanel } from './configPanel.js';
+import { PointCloud } from './pointCloud.js';
 
 const params = new URLSearchParams(location.search);
 const num = (k, d) => (params.has(k) && Number.isFinite(+params.get(k)) ? +params.get(k) : d);
 const CONFIG = {
   pool: Math.round(Math.min(30000, Math.max(2000, num('pool', 12000)))),
+  points: Math.round(Math.min(300000, Math.max(0, num('points', 80000)))),
   ws: params.get('ws') || 'ws://localhost:8765',
   worldH: 1000,
   bloom: num('bloom', 0.55),
@@ -53,6 +57,14 @@ async function boot() {
   const atlas = new GlyphAtlas(renderer);
   const field = new TypeField({ atlas, count: CONFIG.pool, aspect: camera.aspect, worldH: CONFIG.worldH, idleText: CONFIG.idleText });
   scene.add(field.mesh);
+
+  // nube de puntos estilo TouchDesigner: acompaña a cada figura
+  const cloud = new PointCloud({ count: CONFIG.points, W: field.W, H: field.H });
+  scene.add(cloud.points);
+  field.onFigure = (fig, map) => {
+    if (settings.pointcloud !== false && CONFIG.points > 0) cloud.setFigure(fig, map, field.depth);
+  };
+  field.onRelease = () => cloud.scatter();
 
   const fx = createPostFX(renderer, scene, camera, { bloomStrength: CONFIG.bloom, grain: CONFIG.grain });
 
@@ -85,6 +97,19 @@ async function boot() {
     }
   }
 
+  // ── voz → escena según el modo del show ─────────────────────────────────
+  // force = simulador del panel D (permite probar sin estar grabando)
+  function onDelta(itemId, delta, force = false) {
+    if (!show.recording && !force) return;
+    if (show.mode === 'palabras') field.wordsDelta(itemId, delta);
+    else field.typeDelta(itemId, delta);
+  }
+  function onCompleted(itemId, text, force = false) {
+    if (!show.recording && !force) return;
+    if (show.mode === 'palabras') field.completeWords(itemId, text);
+    else field.completeLine(itemId, text);
+  }
+
   // ── audio reactivo ───────────────────────────────────────────────────────
   let lastRealAudio = -1e9;
   function onAudio(rms, freq, real) {
@@ -94,18 +119,101 @@ async function boot() {
     debug.setLevel(rms);
   }
 
-  // ── backend ──────────────────────────────────────────────────────────────
-  const socket = new BackendSocket(CONFIG.ws, {
-    open: () => debug.setStatus({ backend: 'connected' }),
-    close: () => debug.setStatus({ backend: 'offline', mic: '—', openai: '—' }),
-    hello: (m) => debug.setStatus({ backend: 'connected', ...(m.status || {}) }),
-    status: (m) => debug.setStatus(m.status || {}),
-    audio_reactive: (m) => onAudio(+m.rms || 0, +m.freq || 0, true),
-    speech: (m) => field.setSpeaking(m.state === 'started'),
-    word_delta: (m) => field.typeDelta(m.item_id || 'voz', m.delta || ''),
-    verse_completed: (m) => field.completeLine(m.item_id || 'voz', m.text || ''),
-    art_direction: (m) => applyDirection(m.data || m),
+  // ── ajustes del show (backend = fuente de verdad, localStorage = respaldo) ─
+  const LS_KEY = 'poesia.settings.v1';
+  let settings = structuredClone(DEFAULT_SETTINGS);
+  try {
+    const saved = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
+    if (saved && typeof saved === 'object') settings = { ...settings, ...saved };
+  } catch {
+    /* sin localStorage: se usan los valores por defecto */
+  }
+  let saveTimer = 0;
+  function setSettings(next, { persist = true } = {}) {
+    settings = { ...structuredClone(DEFAULT_SETTINGS), ...next };
+    show.setSettings(settings);
+    if (!persist) return;
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify(settings));
+    } catch {
+      /* lleno (imágenes grandes): queda en el backend */
+    }
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => socket.send({ type: 'save_settings', settings }), 400);
+  }
+
+  let toastTimer = 0;
+  const toast = document.createElement('div');
+  toast.id = 'toast';
+  document.body.appendChild(toast);
+  function notify(text) {
+    config?.setState(show?.label?.() || text);
+    if (settings.avisos === false) return;
+    toast.textContent = text;
+    toast.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('on'), 2200);
+  }
+
+  const show = new Show({
+    field,
+    notify: (t) => notify(t),
+    interiorTarget: Math.min(4200, CONFIG.pool * 0.32),
+    onSession: (st) => socket?.send({ type: 'session', ...st }),
   });
+  show.setSettings(settings);
+
+  // ── backend ──────────────────────────────────────────────────────────────
+  let backendSettingsLoaded = false;
+  const socket = new BackendSocket(CONFIG.ws, {
+    open: () => {
+      debug.setStatus({ backend: 'connected' });
+      config.setBackend(true);
+      show.resync();
+      if (config.isOpen) socket.send({ type: 'list_devices' });
+    },
+    close: () => {
+      debug.setStatus({ backend: 'offline', mic: '—', openai: '—' });
+      config.setBackend(false);
+    },
+    hello: (m) => {
+      debug.setStatus({ backend: 'connected', ...(m.status || {}) });
+      config.setDefaultPrompt(m.default_prompt);
+      const remote = m.settings || {};
+      if (!backendSettingsLoaded && Object.keys(remote).length) {
+        // el archivo del backend manda; lo de este navegador sólo completa lo que falte
+        backendSettingsLoaded = true;
+        setSettings({ ...settings, ...remote }, { persist: false });
+        if (config.isOpen) config.render();
+        if (show.state === 'loop') show.goLoop();
+      } else if (!Object.keys(remote).length) {
+        socket.send({ type: 'save_settings', settings }); // primera vez: sembrar el archivo
+      }
+    },
+    status: (m) => debug.setStatus(m.status || {}),
+    devices: (m) => config.setDevices(m.devices, m.current),
+    settings: () => {},
+    audio_reactive: (m) => {
+      onAudio(+m.rms || 0, +m.freq || 0, true);
+      config.setLevel(+m.level || 0, +m.db);
+    },
+    speech: (m) => show.recording && show.mode === 'poema' && field.setSpeaking(m.state === 'started'),
+    word_delta: (m) => onDelta(m.item_id || 'voz', m.delta || ''),
+    verse_completed: (m) => onCompleted(m.item_id || 'voz', m.text || ''),
+    art_direction: (m) => {
+      const d = m.data || m;
+      // las direcciones del simulador siempre se aplican; las de la voz sólo grabando en modo poema
+      if (d.source === 'debug' || (show.recording && show.mode === 'poema')) applyDirection(d);
+    },
+  });
+
+  const config = new ConfigPanel({
+    getSettings: () => settings,
+    onChange: (next) => setSettings(next),
+    onDevice: (dev) => socket.send({ type: 'set_device', device: dev }),
+    requestDevices: () => socket.send({ type: 'list_devices' }),
+  });
+  setInterval(() => config.tick(), 400);
 
   // ── simulador (modo D) ───────────────────────────────────────────────────
   const sim = {
@@ -121,13 +229,13 @@ async function boot() {
 
   async function simulateVerse(text, token = ++sim.token) {
     const itemId = `sim-${Date.now()}`;
-    field.setSpeaking(true);
+    if (show.mode === 'poema') field.setSpeaking(true);
     const parts = text.split(/(\s+)/);
     for (const part of parts) {
       if (token !== sim.token) return;
       if (!part.trim()) {
         sim.target = 0.05;
-        field.typeDelta(itemId, part);
+        onDelta(itemId, part, true);
         await wait(70 + Math.random() * 90);
         continue;
       }
@@ -136,7 +244,7 @@ async function boot() {
         if (token !== sim.token) return;
         const len = 2 + ((Math.random() * 3) | 0);
         sim.target = 0.35 + Math.random() * 0.5;
-        field.typeDelta(itemId, part.slice(i, i + len));
+        onDelta(itemId, part.slice(i, i + len), true);
         i += len;
         await wait(55 + Math.random() * 60);
       }
@@ -145,8 +253,8 @@ async function boot() {
     field.setSpeaking(false);
     await wait(350);
     if (token !== sim.token) return;
-    field.completeLine(itemId, text);
-    requestDirection(text, itemId);
+    onCompleted(itemId, text, true);
+    if (show.mode === 'poema') requestDirection(text, itemId);
   }
 
   async function simulatePoem(lines) {
@@ -154,7 +262,7 @@ async function boot() {
     for (const line of lines) {
       if (token !== sim.token) return;
       await simulateVerse(line, token);
-      await wait(4200 + line.length * 60);
+      await wait((show.mode === 'palabras' ? 900 : 4200) + line.length * 60);
     }
   }
 
@@ -174,33 +282,39 @@ async function boot() {
   });
   debug.setStatus({ backend: 'offline' });
 
-  // ── teclado / kiosk ──────────────────────────────────────────────────────
+  // ── teclado del operador ─────────────────────────────────────────────────
   window.addEventListener('keydown', (e) => {
-    if (debug.isTyping()) {
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
       if (e.key === 'Escape') document.activeElement.blur();
       return;
     }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key.toLowerCase();
-    if (k === 'd') debug.toggle();
+    if (k === 'c') config.toggle();
+    else if (k === 'd') debug.toggle();
     else if (k === 'f') {
       if (document.fullscreenElement) document.exitFullscreen();
       else document.documentElement.requestFullscreen?.().catch(() => {});
-    } else if (k >= '1' && k <= '4') field.setPhysics({ modo: PHYSICS_MODES[+k - 1] });
-    else if (k === 'c') {
-      const name = SHAPE_NAMES[(Math.random() * SHAPE_NAMES.length) | 0];
-      debug.actions.figure(name, Math.random() < 0.5 ? 'concreto' : 'hibrido', 'ambos');
-    } else if (k === 'x') field.releaseFigure(true);
-    else if (k === ' ') {
+    } else if (/^[0-9]$/.test(k)) show.goArtist(k === '0' ? 10 : +k);
+    else if (k === 's') show.start('poema');
+    else if (k === 't') show.toggleWords();
+    else if (k === 'l') show.goLoop();
+    else if (k === 'escape') {
+      config.toggle(false);
+      debug.toggle(false);
+    } else if (k === ' ' && debug.isOpen) {
       e.preventDefault();
       debug.nextVerse();
-    }
+    } else return;
+    config.setState(show.label());
   });
 
   let cursorTimer = 0;
   const showCursor = () => {
     document.body.classList.remove('hide-cursor');
     clearTimeout(cursorTimer);
-    cursorTimer = setTimeout(() => !debug.isOpen && document.body.classList.add('hide-cursor'), 2500);
+    cursorTimer = setTimeout(() => !debug.isOpen && !config.isOpen && document.body.classList.add('hide-cursor'), 2500);
   };
   window.addEventListener('mousemove', showCursor);
   showCursor();
@@ -212,6 +326,7 @@ async function boot() {
     camera.updateProjectionMatrix();
     field.resize(camera.aspect, CONFIG.worldH);
     fx.setSize(w, h);
+    cloud.resize(field.W, field.H, renderer.domElement.height, fov, camDist);
   }
   window.addEventListener('resize', onResize);
 
@@ -225,14 +340,25 @@ async function boot() {
     for (let k = 1; k <= n; k++) field.update(step, t0 + k * step);
     timeOffset += n * step;
   }
+  let orbit = 0;
+  cloud.resize(field.W, field.H, renderer.domElement.height, fov, camDist);
   function frame() {
     const dt = clock.getDelta();
     const t = clock.elapsedTime + timeOffset;
     // deriva lentísima de cámara: revela la profundidad Z sin marear
-    camera.position.x = Math.sin(t * 0.043) * 28;
-    camera.position.y = Math.sin(t * 0.031) * 14;
-    camera.lookAt(0, 0, 0);
+    // estética nube de puntos: con figura en pantalla la cámara orbita y revela el relieve
+    const pc = settings.pointcloud !== false;
+    field.depth = 80 + 380 * (settings.profundidad ?? 0.45);
+    const orbitGoal = pc && field.figure ? settings.orbita ?? 0.6 : 0;
+    orbit += (orbitGoal - orbit) * (1 - Math.exp(-dt * 0.35));
+    const yaw = Math.sin(t * 0.055) * 0.55 * orbit + Math.sin(t * 0.043) * 0.015;
+    const pitch = Math.sin(t * 0.037) * 0.16 * orbit + Math.sin(t * 0.031) * 0.008;
+    camera.position.set(Math.sin(yaw) * Math.cos(pitch) * camDist, Math.sin(pitch) * camDist, Math.cos(yaw) * Math.cos(pitch) * camDist);
+    camera.lookAt(0, field.figure ? field.figure.cy * orbit : 0, 0);
     field.update(dt, t);
+    cloud.setPalette(field.uniforms.uBase.value, field.uniforms.uSecond.value);
+    const quiet = show.state === 'artist' || (show.state === 'perform' && show.mode === 'palabras');
+    cloud.update(dt, t, field.rms, { visible: pc && !quiet, intensity: settings.nube ?? 1 });
     fx.render(t);
     frames++;
     fpsT += dt;
@@ -247,7 +373,9 @@ async function boot() {
   requestAnimationFrame(() => document.getElementById('boot')?.classList.add('gone'));
 
   // acceso desde consola para calibración
-  window.poesia = { field, applyDirection, simulateVerse, simulatePoem, advance, CONFIG };
+  window.poesia = { field, show, config, applyDirection, simulateVerse, simulatePoem, advance, CONFIG };
+
+  show.goLoop(); // la noche empieza en el loop
 }
 
 boot().catch((e) => {

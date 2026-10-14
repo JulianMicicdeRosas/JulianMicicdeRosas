@@ -1,0 +1,8 @@
+Poné acá las imágenes del loop (PNG con fondo transparente funciona mejor):
+
+  flat.png       → logo FLAT
+  sponsors.png   → logos de sponsors
+
+Las rutas se configuran en el panel C → Loop (por ejemplo "loop/flat.png").
+También se pueden subir directamente desde el panel con "Subir…".
+Si una imagen no existe, el loop muestra su texto alternativo hecho de letras.

@@ -25,8 +25,12 @@ poesia-tipografica/
 ├── vite.config.js
 ├── index.html
 ├── start_instalacion.bat Arranque completo en Windows (backend + frontend + Chrome kiosk)
+├── public/loop/          Imágenes del loop (flat.png, sponsors.png…)
 └── src/
-    ├── main.js           Escena, cámara, bucle, conexión al backend, simulador, teclado
+    ├── main.js           Escena, cámara orbital, bucle, conexión al backend, simulador, teclado
+    ├── show.js           Estados de la noche: loop → artista → poema / palabras
+    ├── configPanel.js    Panel C: atajos, micrófono + vúmetro, artistas, loop, prompt, estética
+    ├── pointCloud.js     Nube de puntos estilo TouchDesigner (morph en GPU)
     ├── shaders.js        GLSL de glifos instanciados (reactividad acústica) + pase de grano/aberración
     ├── glyphAtlas.js     Atlas tipográfico dinámico en Canvas 2D (Cormorant Garamond + IBM Plex Mono)
     ├── typeField.js      Motor de partículas: 12 000 letras, 1 draw call, 4 físicas, caligramas, subtítulo vivo
@@ -64,25 +68,55 @@ Producción: `start_instalacion.bat` compila el frontend, abre el backend minimi
   anclados a la luz: un píxel negro sale exactamente negro, el rectángulo del proyector desaparece.
 - GPU: con una gráfica dedicada se sostienen 60 FPS con 12 000–15 000 glifos. En integradas, `?pool=8000&dpr=1`.
 
+## Operación de la noche
+
+```
+ LOOP (FLAT · sponsors · UMBRAL) ──1…9──► NOMBRE DEL ARTISTA ──S──► POEMA (graba)
+   ▲                                  ▲ número: reinicia el nombre      │ T ⇄
+   └───────────────L──────────────────┴─────────────────────────── PALABRAS (graba)
+```
+
+| Tecla | Acción |
+| --- | --- |
+| `C` | panel de operación (y recordatorio de atajos) |
+| `1`…`9`, `0` | ir al nombre del artista N (0 = 10). Otra vez un número: reinicia a ese nombre y deja de grabar |
+| `S` | comenzar a grabar: el poema dibuja con sus letras |
+| `T` | modo palabras: todo lo dicho, disperso por la pared con tamaños sutilmente distintos (otra vez `T`: vuelve a poema) |
+| `L` | volver al loop (deja de grabar) |
+| `F` | pantalla completa · `D` panel técnico / simulación · `Esc` cierra paneles |
+
+Sólo se envía audio a OpenAI mientras se graba (`S` o `T`): el loop y los nombres no consumen la API.
+
+### Panel C
+
+- **Micrófono**: lista los dispositivos de entrada que ve `server.py` y cambia en caliente. El vúmetro muestra nivel,
+  pico, dBFS y avisa «sin señal», «saturando» o «backend desconectado».
+- **Artistas**: nombres en orden; la posición es la tecla. Se reordenan con ↑ ↓.
+- **Loop**: pasos de texto o imagen. Las imágenes van en `public/loop/` (ej. `loop/flat.png`) o se suben con «Subir…».
+  Render «letras» = la figura se forma con letras y nube de puntos; «imagen» = el logo tal cual (para sponsors
+  legibles); «título» = texto compuesto en tipografía.
+- **Prompt estético**: cómo interpreta el LLM los versos. La parte técnica (el JSON) se agrega sola.
+- **Estética**: nube de puntos estilo *pointcloud* de TouchDesigner (on/off), profundidad, intensidad y órbita de cámara.
+
+Todo se guarda solo en `settings.local.json` junto a `server.py` (y en el navegador como respaldo).
+
+### Estética nube de puntos
+
+Cada figura (caligrama, UMBRAL, logos) se acompaña de ~80 000 puntos (`?points=`) muestreados de su máscara y
+extruidos en Z por una luz rasante: un relieve que la cámara orbita lentamente. Los puntos viajan entre figuras
+por curvas en GPU, se deshacen en polvo cuando la figura se suelta y la voz los empuja en profundidad. El brillo se
+normaliza por densidad para que el fondo siga siendo negro absoluto.
+
 ### Sin micrófono / sin clave (calibración)
 
 ```bat
 .venv\Scripts\python server.py --no-audio --no-openai
 ```
 
-En el navegador, **D** abre el panel: inyecta versos de prueba (se simulan los deltas del transcriptor y una
-envolvente de voz), fuerza figuras y físicas, y muestra el estado de micrófono / OpenAI / LLM. Si el backend no está
-corriendo, el navegador usa su propio director heurístico: el frontend es autosuficiente para calibrar.
+`D` abre el panel técnico: inyecta versos de prueba (respeta el modo poema/palabras), fuerza figuras y físicas.
+Si el backend no está corriendo, el navegador usa su propio director heurístico.
 
-| Tecla | Acción |
-| --- | --- |
-| `D` | panel de calibración |
-| `F` | pantalla completa |
-| `1`–`4` | lluvia · enjambre · vórtice · ceniza |
-| `C` | caligrama al azar · `X` disolverlo |
-| `Espacio` | leer el siguiente verso de prueba |
-
-Parámetros de URL: `?pool=12000 &ws=ws://localhost:8765 &bloom=0.55 &grain=0.055 &dpr=1.5 &debug`.
+Parámetros de URL: `?pool=12000 &points=80000 &ws=ws://localhost:8765 &bloom=0.55 &grain=0.055 &dpr=1.5 &debug`.
 
 ## Protocolo WebSocket (`ws://localhost:8765`)
 
@@ -97,7 +131,8 @@ Servidor → frontend (JSON, campo `type`):
 | `art_direction` | `data`: contrato abajo + `verso`, `provider`, `latencia_ms` |
 | `status` / `hello` | `status`: `{mic, openai, llm}` |
 
-Frontend → servidor: `{"type":"inject_verse","text":"…"}` (modo debug) y `{"type":"ping"}`.
+Frontend → servidor: `session` (`recording`, `mode`), `list_devices` / `set_device`, `save_settings` / `get_settings`,
+`inject_verse` (modo debug) y `ping`.
 
 Contrato `art_direction.data` (saneado en `server.py` y otra vez en `localDirector.js`):
 

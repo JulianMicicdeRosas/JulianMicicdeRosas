@@ -148,3 +148,231 @@ body.hide-cursor * {
   color: #7d7870;
   font-size: 11px;
 }
+
+/* ── Logo / imagen del loop ───────────────────────────────────────── */
+#overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.6s ease;
+  z-index: 2;
+}
+#overlay.on {
+  opacity: 1;
+}
+#overlay img {
+  max-width: 62vw;
+  max-height: 58vh;
+  object-fit: contain;
+}
+
+/* ── Aviso de operador (2 s, discreto) ────────────────────────────── */
+#toast {
+  position: fixed;
+  right: 22px;
+  bottom: 18px;
+  font: 12px/1.3 'IBM Plex Mono', Consolas, monospace;
+  letter-spacing: 0.08em;
+  color: #8c8984;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  pointer-events: none;
+  z-index: 20;
+}
+#toast.on {
+  opacity: 0.75;
+}
+
+/* ── Panel de operación (tecla C) ─────────────────────────────────── */
+#config {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  bottom: 16px;
+  width: min(640px, calc(100vw - 32px));
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 0 18px 18px;
+  background: rgba(8, 8, 8, 0.94);
+  border: 1px solid #2a2927;
+  font: 12px/1.45 'IBM Plex Mono', Consolas, monospace;
+  color: #cfcac0;
+  z-index: 11;
+  display: none;
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: auto;
+}
+#config.open {
+  display: block;
+}
+#config header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0 10px;
+  background: rgba(8, 8, 8, 0.98);
+  border-bottom: 1px solid #1d1c1a;
+}
+#config h1 {
+  font: 500 22px/1.1 'Cormorant Garamond', Georgia, serif;
+  letter-spacing: 0.05em;
+  margin: 0;
+  color: #f4f1ea;
+  flex: 1;
+}
+#config h2 {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #7d7870;
+  margin: 18px 0 8px;
+  font-weight: 400;
+}
+#config .saved {
+  color: #9fc29a;
+}
+#config .keys {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 14px;
+  margin: 0;
+}
+#config .keys dt {
+  color: #f4f1ea;
+}
+#config .keys dd {
+  margin: 0;
+  color: #a8a398;
+}
+#config .state {
+  margin-top: 8px;
+  color: #7d7870;
+}
+#config .state b {
+  color: #e3a14b;
+  font-weight: 400;
+}
+#config .hint {
+  color: #7d7870;
+  margin: 4px 0 8px;
+}
+#config code {
+  color: #cfcac0;
+}
+#config .row,
+#config .item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 5px 0;
+}
+#config .num {
+  width: 18px;
+  color: #e3a14b;
+  text-align: right;
+}
+#config input,
+#config select,
+#config textarea,
+#config button {
+  background: #111110;
+  color: #e8e3d8;
+  border: 1px solid #34322e;
+  padding: 5px 8px;
+  font: inherit;
+}
+#config .item input[data-field='artist'] {
+  flex: 1;
+  min-width: 180px;
+  font: 16px/1.2 'Cormorant Garamond', Georgia, serif;
+}
+#config .step input[data-field='contenido'] {
+  width: 150px;
+}
+#config .step input[data-field='duracion'] {
+  width: 52px;
+}
+#config .step input[data-field='letras'] {
+  width: 120px;
+}
+#config .unit {
+  color: #7d7870;
+  margin-left: -4px;
+}
+#config select[data-device] {
+  flex: 1;
+  min-width: 0;
+}
+#config textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font: 12px/1.45 'IBM Plex Mono', Consolas, monospace;
+}
+#config button {
+  cursor: pointer;
+}
+#config button:hover {
+  border-color: #8c8984;
+}
+#config .vu {
+  position: relative;
+  height: 14px;
+  background: #151413;
+  border: 1px solid #2a2927;
+  margin-top: 8px;
+}
+#config .vu i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: #4a4844;
+  transition: width 40ms linear;
+}
+#config .vu i.ok {
+  background: #9fc29a;
+}
+#config .vu i.hot {
+  background: #d36a6a;
+}
+#config .vu b {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: #f4f1ea;
+  left: 0;
+}
+#config .vu-info {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+#config .ok {
+  color: #9fc29a;
+}
+#config .bad {
+  color: #d36a6a;
+}
+#config .slider {
+  display: grid;
+  grid-template-columns: 170px 1fr 44px;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+#config .slider input {
+  padding: 0;
+}
+#config .slider output {
+  color: #a8a398;
+  text-align: right;
+}
