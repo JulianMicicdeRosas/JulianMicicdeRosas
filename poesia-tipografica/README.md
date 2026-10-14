@@ -214,15 +214,21 @@ la figura de la biblioteca. En modo palabras (T) las ilustraciones también se c
 ## Placa del artista · tamaños en grilla · tecla 0
 
 **Placa del artista (1–4, 6–9)**: primero se ve el nombre sobre el muro. Cuando la persona **empieza a hablar**
-(la voz supera el umbral ~0,35 s), el nombre se borra letra por letra con glitch y arranca la animación (lo mismo
-que apretar S): transcripción, muro e ilustraciones. Se ajusta en panel C → Micrófono («Placa del artista…» y
-«Umbral de voz»); el comienzo de lo dicho no se pierde (el backend guarda el último segundo y medio de audio).
+(la voz supera el umbral ~0,35 s) o se aprieta S, **toda la placa se borra** con glitch, letra por letra, y empieza
+el muro del artista:
 
-**Tamaños**: el tamaño de las letras del muro es el mínimo; algunas palabras dichas aparecen **2, 3 o 4 veces más
-grandes**, ocupando exactamente k × k celdas por letra (todo en grilla); las palabras clave, en el rosa de la marca.
+- cada palabra dicha aparece en la grilla, en un lugar libre, en **tamaños muy distintos**: el módulo del muro es
+  el mínimo y algunas ocupan 2, 3, 5, 8 o 12 módulos (hasta un tercio del alto). Los tamaños grandes son para
+  palabras con peso; las cortas y de enlace (la, el, y, de…) quedan chicas. Las grandes pueden ir en el rosa de la marca.
+- cuando la pantalla se **satura** (~45 % ocupada), las más viejas se rompen con glitch hasta bajar a ~30 %.
+- **cada oración trae su dibujo** (composición del LLM + tratamiento) hecho con lo dicho, en positivo sobre negro;
+  las palabras que lo tapan se rompen para que se lea.
+
+Se ajusta en panel C → Micrófono («Placa del artista…» y «Umbral de voz»); el comienzo de lo dicho no se pierde
+(el backend guarda el último segundo y medio de audio).
 
 **Tecla 0 — sólo transcripción**: se apaga todo en su lugar (sin polvo que cae) y graba. Cada palabra dicha aparece
-alineada a la grilla, en tamaño mínimo o 2× / 3×, sobre el trazado de una figura (círculo, espiral, diagonal, onda,
+alineada a la grilla, en tamaño mínimo o 2× / 3× (todo un 30 % más grande que el muro), sobre el trazado de una figura (círculo, espiral, diagonal, onda,
 columna o constelación) que se renueva cada 7–10 palabras; líneas finas las unen. Quedan a lo sumo 9 palabras: cada
 una vive 7–12 s y se rompe con glitch. S detiene / retoma; L vuelve al loop.
 

@@ -176,7 +176,13 @@ export class Show {
   /** S: graba / deja de grabar (en el nombre del artista no empieza sola). */
   toggleRecord() {
     if (this.recording) this.stop();
-    else this.start(this.state === 'perform' ? this.mode : 'poema');
+    else this.start(...this.nextRecording());
+  }
+
+  /** Qué arranca S: en la placa del artista, el muro de palabras (borrando la placa); si no, lo que había. */
+  nextRecording() {
+    if (this.state === 'artist') return ['muro', { dissolve: true }];
+    return [this.state === 'perform' ? this.mode : 'poema'];
   }
 
   /** Detener la grabación (tecla S o P): la composición queda en pantalla; S reanuda. */
@@ -195,6 +201,8 @@ export class Show {
     const f = this.field;
     f.wallFx = false;
     f.sparseMode = false;
+    f.artistWall = false;
+    f.backdropOnlyShape = false;
     f.clearScene();
     f.resetCorpus(this._loopCorpus());
     f.cursorEnabled = false;
@@ -400,6 +408,8 @@ export class Show {
     const f = this.field;
     f.wallFx = false;
     f.sparseMode = false;
+    f.artistWall = false;
+    f.backdropOnlyShape = false;
     f.clearSparse();
     f.cursorEnabled = false;
     f.releaseFigure(true);
@@ -454,6 +464,8 @@ export class Show {
     const f = this.field;
     f.wallFx = false;
     f.sparseMode = false;
+    f.artistWall = false;
+    f.backdropOnlyShape = false;
     f.clearScene();
     const txt = this._loopSteps().find((s) => s.tipo === 'texto');
     const name = (txt && txt.contenido) || 'UMBRAL';
@@ -489,6 +501,8 @@ export class Show {
     f.setBackdrop(true);
     f.showTitle(a.name);
     f.sparseMode = false;
+    f.artistWall = false;
+    f.backdropOnlyShape = false;
     f.wallFx = true; // en el muro del artista aparecen palabras grandes en grilla
     this.state = 'artist';
     this.artistIdx = n - 1;
@@ -510,7 +524,9 @@ export class Show {
       else f.clearTitle();
     }
     f.sparseMode = mode === 'pocas';
-    f.wallFx = mode !== 'pocas';
+    f.artistWall = mode === 'muro';
+    f.backdropOnlyShape = mode === 'muro';
+    f.wallFx = mode === 'poema' || mode === 'palabras';
     if (mode === 'pocas') {
       // sólo la transcripción: se borra todo y quedan pocas palabras que arman figuras entre ellas
       f.releaseFigure(true);
@@ -522,6 +538,17 @@ export class Show {
       f.cursorEnabled = false;
       f.setPhysics({ modo: 'lluvia_text_rain', intensidad: 0.15, velocidad: 0.3, turbulencia: 0.1, densidad: 0.3 });
       f.onTransition?.(0.9);
+    } else if (mode === 'muro') {
+      // placa del artista hablando: se borra toda la placa; las palabras dichas aparecen en muchos tamaños y
+      // cada oración trae su dibujo (hecho con lo dicho)
+      if (this.state !== 'perform' || dissolve) f.dissolveBackdrop(2.6);
+      f.setShape(null);
+      f.clearWords();
+      f.setBackdrop(true); // el telón queda para los dibujos (sólo se ve donde está la figura)
+      f.wordsToBackdrop = false;
+      f.cursorEnabled = false;
+      f.setSceneDensity(0);
+      f.setPhysics({ modo: 'lluvia_text_rain', intensidad: 0.2, velocidad: 0.3, turbulencia: 0.1, densidad: 0.3 });
     } else if (mode === 'palabras') {
       f.releaseFigure(true);
       f.setBackdrop(true); // lo dicho se escribe en el muro; las ilustraciones se calan en él
@@ -540,7 +567,7 @@ export class Show {
     this.state = 'perform';
     this.mode = mode;
     this._setRecording(true);
-    this.notify(`● GRABANDO · ${mode === 'palabras' ? 'palabras' : mode === 'pocas' ? 'pocas palabras' : 'poema'}`);
+    this.notify(`● GRABANDO · ${{ palabras: 'palabras', pocas: 'pocas palabras', muro: 'artista' }[mode] || 'poema'}`);
   }
 
   /** 0: se borra todo y queda sólo la transcripción, con pocas palabras (graba). */

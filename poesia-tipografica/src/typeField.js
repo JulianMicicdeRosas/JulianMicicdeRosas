@@ -40,6 +40,7 @@ const angDiff = (a, b) => {
   else if (d < -Math.PI) d += TAU;
   return d;
 };
+const STOP = new Set('la el los las lo y o u e de del en se un una unos unas al que por con sin su sus mi mis tu tus a es no ni le les me te nos ya muy mas pero como para cuando donde entre sobre hasta desde este esta eso esa ese aqui alli hay fue era son'.split(' '));
 const normalizeWord = (w) => w.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zñ0-9]/g, '');
 
 // Campo de ruido "curl" analítico (divergencia nula, ~6 trig por llamada).
@@ -140,6 +141,9 @@ export class TypeField {
     this.wallFx = false;
     this.bigWords = []; // {c0, r0, k, len, idx[], until}
     this.titleFade = null; // el nombre se borra de a poco: su hueco en el muro dura hasta que termina
+    // placas de artista hablando (modo «muro»): palabras de muchos tamaños + sólo el dibujo del telón
+    this.artistWall = false;
+    this.backdropOnlyShape = false; // el telón sólo se ve donde está el dibujo
     this.fxVer = 0;
     this.fxNext = 0;
     this.breaking = []; // letras que se rompen con glitch y luego se apagan: {i, at}
@@ -1412,7 +1416,7 @@ export class TypeField {
         c.alpha = 0.82;
       }
       const fx = FX[j];
-      if ((holes.length && this._inHoles(c.x, c.y, B.cw * 0.5, holes)) || (S && c.hide) || fx === 1) {
+      if ((holes.length && this._inHoles(c.x, c.y, B.cw * 0.5, holes)) || (S && c.hide) || fx === 1 || (this.backdropOnlyShape && !S)) {
         if (c.i >= 0) this._bdDrop(c, t, Math.random() < 0.05); // casi todas se apagan; pocas caen (forma limpia)
         continue;
       }
@@ -1819,6 +1823,141 @@ export class TypeField {
     this.metaDirty = true;
   }
 
+  /**
+   * Placas de artista: cada palabra dicha en la grilla del muro, en tamaños muy distintos (el módulo es el mínimo;
+   * algunas hasta un tercio del alto). Lugar libre al azar; si la pantalla se satura, las más viejas se rompen.
+   */
+  _placeArtistWord(raw) {
+    if (!this.wall) this._wallInit();
+    const W = this.wall;
+    W.order = W.order || [];
+    const text = this.wallUpper ? raw.toUpperCase() : raw;
+    const len = [...text].length;
+    const u = Math.random();
+    let k = u < 0.42 ? 1 : u < 0.64 ? 2 : u < 0.79 ? 3 : u < 0.89 ? 5 : u < 0.96 ? 8 : 12;
+    const nw = normalizeWord(raw);
+    if (this.keywords.has(nw) || this.rms > 0.7) k = Math.max(k, 5);
+    // los tamaños grandes, para palabras con peso: las cortas y de enlace (la, el, y, de…) quedan chicas
+    if (STOP.has(nw) || nw.length <= 2) k = Math.min(k, 2);
+    else if (nw.length <= 3) k = Math.min(k, 3);
+    while (k > 1 && (len * k > W.colsN * 0.92 || k > W.rowsN * 0.4)) k--;
+    const wC = len * k;
+    const free = (r, c) => {
+      if (r < 0 || c < 0 || r + k > W.rowsN || c + wC > W.colsN) return false;
+      for (let dr = -1; dr <= k; dr++) {
+        const rr = r + dr;
+        if (rr < 0 || rr >= W.rowsN) continue;
+        for (let dc = -1; dc <= wC; dc++) {
+          const cc = c + dc;
+          if (cc < 0 || cc >= W.colsN) continue;
+          if (W.occ[rr * W.colsN + cc] !== -1) return false;
+        }
+      }
+      return true;
+    };
+    let pos = null;
+    for (let attempt = 0; attempt < 4 && !pos; attempt++) {
+      for (let n = 0; n < 160; n++) {
+        const r = Math.floor(Math.random() * (W.rowsN - k + 1)), c = Math.floor(Math.random() * (W.colsN - wC + 1));
+        if (free(r, c)) {
+          pos = [r, c];
+          break;
+        }
+      }
+      // no entra: se rompen las más viejas hasta que haya lugar
+      if (!pos) for (let q = 0; q < 3 && W.order.length; q++) this._wallBreak(W.order.shift());
+    }
+    if (!pos) return;
+    const [r0, c0] = pos, id = W.nextId++, cells = [];
+    for (let dr = 0; dr < k; dr++) for (let dc = 0; dc < wC; dc++) {
+      const ci = (r0 + dr) * W.colsN + c0 + dc;
+      W.occ[ci] = id;
+      cells.push(ci);
+    }
+    const t = this.time, S = W.rh * k * 1.62, idx = [];
+    const accent = k >= 5 && (this.keywords.has(normalizeWord(raw)) || Math.random() < 0.35) ? 1 : 0;
+    [...text].forEach((ch, n) => {
+      const i = this._allocParticle();
+      if (i < 0) return;
+      this.state[i] = WORD;
+      this.grp[i] = 0;
+      this.pslot[i] = this.atlas.slot(ch, this._k('mono'));
+      this.ptint[i] = 0;
+      this.paccent[i] = accent;
+      this.tx[i] = W.x0 + (c0 + n * k + k / 2) * W.cw;
+      this.ty[i] = W.y0 - (r0 + k / 2) * W.rh;
+      this.tz[i] = 0;
+      this.trot[i] = this.rot[i] = 0;
+      this.tsize[i] = this.size[i] = S;
+      this.talpha[i] = k >= 5 ? 1 : 0.6 + Math.random() * 0.4;
+      this.px[i] = this.tx[i] + (Math.random() - 0.5) * W.cw * 10; // llega con saltos
+      this.py[i] = this.ty[i];
+      this.pz[i] = 0;
+      this.vx[i] = this.vy[i] = this.vz[i] = 0;
+      this.alpha[i] = 0;
+      this.delay[i] = t + n * 0.03;
+      this.birth[i] = this.delay[i];
+      this.level[i] = 0.2;
+      this.words.push(i);
+      idx.push(i);
+    });
+    W.words.set(id, { cells, idx });
+    W.order.push(id);
+    this.metaDirty = true;
+    this.onTransition?.(k >= 5 ? 0.3 : 0.1);
+    // saturación: si el muro pasa de ~45 % ocupado, se rompen las más viejas hasta bajar a ~30 %
+    let used = 0;
+    for (let q = 0; q < W.occ.length; q++) if (W.occ[q] !== -1) used++;
+    if (used / W.occ.length > 0.45) {
+      while (W.order.length > 1 && used / W.occ.length > 0.3) {
+        const old = W.order.shift();
+        used -= W.words.get(old)?.cells.length || 0;
+        this._wallBreak(old);
+      }
+    }
+  }
+
+  /** La palabra se rompe con glitch y libera su lugar. */
+  _wallBreak(id) {
+    const W = this.wall, w = W && W.words.get(id);
+    if (!w) return;
+    for (const ci of w.cells) if (W.occ[ci] === id) W.occ[ci] = -1;
+    this._breakLetters(w.idx, this.time, W.cw * 10);
+    W.words.delete(id);
+    if (W.order) W.order = W.order.filter((x) => x !== id);
+  }
+
+  /** Al llegar un dibujo: las palabras que lo tapan se rompen (el dibujo se lee limpio). */
+  breakWordsOverShape() {
+    const W = this.wall;
+    if (!W || !this.shape || !this.backdrop) return;
+    // cada letra se revisa en su centro y en sus cuatro esquinas: si alguna cae sobre el dibujo, la palabra se rompe
+    const over = (i) => {
+      const h = this.tsize[i] * 0.32;
+      for (const [dx, dy] of [[0, 0], [-h, -h], [h, -h], [-h, h], [h, h]]) if (!this._shapeHides(this.tx[i] + dx, this.ty[i] + dy)) return true;
+      return false;
+    };
+    for (const [id, w] of [...W.words]) {
+      if (w.idx.some((i) => this.state[i] === WORD && over(i))) this._wallBreak(id);
+    }
+  }
+
+  /** Toda la placa (muro y nombre) se borra con glitch, letra por letra, durante `secs`. */
+  dissolveBackdrop(secs = 2.6) {
+    const B = this.backdrop, t = this.time;
+    if (!B) return;
+    for (const c of B.cells) {
+      if (c.i < 0) continue;
+      const i = c.i;
+      c.i = -1;
+      if (this.state[i] !== BGW) continue;
+      this.state[i] = WORD;
+      const at = t + Math.random() * secs;
+      this.breaking.push({ i, jumpAt: at, at: at + 0.25 + Math.random() * 0.3, span: B.cw * 8 });
+    }
+    this.clearWallFx();
+  }
+
   _wallEvict(id) {
     const W = this.wall;
     const w = W.words.get(id);
@@ -1839,6 +1978,10 @@ export class TypeField {
     if (!word) return;
     if (this.sparseMode) {
       this._placeSparse(word);
+      return;
+    }
+    if (this.artistWall) {
+      this._placeArtistWord(word);
       return;
     }
     if (this.wordsToBackdrop && this.backdropOn) {
@@ -2108,7 +2251,7 @@ export class TypeField {
     F.n++;
     F.last = [x, y];
     // tamaños en grilla: el del muro es el mínimo; algunas palabras 2 o 3 veces más grandes
-    const base = clamp(this.H * 0.034, 18, 48);
+    const base = clamp(this.H * 0.034, 18, 48) * 1.3; // tecla 0: todo un 30 % más grande
     const u = Math.random();
     const k = this.keywords.has(normalizeWord(word)) || u > 0.86 ? 3 : u > 0.6 ? 2 : 1;
     const S = base * k;

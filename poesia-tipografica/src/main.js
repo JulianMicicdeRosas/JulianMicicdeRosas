@@ -154,7 +154,8 @@ async function boot() {
         preview = toneToText(t.tone, t.accent, gw, gh);
       }
       const origen = `${pick.origen} · ${kind}`;
-      const pol = pick.chars ? 'positivo' : choosePolarity(dir);
+      const artistWall = show.mode === 'muro' && show.state === 'perform';
+      const pol = pick.chars || artistWall ? 'positivo' : choosePolarity(dir); // en las placas, el dibujo sobre negro
       lastGrid = { grid: preview, origen, pol };
       // el contorno de la forma va en el color de acento de la marca
       field.edgeAccent = settings.contorno_acento !== false;
@@ -163,6 +164,7 @@ async function boot() {
       field.setBackdrop(true); // la ilustración se cala en el muro: tiene que estar visible
       field.refillSecs = (settings.cadencia && settings.cadencia.min_s) || 14;
       field.setShape(shapeArg, { polaridad: pol, duracion: Math.max(8, +dir.duracion_s || 16), chars: !!pick.chars });
+      if (artistWall) field.breakWordsOverShape(); // las palabras que tapan el dibujo se rompen
       config.setLastDirection({ ...dir, origen: `${origen} · ${pol}`, pidio: 'grilla', estiloVisto: 'grilla' });
       debug.setDirection(dir);
       return;
@@ -287,12 +289,12 @@ async function boot() {
   // force = simulador del panel D (permite probar sin estar grabando)
   function onDelta(itemId, delta, force = false) {
     if (!show.recording && !force) return;
-    if (show.mode === 'palabras' || show.mode === 'pocas') field.wordsDelta(itemId, delta);
+    if (show.mode === 'palabras' || show.mode === 'pocas' || show.mode === 'muro') field.wordsDelta(itemId, delta);
     else field.typeDelta(itemId, delta);
   }
   function onCompleted(itemId, text, force = false) {
     if (!show.recording && !force) return;
-    if (show.mode === 'palabras' || show.mode === 'pocas') field.completeWords(itemId, text);
+    if (show.mode === 'palabras' || show.mode === 'pocas' || show.mode === 'muro') field.completeWords(itemId, text);
     else field.completeLine(itemId, text);
   }
 
@@ -312,7 +314,7 @@ async function boot() {
     if (voiceFor > 0.35) {
       voiceFor = 0;
       logUi({ action: 'voz' });
-      show.start('poema', { dissolve: true });
+      show.start('muro', { dissolve: true });
       config.setState(show.label());
     }
   }
@@ -474,8 +476,8 @@ async function boot() {
       if (m.action === 'arranque') {
         field.clearScene();
         show.goLoop();
-      } else if (m.action === 'grabar') show.start(show.state === 'perform' ? show.mode : 'poema');
-      else if (m.action === 'voz') show.start('poema', { dissolve: true });
+      } else if (m.action === 'grabar') show.start(...show.nextRecording());
+      else if (m.action === 'voz') show.start('muro', { dissolve: true });
       else if (m.action === 'detener') show.stop();
       else if (m.key) doKey(m.key);
       config.setState(show.label());
@@ -538,7 +540,7 @@ async function boot() {
     },
     onRecord: () => {
       logUi({ action: 'grabar' });
-      show.start(show.state === 'perform' ? show.mode : 'poema');
+      show.start(...show.nextRecording());
       config.setState(show.label());
     },
     onStop: () => {

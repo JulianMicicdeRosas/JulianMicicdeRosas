@@ -2049,6 +2049,9 @@ class ArtDirector:
         p = cadence_params(self.settings.get("cadencia") if self.settings else None)
         now = time.monotonic()
         since_img, since_verse, words = now - self.last_image_t, now - self.last_verse_t, self._words()
+        if self.hub.session.get("mode") == "muro":
+            # placas de artista: un dibujo por oración (con un respiro mínimo entre dibujos)
+            return "oración" if since_img >= 5 and since_verse >= 0.4 else ""
         if since_img < p["min_s"]:
             return ""
         if words >= p["palabras"] and since_verse >= p["pausa_s"]:
@@ -2369,7 +2372,7 @@ async def main_async(args: argparse.Namespace) -> None:
         elif kind == "session":
             was = hub.session.get("recording")
             hub.session = {"recording": bool(msg.get("recording")),
-                           "mode": "palabras" if msg.get("mode") == "palabras" else "poema"}
+                           "mode": msg.get("mode") if msg.get("mode") in ("palabras", "pocas", "muro") else "poema"}
             log.info("Sesión: %s", hub.session)
             if hub.session["recording"] and not was:
                 director.reset_stanza()
