@@ -151,6 +151,7 @@ class Config:
     vad_prefix_ms: int
 
     audio_device: str
+    audio_channel: int
     sample_rate: int
     block_ms: int
     fft_size: int
@@ -191,6 +192,7 @@ class Config:
             vad_silence_ms=_env_int("VAD_SILENCE_MS", 350),
             vad_prefix_ms=_env_int("VAD_PREFIX_PADDING_MS", 300),
             audio_device=_env("AUDIO_DEVICE"),
+            audio_channel=max(1, _env_int("AUDIO_CHANNEL", 1)),  # entrada de la placa (Focusrite: 1..18)
             sample_rate=_env_int("AUDIO_SAMPLE_RATE", 24000),
             block_ms=max(5, _env_int("AUDIO_BLOCK_MS", 10)),
             fft_size=max(512, _env_int("AUDIO_FFT_SIZE", 2048)),
@@ -226,7 +228,7 @@ class SettingsStore:
 
     KEYS = ("device", "artists", "loop", "prompt_estetica", "avisos", "pointcloud", "profundidad", "nube", "orbita",
             "curaduria", "imagenes", "prompt_grilla", "polaridad", "director", "cadencia", "estilos", "glitch_ambiente", "ascii_filas",
-            "marca", "muro", "formato")
+            "marca", "muro", "formato", "canal")
 
     def __init__(self, path: str) -> None:
         self.path = path
@@ -521,9 +523,19 @@ class AudioEngine:
         self.overflows = 0
         self.resampler: LinearResampler | None = None
         self.device_override: str | None = None  # elegido desde el panel C (tiene prioridad sobre .env)
+        self.channel_override: int | None = None  # entrada de una placa multicanal, 1 = la primera
+        self.nch = 1  # canales abiertos en el stream (se usa sólo self.ch_idx)
+        self.ch_idx = 0
         self._restart = False
         self.device_name = ""
         self.zero_blocks = 0  # bloques de silencio digital absoluto (macOS sin permiso de micrófono)
+
+    def request_channel(self, channel: int | str | None) -> None:
+        try:
+            self.channel_override = max(1, int(channel)) if channel not in (None, "") else None
+        except (TypeError, ValueError):
+            self.channel_override = None
+        self._restart = True
 
     def request_device(self, device: str | int | None) -> None:
         """Cambia de micrófono en caliente: el bucle cierra el stream y reabre con el nuevo."""
@@ -542,6 +554,7 @@ class AudioEngine:
                     out.append({"index": idx, "name": info["name"],
                                 "hostapi": sd.query_hostapis(info["hostapi"])["name"],
                                 "samplerate": int(info["default_samplerate"]),
+                                "channels": int(info["max_input_channels"]),
                                 "default": idx == default_in})
         except Exception as exc:
             log.warning("No pude listar dispositivos: %s", exc)
@@ -578,9 +591,17 @@ class AudioEngine:
 
     def _open_stream(self):  # noqa: ANN202
         device = self._resolve_device()
+        info = sd.query_devices(device, "input")
+        # placa multicanal (p. ej. Focusrite 18i20): se abren los canales hasta el elegido y se usa sólo ése
+        want = self.channel_override or self.cfg.audio_channel
+        maxch = max(1, int(info.get("max_input_channels", 1)))
+        if want > maxch:
+            log.warning("El dispositivo tiene %d entrada(s); el canal %d no existe, uso el %d", maxch, want, maxch)
+        ch = min(want, maxch)
+        self.nch, self.ch_idx = ch, ch - 1
+        self.device_name = f"{info['name']} · canal {ch}" if maxch > 1 else info["name"]
         try:
-            self.device_name = sd.query_devices(device, "input")["name"]
-            stream = sd.RawInputStream(samplerate=self.sr, channels=1, dtype="int16",
+            stream = sd.RawInputStream(samplerate=self.sr, channels=self.nch, dtype="int16",
                                        blocksize=self.block, device=device, latency="low",
                                        callback=self._callback)
             self.resampler = None
@@ -588,11 +609,10 @@ class AudioEngine:
                      self.sr, self.block, 1000 * self.block / self.sr)
             return stream
         except Exception as exc:  # el dispositivo no soporta 24 kHz: abrir nativo y remuestrear
-            info = sd.query_devices(device, "input")
             native = int(info["default_samplerate"])
             log.warning("No se pudo abrir a %d Hz (%s). Abro a %d Hz y remuestreo.", self.sr, exc, native)
             native_block = max(64, int(native * self.cfg.block_ms / 1000))
-            stream = sd.RawInputStream(samplerate=native, channels=1, dtype="int16",
+            stream = sd.RawInputStream(samplerate=native, channels=self.nch, dtype="int16",
                                        blocksize=native_block, device=device, latency="low",
                                        callback=self._callback)
             self.resampler = LinearResampler(native, self.sr)
@@ -651,6 +671,8 @@ class AudioEngine:
             self.hub.set_status(mic="silencio", mic_device=hint)
 
     def _process(self, data: bytes) -> None:
+        if self.nch > 1:  # quedarse con el canal elegido
+            data = np.frombuffer(data, dtype=np.int16).reshape(-1, self.nch)[:, self.ch_idx].tobytes()
         self._check_digital_silence(data)
         x = np.frombuffer(data, dtype=np.int16).astype(np.float32) * (1.0 / 32768.0)
         if self.resampler is not None:
@@ -1727,6 +1749,8 @@ async def main_async(args: argparse.Namespace) -> None:
     audio = AudioEngine(cfg, hub, oa_queue, loop) if not args.no_audio else None
     if audio is not None and settings.get("device") not in (None, ""):
         audio.device_override = str(settings.get("device"))
+    if audio is not None and settings.get("canal") not in (None, ""):
+        audio.request_channel(settings.get("canal"))
 
     def key_status() -> dict[str, Any]:
         return {"has_key": bool(cfg.openai_api_key), "masked": mask_key(cfg.openai_api_key),
@@ -1738,8 +1762,8 @@ async def main_async(args: argparse.Namespace) -> None:
                                "session": hub.session}
 
     def on_verse(text: str, item_id: str, source: str) -> None:
-        # Sólo se dirige arte si se está grabando en modo poema (en modo palabras no hace falta el LLM).
-        if hub.session.get("recording") and hub.session.get("mode") == "poema":
+        # Se dirige arte grabando, en modo poema y en modo palabras (las ilustraciones se calan en el muro).
+        if hub.session.get("recording"):
             director.add_verse(text, item_id, source)
 
     transcriber = RealtimeTranscriber(cfg, hub, oa_queue, on_verse) if oa_queue is not None else None
@@ -1762,7 +1786,13 @@ async def main_async(args: argparse.Namespace) -> None:
         elif kind == "list_devices":
             current = audio.device_override if audio and audio.device_override is not None else cfg.audio_device
             await hub.reply(ws, "devices", devices=AudioEngine.list_devices(), current=current or "",
-                            active=audio.device_name if audio else "")
+                            active=audio.device_name if audio else "",
+                            channel=(audio.channel_override or cfg.audio_channel) if audio else cfg.audio_channel)
+        elif kind == "set_channel":
+            ch = msg.get("channel")
+            settings.update({"canal": ch})
+            if audio is not None:
+                audio.request_channel(ch)
         elif kind == "set_device":
             dev = msg.get("device")
             dev = "" if dev in (None, "") else str(dev)
@@ -1926,10 +1956,19 @@ async def run_check() -> None:
             dev = settings.get("device") or cfg.audio_device or None
             dev = int(dev) if isinstance(dev, str) and dev.isdigit() else dev
             info = sd.query_devices(dev, "input")
-            print(f"· Micrófono: {info['name']} — grabando 2 s, habla o aplaude…")
+            nch = max(1, min(int(info.get("max_input_channels", 1)), 32))
+            want = int(settings.get("canal") or cfg.audio_channel or 1)
+            print(f"· Micrófono: {info['name']} ({nch} entrada(s), se usa la {min(want, nch)}) — grabando 2 s, habla o aplaude…")
             rec = sd.rec(int(2 * info["default_samplerate"]), samplerate=info["default_samplerate"],
-                         channels=1, dtype="int16", device=dev)
+                         channels=nch, dtype="int16", device=dev)
             sd.wait()
+            if nch > 1:  # placa multicanal: dónde hay señal
+                peaks = np.abs(rec).max(axis=0)
+                for c, pk in enumerate(peaks, 1):
+                    dbc = 20 * math.log10(max(int(pk), 1) / 32768)
+                    bar = "█" * max(0, int((dbc + 60) / 3))
+                    print(f"    entrada {c:>2}: {dbc:6.1f} dBFS {bar}{'   ← elegida' if c == min(want, nch) else ''}")
+                rec = rec[:, min(want, nch) - 1]
             peak = int(np.abs(rec).max())
             if peak == 0:
                 ok = False
@@ -1960,7 +1999,8 @@ def list_devices() -> None:
         if info.get("max_input_channels", 0) > 0:
             mark = "*" if idx == default_in else " "
             host = sd.query_hostapis(info["hostapi"])["name"]
-            print(f"{mark} [{idx:>2}] {info['name']}  ({host}, {int(info['default_samplerate'])} Hz)")
+            print(f"{mark} [{idx:>2}] {info['name']}  ({host}, {int(info['default_samplerate'])} Hz, "
+                  f"{info['max_input_channels']} entrada(s))")
 
 
 def main() -> None:

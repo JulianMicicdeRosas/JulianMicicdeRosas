@@ -25,7 +25,7 @@ export const CADENCE_PRESETS = {
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 export class ConfigPanel {
-  constructor({ getSettings, onChange, onDevice, requestDevices, onScanLogos, onSaveKey, onRecord, onStop, onPreviewStyle, defaultPrompt }) {
+  constructor({ getSettings, onChange, onDevice, onChannel, requestDevices, onScanLogos, onSaveKey, onRecord, onStop, onPreviewStyle, defaultPrompt }) {
     this.onPreviewStyle = onPreviewStyle;
     this.onOpenFolder = arguments[0].onOpenFolder;
     this.onTestGrid = arguments[0].onTestGrid;
@@ -36,6 +36,7 @@ export class ConfigPanel {
     this.getSettings = getSettings;
     this.onChange = onChange;
     this.onDevice = onDevice;
+    this.onChannel = onChannel;
     this.requestDevices = requestDevices;
     this.defaultPrompt = defaultPrompt || '';
     this.devices = [];
@@ -166,6 +167,11 @@ export class ConfigPanel {
         <div class="row">
           <select data-device><option value="">(micrófono por defecto del sistema)</option></select>
           <button data-act="devices">Actualizar lista</button>
+        </div>
+        <div class="row">
+          <span>Entrada de la placa:</span>
+          <select data-channel><option value="1">1</option></select>
+          <span class="hint" data-channel-hint></span>
         </div>
         <div class="vu"><i data-vu></i><b data-peak></b></div>
         <div class="vu-info"><span data-db>—</span><span data-signal>—</span></div>
@@ -392,6 +398,7 @@ export class ConfigPanel {
     );
     sel.innerHTML = opts.join('');
     sel.value = String(this.currentDevice ?? '');
+    this._renderChannels();
     if (sel.value !== String(this.currentDevice ?? '') && this.currentDevice) {
       // configurado por nombre en .env: mostrarlo igual
       sel.insertAdjacentHTML('beforeend', `<option value="${esc(this.currentDevice)}">${esc(this.currentDevice)}</option>`);
@@ -399,9 +406,23 @@ export class ConfigPanel {
     }
   }
 
-  setDevices(devices, current) {
+  /** Placas multicanal (Focusrite 18i20…): elegir en qué entrada está el micrófono. */
+  _renderChannels() {
+    const csel = this.$('[data-channel]');
+    if (!csel) return;
+    const d = this.devices.find((x) => String(x.index) === String(this.currentDevice)) || this.devices.find((x) => x.default);
+    const n = Math.max(1, Math.min(32, d?.channels || 1));
+    const cur = Math.min(n, Math.max(1, +this.currentChannel || 1));
+    csel.innerHTML = Array.from({ length: n }, (_, k) => `<option value="${k + 1}">${k + 1}</option>`).join('');
+    csel.value = String(cur);
+    csel.disabled = n <= 1;
+    this.$('[data-channel-hint]').textContent = n > 1 ? `${n} entradas en este dispositivo` : 'una sola entrada';
+  }
+
+  setDevices(devices, current, channel) {
     this.devices = devices || [];
     this.currentDevice = current ?? '';
+    if (channel) this.currentChannel = channel;
     if (this.isOpen) this._renderDevices();
   }
 
@@ -633,9 +654,19 @@ export class ConfigPanel {
 
   _input(ev) {
     const t = ev.target;
+    if (t.matches('[data-channel]')) {
+      if (ev.type === 'change') {
+        this.currentChannel = +t.value;
+        this.peak = 0;
+        this.onChannel?.(+t.value);
+        this.flashSaved();
+      }
+      return;
+    }
     if (t.matches('[data-device]')) {
       if (ev.type === 'change') {
         this.currentDevice = t.value;
+        this._renderChannels();
         this.peak = 0;
         this.onDevice(t.value);
         this.flashSaved();

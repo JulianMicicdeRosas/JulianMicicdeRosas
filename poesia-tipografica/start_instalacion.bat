@@ -47,7 +47,9 @@ set CHROME=%ProgramFiles%\Google\Chrome\Application\chrome.exe
 if not exist "%CHROME%" set CHROME=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe
 if not exist "%CHROME%" set CHROME=%LocalAppData%\Google\Chrome\Application\chrome.exe
 
+REM GPU dedicada (p. ej. RTX 3070 Ti): forzar la placa de alto rendimiento y no caer en la integrada
 start "" "%CHROME%" --kiosk --start-fullscreen --no-first-run --disable-infobars ^
+  --force_high_performance_gpu --ignore-gpu-blocklist --enable-gpu-rasterization ^
   --disable-session-crashed-bubble --overscroll-history-navigation=0 --disable-pinch ^
   --autoplay-policy=no-user-gesture-required --disable-features=Translate ^
   --user-data-dir="%~dp0.chrome-kiosk" "http://127.0.0.1:5173/"

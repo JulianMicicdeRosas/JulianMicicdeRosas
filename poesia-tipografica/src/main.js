@@ -352,7 +352,7 @@ async function boot() {
       debug.setStatus(m.status || {});
       config.setMicStatus(m.status || {});
     },
-    devices: (m) => config.setDevices(m.devices, m.current),
+    devices: (m) => config.setDevices(m.devices, m.current, m.channel),
     settings: () => {},
     logos: (m) => {
       logoRequests.get(m.id)?.(m.logos || []);
@@ -378,6 +378,7 @@ async function boot() {
     getSettings: () => settings,
     onChange: (next) => setSettings(next),
     onDevice: (dev) => socket.send({ type: 'set_device', device: dev }),
+    onChannel: (ch) => socket.send({ type: 'set_channel', channel: ch }),
     requestDevices: () => socket.send({ type: 'list_devices' }),
     onSaveKey: (key) => socket.send({ type: 'set_api_key', key }),
     onOpenFolder: (que) => socket.send({ type: 'open_folder', que }),

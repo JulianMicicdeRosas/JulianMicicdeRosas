@@ -126,6 +126,29 @@ Producción: `start_instalacion.bat` compila el frontend, abre el backend minimi
   anclados a la luz: un píxel negro sale exactamente negro, el rectángulo del proyector desaparece.
 - GPU: con una gráfica dedicada se sostienen 60 FPS con 12 000–15 000 glifos. En integradas, `?pool=8000&dpr=1`.
 
+### Equipo de prueba: RTX 3070 Ti + Focusrite Scarlett 18i20 (2.ª gen.)
+
+**Placa de video.** El lanzador abre Chrome forzando la GPU de alto rendimiento. Si el equipo también tiene video
+integrado, conviene fijarlo a mano: Configuración de Windows → Sistema → Pantalla → Gráficos → Chrome → «Alto
+rendimiento» (o Panel de control de NVIDIA → Programas → Chrome → «Procesador NVIDIA de alto rendimiento»). Con una
+3070 Ti la calidad adaptativa queda siempre en «alta»; si se quiere más densidad: `http://127.0.0.1:5173/?pool=16000`.
+En el Panel de NVIDIA, «Sincronización vertical: activada» para Chrome evita cortes en el proyector.
+
+**Placa de audio.** Instalar el driver de Focusrite (Focusrite Control) y fijar la frecuencia en **48 kHz** (el
+programa remuestrea a 24 kHz). En Windows la placa aparece varias veces (MME, DirectSound, WASAPI, WDM-KS) y, según
+el driver, como pares de entradas («Analogue 1 + 2», «Analogue 3 + 4»…) o como un único dispositivo de 18 entradas.
+En el panel C → Micrófono:
+
+1. Elegir el dispositivo Focusrite del tipo **MME** o **Windows WASAPI** (WDM-KS suele fallar).
+2. En **«Entrada de la placa»** elegir dónde está el micrófono: en «Analogue 3 + 4» la entrada 1 es la 3 de la placa
+   y la 2 es la 4; en el dispositivo de 18 entradas es el número directo.
+3. Hablar y mirar el vúmetro. `diagnostico_windows.bat` graba todas las entradas a la vez y muestra el nivel de cada una
+   (con una flecha en la elegida): sirve para encontrar en qué entrada está la voz.
+
+Micrófono de condensador: activar **48V** en la placa. Ganancia: que la voz normal pique entre −18 y −10 dBFS; sin
+«Air» ni «Inst». Desactivar en Windows las «mejoras de audio» de la Focusrite. También se puede fijar en `.env`:
+`AUDIO_DEVICE=Focusrite` y `AUDIO_CHANNEL=1`.
+
 ## Formato de salida
 
 Panel C → **Formato de salida**: 1822 × 737 (por defecto, la pantalla del FLAT), 1920 × 1080, pantalla completa u
