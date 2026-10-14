@@ -8,7 +8,7 @@ const SHORTCUTS = [
   ['C', 'abrir / cerrar este panel'],
   ['→ / ←', 'loop: alterna FLAT ↔ UMBRAL (desde otro paso vuelve a FLAT). Los logos pasan solos en el loop automático'],
   ['T', 'desde el título (o cuando sea): empieza a grabar en modo palabras, hasta elegir artista'],
-  ['1 … 4, 6 … 9', 'nombre del artista: deja de grabar y espera la S. El muro se fragmenta con glitch'],
+  ['1 … 4, 6 … 9', 'placa del artista: cuando empieza a hablar el nombre se borra y arranca la animación (o con S)'],
   ['0', 'sólo transcripción: se borra todo; pocas palabras que arman figuras entre ellas y se rompen con glitch'],
   ['5', 'cierre: todo se desarma y queda el logo de FLAT, que cada 4 s se rompe con glitch y se vuelve a armar'],
   ['S', 'grabar / dejar de grabar (el poema dibuja; lo dibujado queda en pantalla)'],
@@ -179,6 +179,13 @@ export class ConfigPanel {
         <div class="vu"><i data-vu></i><b data-peak></b></div>
         <div class="vu-info"><span data-db>—</span><span data-signal>—</span></div>
         <div class="vu-info"><span>Transcripción (OpenAI)</span><span data-openai>—</span></div>
+        <div class="row"><label><input type="checkbox" data-voz> Placa del artista: cuando la persona empieza a hablar, el nombre se borra y arranca la animación (sin apretar S)</label></div>
+        <div class="row">
+          <span>Umbral de voz:</span>
+          <input type="range" min="0.1" max="0.8" step="0.01" data-umbral-voz style="flex:1">
+          <span data-umbral-val></span>
+        </div>
+        <p class="hint">Más alto = hace falta hablar más fuerte para que arranque (evita que lo dispare el ruido de la sala). Compará con la barra del micrófono.</p>
         <p class="hint" data-recinfo>Grabación de la sesión: —</p>
         <p class="hint">Habla al micrófono: la barra debe moverse. Verde = señal, rojo = saturación. El micrófono lo abre el
         backend (server.py); si aparece «backend desconectado», arráncalo.</p>
@@ -347,6 +354,9 @@ export class ConfigPanel {
     this.$('select[data-sopt="tratamiento"]').value = s.tratamiento || 'azar';
     this.$('select[data-sopt="forma_grilla"]').value = forma;
     this._renderPresets(s, forma);
+    this.$('[data-voz]').checked = s.inicio_por_voz !== false;
+    this.$('[data-umbral-voz]').value = s.umbral_voz ?? 0.35;
+    this.$('[data-umbral-val]').textContent = Number(s.umbral_voz ?? 0.35).toFixed(2);
     const fmt = s.formato || '1822x737';
     const fsel = this.$('select[data-formato]');
     fsel.value = [...fsel.options].some((o) => o.value === fmt) ? fmt : 'otro';
@@ -801,6 +811,15 @@ export class ConfigPanel {
         else cad[k] = Math.max(0, +t.value || 0);
         s.cadencia = cad;
       }, k === 'preset');
+      return;
+    }
+    if (t.matches('[data-voz]')) {
+      this._commit((s) => (s.inicio_por_voz = t.checked), false);
+      return;
+    }
+    if (t.matches('[data-umbral-voz]')) {
+      this.$('[data-umbral-val]').textContent = Number(t.value).toFixed(2);
+      this._commit((s) => (s.umbral_voz = +t.value), false);
       return;
     }
     if (t.matches('select[data-formato]')) {

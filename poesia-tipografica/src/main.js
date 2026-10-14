@@ -298,8 +298,29 @@ async function boot() {
 
   // ── audio reactivo ───────────────────────────────────────────────────────
   let lastRealAudio = -1e9;
+  // placa del artista: cuando la persona empieza a hablar, el nombre se borra y arranca la animación
+  let voiceFor = 0, lastVoiceT = 0;
+  function detectVoice(rms) {
+    const now = performance.now(), dt = Math.min(0.1, (now - lastVoiceT) / 1000);
+    lastVoiceT = now;
+    if (replayMode || show.state !== 'artist' || settings.inicio_por_voz === false) {
+      voiceFor = 0;
+      return;
+    }
+    if (rms > (settings.umbral_voz ?? 0.35)) voiceFor += dt;
+    else voiceFor = Math.max(0, voiceFor - dt * 0.5);
+    if (voiceFor > 0.35) {
+      voiceFor = 0;
+      logUi({ action: 'voz' });
+      show.start('poema', { dissolve: true });
+      config.setState(show.label());
+    }
+  }
   function onAudio(rms, freq, real) {
-    if (real) lastRealAudio = performance.now();
+    if (real) {
+      lastRealAudio = performance.now();
+      detectVoice(rms);
+    }
     else if (performance.now() - lastRealAudio < 500) return; // el micrófono real manda
     field.setAudio(rms, freq);
     debug.setLevel(rms);
@@ -454,6 +475,7 @@ async function boot() {
         field.clearScene();
         show.goLoop();
       } else if (m.action === 'grabar') show.start(show.state === 'perform' ? show.mode : 'poema');
+      else if (m.action === 'voz') show.start('poema', { dissolve: true });
       else if (m.action === 'detener') show.stop();
       else if (m.key) doKey(m.key);
       config.setState(show.label());
@@ -792,6 +814,7 @@ async function boot() {
   window.poesia = {
     field, show, config, applyDirection, simulateVerse, simulatePoem, advance, CONFIG, emojiFigure, maskToGrid, treat, composeFigure, figureToTone,
     setTestSettings: (o) => (settings = { ...settings, ...o }),
+    feedAudio: (rms) => onAudio(rms, 150, true), // pruebas: nivel de micrófono simulado
     // pruebas / calibración: forzar un estilo
     setStyleForTest: (e) => (settings = { ...settings, estilos: { activos: [e], modo: 'azar' } }),
     glitchNow: (secs = 0.6, amp = 0.9) => Object.assign(glitch, { burst: secs, amp }),

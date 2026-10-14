@@ -229,6 +229,7 @@ class SettingsStore:
     KEYS = ("device", "artists", "loop", "prompt_estetica", "avisos", "pointcloud", "profundidad", "nube", "orbita",
             "curaduria", "imagenes", "prompt_grilla", "polaridad", "director", "cadencia", "estilos", "glitch_ambiente", "ascii_filas",
             "marca", "muro", "formato", "canal", "forma_grilla", "grilla_preset", "tratamiento",
+            "inicio_por_voz", "umbral_voz",
             # marcas de migración: que una corrección automática se aplique una sola vez (y no pise lo elegido)
             "imagenes_v4", "imagenes_v5", "loop_grupos_v2", "loop_flat_v3", "loop_flat_v4", "loop_umbral_v6", "imagenes_v7")
 
@@ -645,6 +646,8 @@ class AudioEngine:
         self.peak_hold = 1e-3
         self.chunk_bytes = int(self.sr * cfg.openai_chunk_ms / 1000) * 2
         self.pcm_acc = bytearray()
+        self.preroll = bytearray()
+        self.preroll_bytes = int(self.sr * 1.5) * 2
         self.overflows = 0
         self.resampler: LinearResampler | None = None
         self.device_override: str | None = None  # elegido desde el panel C (tiene prioridad sobre .env)
@@ -881,7 +884,14 @@ class AudioEngine:
 
         if self.openai_queue is not None and not self.hub.session.get("recording"):
             self.pcm_acc.clear()  # fuera de grabación no se envía nada (ni se paga) a OpenAI
+            # …pero se guarda el último segundo y medio: si la grabación arranca por la voz, no se pierde el comienzo
+            self.preroll.extend(pcm)
+            if len(self.preroll) > self.preroll_bytes:
+                del self.preroll[:len(self.preroll) - self.preroll_bytes]
         elif self.openai_queue is not None:
+            if self.preroll:
+                self.pcm_acc.extend(self.preroll)
+                self.preroll.clear()
             self.pcm_acc.extend(pcm)
             while len(self.pcm_acc) >= self.chunk_bytes:
                 chunk = bytes(self.pcm_acc[:self.chunk_bytes])

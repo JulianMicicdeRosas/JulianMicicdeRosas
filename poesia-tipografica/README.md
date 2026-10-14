@@ -211,14 +211,15 @@ El servidor la limpia (acepta otros caracteres, la recentra y la escala) y, si i
 corto sólo de la grilla. Si eso también falla, se usa la silueta SVG que el modelo manda de respaldo, y si no hay,
 la figura de la biblioteca. En modo palabras (T) las ilustraciones también se calan en el muro.
 
-## Muro de artistas: fragmentos y tamaños · tecla 0
+## Placa del artista · tamaños en grilla · tecla 0
 
-**Muro de artistas (1–4, 6–9) y performance**: cada 1–3 s se borran con glitch bloques de una grilla modular (módulos
-casi cuadrados de celdas): unos quedan **vacíos**, otros **grises plenos**, **tenues** o **salpicados** con una trama de
-puntos; contornos finos, alguna línea que se prolonga hasta el borde y dos verticales rojas sobre la grilla. Cada
-bloque dura 8–20 s y vuelve. Además, algunas palabras dichas aparecen **2, 3 o 4 veces más grandes**, ocupando
-exactamente k × k celdas por letra (el tamaño del muro es el mínimo; todo en grilla); las palabras clave, en el rosa
-de la marca.
+**Placa del artista (1–4, 6–9)**: primero se ve el nombre sobre el muro. Cuando la persona **empieza a hablar**
+(la voz supera el umbral ~0,35 s), el nombre se borra letra por letra con glitch y arranca la animación (lo mismo
+que apretar S): transcripción, muro e ilustraciones. Se ajusta en panel C → Micrófono («Placa del artista…» y
+«Umbral de voz»); el comienzo de lo dicho no se pierde (el backend guarda el último segundo y medio de audio).
+
+**Tamaños**: el tamaño de las letras del muro es el mínimo; algunas palabras dichas aparecen **2, 3 o 4 veces más
+grandes**, ocupando exactamente k × k celdas por letra (todo en grilla); las palabras clave, en el rosa de la marca.
 
 **Tecla 0 — sólo transcripción**: se apaga todo en su lugar (sin polvo que cae) y graba. Cada palabra dicha aparece
 alineada a la grilla, en tamaño mínimo o 2× / 3×, sobre el trazado de una figura (círculo, espiral, diagonal, onda,

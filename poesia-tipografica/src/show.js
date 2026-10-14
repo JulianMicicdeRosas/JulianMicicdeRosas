@@ -31,6 +31,8 @@ export const DEFAULT_SETTINGS = {
   imagenes: 'grilla', // 'grilla' = el LLM devuelve la figura como texto · 'llm' = trazado SVG · 'biblioteca' = curadas
   polaridad: 'alternar', // grilla: positivo | negativo | alternar | llm
   formato: '1822x737', // salida: 'ANCHOxALTO' (cuadro centrado) o 'pantalla'
+  inicio_por_voz: true, // placa del artista: arranca sola cuando la persona habla
+  umbral_voz: 0.35,
   forma_grilla: 'llm', // ilustración: 'llm' (composición) · 'emoji' · 'letras'
   grilla_preset: 'composicion',
   tratamiento: 'azar', // topografia | trama | erosion | eco | silueta | azar | llm
@@ -487,7 +489,7 @@ export class Show {
     f.setBackdrop(true);
     f.showTitle(a.name);
     f.sparseMode = false;
-    f.wallFx = true; // el muro del artista se va fragmentando con glitch
+    f.wallFx = true; // en el muro del artista aparecen palabras grandes en grilla
     this.state = 'artist';
     this.artistIdx = n - 1;
     this.notify(`${n} · ${a.name} — S para comenzar`);
@@ -495,7 +497,7 @@ export class Show {
   }
 
   // ── grabación ────────────────────────────────────────────────────────────
-  start(mode = 'poema') {
+  start(mode = 'poema', { dissolve = false } = {}) {
     clearTimeout(this.loopTimer);
     this.loopToken++;
     this._hideImage();
@@ -504,7 +506,8 @@ export class Show {
     if (this.state !== 'perform') {
       // desde el loop o el nombre: el título se disuelve y su nombre queda en el corpus
       f.releaseFigure(true);
-      f.clearTitle();
+      if (dissolve) f.dissolveTitle(2.6); // la persona empezó a hablar: el nombre se borra de a poco
+      else f.clearTitle();
     }
     f.sparseMode = mode === 'pocas';
     f.wallFx = mode !== 'pocas';

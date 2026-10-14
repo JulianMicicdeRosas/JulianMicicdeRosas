@@ -136,10 +136,10 @@ export class TypeField {
     this.bdFill = null;      // llenado progresivo del telón hasta la próxima imagen: { t0, dur }
     this.bdRows = 40; // filas del muro = resolución de las ilustraciones (≈ 11 000 celdas: entra en el pool)
     this.edgeAccent = true; // contorno de las ilustraciones en el color de acento
-    // muro de artistas: fragmentos borrados con glitch y palabras grandes alineadas a la grilla
+    // muro de artistas: palabras grandes alineadas a la grilla (2×, 3×, 4× del tamaño mínimo)
     this.wallFx = false;
-    this.frags = []; // {c0, r0, w, h, mode: 'vacio'|'tenue'|'mancha', seed, born, until}
     this.bigWords = []; // {c0, r0, k, len, idx[], until}
+    this.titleFade = null; // el nombre se borra de a poco: su hueco en el muro dura hasta que termina
     this.fxVer = 0;
     this.fxNext = 0;
     this.breaking = []; // letras que se rompen con glitch y luego se apagan: {i, at}
@@ -1378,7 +1378,7 @@ export class TypeField {
       if (this.refillSecs) this.setBackdropFill(this.refillSecs); // el muro se reescribe hasta la próxima imagen
     }
     if (this.wallFx) this._wallFxStep(t);
-    else if (this.frags.length || this.bigWords.length) this.clearWallFx();
+    else if (this.bigWords.length) this.clearWallFx();
     if (B.fxVer !== this.fxVer) this._fxRecompute();
     const FX = B.fx;
     const holes = this._bdHoles();
@@ -1412,14 +1412,14 @@ export class TypeField {
         c.alpha = 0.82;
       }
       const fx = FX[j];
-      if ((holes.length && this._inHoles(c.x, c.y, B.cw * 0.5, holes)) || (S && c.hide) || fx === 1 || fx === 3) {
+      if ((holes.length && this._inHoles(c.x, c.y, B.cw * 0.5, holes)) || (S && c.hide) || fx === 1) {
         if (c.i >= 0) this._bdDrop(c, t, Math.random() < 0.05); // casi todas se apagan; pocas caen (forma limpia)
         continue;
       }
       // tono y acento de la ilustración: cada letra se enciende según la imagen; el acento dibuja líneas de marca
       if (c.i >= 0) {
         const a = S ? c.acc : 0;
-        const al = (S ? (a ? 1 : c.alpha) : 0.82) * (fx === 2 ? 0.3 : fx === 4 ? 0.55 : 1); // fragmento tenue / salpicado
+        const al = S ? (a ? 1 : c.alpha) : 0.82;
         if (this.accent[c.i] !== a || Math.abs(this.talpha[c.i] - al) > 0.01) {
           this.accent[c.i] = a;
           this.talpha[c.i] = al;
@@ -1523,6 +1523,10 @@ export class TypeField {
   _bdHoles() {
     const H = this.backdropHoles.slice();
     if (this.title?.rect) H.push(this.title.rect);
+    if (this.titleFade) {
+      if (this.time < this.titleFade.until) H.push(this.titleFade.rect);
+      else this.titleFade = null;
+    }
     if (this.line?.rect) H.push(this.line.rect); // la transcripción en vivo se lee sobre negro
     if (this.figure) H.push(this.figure);
     return H;
@@ -1642,6 +1646,21 @@ export class TypeField {
     this.title = { text, idx, rect: { x0: -half - pad, x1: half + pad, y0: y0 - (rows.length - 1) * lineH - S * 0.62 - pad, y1: y0 + S * 0.62 + pad } };
     this.metaDirty = true;
     this.onTransition?.(0.6);
+  }
+
+  /** El nombre se borra letra por letra con glitch durante `secs` (cuando la persona empieza a hablar). */
+  dissolveTitle(secs = 2.4) {
+    if (!this.title) return;
+    const t = this.time;
+    const order = this.title.idx.filter((i) => this.state[i] === TITLE).sort(() => Math.random() - 0.5);
+    order.forEach((i, n) => {
+      this.state[i] = WORD;
+      const at = t + (n / Math.max(1, order.length)) * secs + Math.random() * 0.15;
+      this.breaking.push({ i, jumpAt: at, at: at + 0.3 + Math.random() * 0.3, span: this.H * 0.07 });
+    });
+    if (this.title.rect) this.titleFade = { rect: this.title.rect, until: t + secs + 0.5 };
+    this.title = null;
+    this.onTransition?.(0.5);
   }
 
   clearTitle() {
@@ -1917,23 +1936,10 @@ export class TypeField {
   // ════════════════════════════════════════════════════════════════════════
   //  Muro de artistas: fragmentos con glitch + palabras grandes en grilla
   // ════════════════════════════════════════════════════════════════════════
-  /** Módulo de la grilla: un bloque casi cuadrado de celdas del muro. */
-  _module() {
-    const B = this.backdrop;
-    const mr = Math.max(3, Math.round(B.rowsN / 8));
-    return { mr, mc: Math.max(4, Math.round((mr * B.rh) / B.cw)) };
-  }
-
   _wallFxStep(t) {
     const B = this.backdrop;
     if (!B) return;
     let changed = false;
-    for (let k = this.frags.length - 1; k >= 0; k--) {
-      if (t > this.frags[k].until) {
-        this.frags.splice(k, 1);
-        changed = true;
-      }
-    }
     for (let k = this.bigWords.length - 1; k >= 0; k--) {
       if (t > this.bigWords[k].until) {
         this._breakLetters(this.bigWords[k].idx, t, B.cw * 6);
@@ -1942,26 +1948,13 @@ export class TypeField {
       }
     }
     if (t >= this.fxNext) {
-      this.fxNext = t + 1.2 + Math.random() * 1.8;
-      const n = 1 + (Math.random() < 0.45 ? 1 : 0);
-      for (let q = 0; q < n && this.frags.length < 14; q++) changed = this._spawnFrag(t) || changed;
-      if (Math.random() < 0.55 && this.bigWords.length < 5) changed = this._spawnBigWord(t) || changed;
-      if (changed) this.onTransition?.(0.3);
+      this.fxNext = t + 2 + Math.random() * 2.5;
+      if (this.bigWords.length < 5 && this._spawnBigWord(t)) {
+        changed = true;
+        this.onTransition?.(0.25);
+      }
     }
     if (changed) this.fxVer++;
-  }
-
-  /** Un bloque de la grilla modular se borra (vacío), se apaga (tenue) o se salpica (mancha), con glitch. */
-  _spawnFrag(t) {
-    const B = this.backdrop, { mr, mc } = this._module();
-    const w = mc * (1 + Math.floor(Math.random() * 3)), h = mr * (1 + Math.floor(Math.random() * 3));
-    if (w >= B.colsN || h >= B.rowsN) return false;
-    const c0 = mc * Math.floor(Math.random() * Math.floor((B.colsN - w) / mc + 1));
-    const r0 = mr * Math.floor(Math.random() * Math.floor((B.rowsN - h) / mr + 1));
-    const u = Math.random();
-    const mode = u < 0.36 ? 'vacio' : u < 0.58 ? 'gris' : u < 0.8 ? 'tenue' : 'mancha';
-    this.frags.push({ c0, r0, w, h, mode, seed: Math.random() * 1000, born: t, until: t + 8 + Math.random() * 12 });
-    return true;
   }
 
   /** Una palabra dicha, 2, 3 o 4 veces más grande, ocupando exactamente k × k celdas por letra. */
@@ -2015,22 +2008,10 @@ export class TypeField {
     return false;
   }
 
-  /** Celdas afectadas: 1 oculta · 2 tenue · 3 mancha oculta · 4 mancha tenue. */
+  /** Celdas que tapan las palabras grandes (1 = oculta). */
   _fxRecompute() {
     const B = this.backdrop;
     B.fx.fill(0);
-    const hash = (a, b, s) => {
-      const v = Math.sin(a * 127.1 + b * 311.7 + s * 74.7) * 43758.5453;
-      return v - Math.floor(v);
-    };
-    for (const f of this.frags) {
-      for (let r = f.r0; r < Math.min(B.rowsN, f.r0 + f.h); r++) {
-        for (let c = f.c0; c < Math.min(B.colsN, f.c0 + f.w); c++) {
-          const j = r * B.colsN + c;
-          B.fx[j] = f.mode === 'vacio' || f.mode === 'gris' ? 1 : f.mode === 'tenue' ? 2 : hash(r, c, f.seed) < 0.55 ? 3 : 4;
-        }
-      }
-    }
     for (const b of this.bigWords) {
       for (let r = b.r0; r < Math.min(B.rowsN, b.r0 + b.k); r++) {
         for (let c = b.c0; c < Math.min(B.colsN, b.c0 + b.len * b.k); c++) B.fx[r * B.colsN + c] = 1;
@@ -2042,7 +2023,6 @@ export class TypeField {
   clearWallFx() {
     for (const b of this.bigWords) this._breakLetters(b.idx, this.time, (this.backdrop?.cw || 10) * 6);
     this.bigWords = [];
-    this.frags = [];
     this.fxVer++;
   }
 
@@ -2060,6 +2040,12 @@ export class TypeField {
     if (!this.breaking.length) return;
     const keep = [];
     for (const b of this.breaking) {
+      if (b.jumpAt != null && !b.jumped && t >= b.jumpAt) {
+        b.jumped = true; // el salto con glitch, en su turno (nombre que se borra de a poco)
+        this.tx[b.i] += (Math.random() - 0.5) * b.span;
+        this.ty[b.i] += (Math.random() - 0.5) * b.span * 0.35;
+        this.onTransition?.(0.12);
+      }
       if (t < b.at) {
         keep.push(b);
         continue;
