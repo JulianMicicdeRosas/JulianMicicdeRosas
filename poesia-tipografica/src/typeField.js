@@ -1234,13 +1234,15 @@ export class TypeField {
    * positivo: sólo quedan las palabras dentro de la figura · negativo: la figura es un hueco en el muro.
    * Las letras que sobran caen con glitch; las que faltan aparecen con un salto.
    */
-  setShape(grid, { polaridad = 'negativo', duracion = 20 } = {}) {
+  setShape(grid, { polaridad = 'negativo', duracion = 20, chars = false } = {}) {
     if (!grid || !grid.length) {
       if (this.shape) this.onTransition?.(0.45);
       this.shape = null;
       return;
     }
-    this.shape = { grid, gw: grid[0].length, gh: grid.length, pol: polaridad === 'positivo' ? 'positivo' : 'negativo', until: this.time + duracion };
+    // chars: arte ASCII con letras propias (una letra de la grilla = una celda del muro, sólo positivo)
+    const pol = chars || polaridad === 'positivo' ? 'positivo' : 'negativo';
+    this.shape = { grid, gw: Math.max(...grid.map((r) => r.length)), gh: grid.length, pol, chars, until: this.time + duracion };
     this.bdFill = null; // la imagen se muestra completa
     this.onTransition?.(0.75);
   }
@@ -1258,12 +1260,25 @@ export class TypeField {
 
   /** ¿La celda (x, y) del telón queda vacía por la ilustración en grilla? */
   _shapeHides(x, y) {
+    const ch = this._shapeChar(x, y);
+    const inside = this.shape.chars ? !!ch && ch !== ' ' : ch === '#';
+    return this.shape.pol === 'positivo' ? !inside : inside;
+  }
+
+  /** Carácter de la grilla que cae en (x, y). Silueta: celdas 1 × 2 que cubren el alto del muro.
+   *  Letras: una letra por celda del muro, centrada. */
+  _shapeChar(x, y) {
     const S = this.shape, B = this.backdrop;
-    const gh = B.top - B.bottom, cellH = gh / S.gh, cellW = cellH / 2;
-    const gwW = cellW * S.gw, cx = (B.x0 + B.x1) / 2;
-    const gx = Math.floor((x - (cx - gwW / 2)) / cellW), gy = Math.floor((B.top - y) / cellH);
-    const inside = gx >= 0 && gx < S.gw && gy >= 0 && gy < S.gh && S.grid[gy][gx] === '#';
-    return S.pol === 'positivo' ? !inside : inside;
+    let gx, gy;
+    if (S.chars) {
+      gx = Math.floor((x - ((B.x0 + B.x1) / 2 - (S.gw * B.cw) / 2)) / B.cw);
+      gy = Math.floor((B.top - y) / B.rh - (B.rowsN - S.gh) / 2);
+    } else {
+      const cellH = (B.top - B.bottom) / S.gh, cellW = cellH / 2;
+      gx = Math.floor((x - ((B.x0 + B.x1) / 2 - (cellW * S.gw) / 2)) / cellW);
+      gy = Math.floor((B.top - y) / cellH);
+    }
+    return gx >= 0 && gy >= 0 && gy < S.gh ? S.grid[gy][gx] || null : null;
   }
 
   _bdBuild() {
@@ -1316,11 +1331,12 @@ export class TypeField {
       for (let q = 0, qn = Math.max(70, Math.round(1000 * step)); q < qn && B.rw < B.cells.length; q++, B.rw++) {
         const c = B.cells[B.rw];
         c.ch = B.next[B.rw] || ' ';
-        if (c.i < 0) continue;
+        if (c.i < 0 || this.shape?.chars) continue; // con arte de letras, la celda muestra la letra de la imagen
         if (c.ch === ' ') this._bdDrop(c, t);
         else {
           this.slot[c.i] = this.atlas.slot(c.ch, B.kind);
           this.birth[c.i] = t;
+          c.shown = c.ch;
         }
       }
       if (B.rw >= B.cells.length) B.next = null;
@@ -1355,7 +1371,15 @@ export class TypeField {
           this.metaDirty = true;
         }
       }
-      if (c.i < 0 && c.ch !== ' ' && j < limit && t >= c.at && budget-- > 0) this._bdPlace(c, t);
+      // arte de letras: la celda muestra la letra de la imagen (cambia con un salto)
+      const want = this.shape?.chars ? this._shapeChar(c.x, c.y) || ' ' : c.ch;
+      if (c.i >= 0 && c.shown !== want && want !== ' ') {
+        this.slot[c.i] = this.atlas.slot(want, B.kind);
+        this.birth[c.i] = t;
+        c.shown = want;
+        this.metaDirty = true;
+      }
+      if (c.i < 0 && want !== ' ' && (j < limit || this.shape?.chars) && t >= c.at && budget-- > 0) this._bdPlace(c, t, want);
     }
     // letras que se desprenden y caen (más con la voz fuerte)
     const rate = (0.8 + 5 * this.phys.intensidad + 14 * this.rms) * step;
@@ -1382,6 +1406,7 @@ export class TypeField {
       else {
         this.slot[c.i] = this.atlas.slot(ch, B.kind);
         this.birth[c.i] = t; // destello
+        c.shown = ch;
         this.talpha[c.i] = 1;
       }
     }
@@ -1390,7 +1415,7 @@ export class TypeField {
     this.metaDirty = true;
   }
 
-  _bdPlace(c, t) {
+  _bdPlace(c, t, ch = c.ch) {
     const B = this.backdrop;
     const i = this._allocParticle(false);
     if (i < 0) return;
@@ -1408,7 +1433,8 @@ export class TypeField {
     this.tsize[i] = B.size;
     this.size[i] = B.size;
     this.talpha[i] = 0.82;
-    this.pslot[i] = this.atlas.slot(c.ch, B.kind);
+    this.pslot[i] = this.atlas.slot(ch, B.kind);
+    c.shown = ch;
     this.ptint[i] = 0;
     this.paccent[i] = 0;
     this.delay[i] = t + Math.random() * 0.4;

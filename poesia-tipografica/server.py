@@ -228,7 +228,7 @@ class SettingsStore:
 
     KEYS = ("device", "artists", "loop", "prompt_estetica", "avisos", "pointcloud", "profundidad", "nube", "orbita",
             "curaduria", "imagenes", "prompt_grilla", "polaridad", "director", "cadencia", "estilos", "glitch_ambiente", "ascii_filas",
-            "marca", "muro", "formato", "canal", "forma_grilla",
+            "marca", "muro", "formato", "canal", "forma_grilla", "grilla_preset",
             # marcas de migración: que una corrección automática se aplique una sola vez (y no pise lo elegido)
             "imagenes_v4", "imagenes_v5", "loop_grupos_v2", "loop_flat_v3", "loop_flat_v4")
 
@@ -1209,32 +1209,159 @@ IMAGES_LIBRARY = f"""Imágenes CURADAS: cada estrofa produce una imagen (modo_vi
 
 # Imágenes en GRILLA DE TEXTO: el modelo devuelve la silueta como texto (# = figura, . = fondo); el programa la
 # compone con las palabras dichas, en positivo (la figura hecha de palabras) o en negativo (hueco en el muro).
-GRID_W, GRID_H = 48, 26
-IMAGES_GRID = f"""Imágenes en GRILLA DE TEXTO: cada estrofa DEBE producir una imagen. modo_visual es "concreto" o "hibrido".
-Agrega la clave "grilla": una lista de EXACTAMENTE {GRID_H} cadenas de EXACTAMENTE {GRID_W}
-caracteres cada una, usando SOLO "#" (figura) y "." (fondo). Además, en svg_paths, 1 a 3 paths cerrados que dibujen la
-MISMA silueta rellena (respaldo si la grilla falla; 40 comandos como máximo en total). Cada carácter es una celda el doble de alta que ancha:
-dibuja la figura más ancha de lo que parece en texto para que no quede estirada. Una sola silueta, rellena (no sólo el
-contorno), sin texto ni letras dentro de la grilla. En "figura" escribe el concepto dibujado."""
-IMAGES_GRID_EMOJI = """Imágenes como SILUETA DE EMOJI: cada estrofa DEBE producir una imagen (modo_visual "concreto" o
-"hibrido"). Deja svg_paths como []. Agrega la clave "emoji": UN solo emoji estándar (un carácter, sin tono de piel,
-sin banderas ni combinaciones) cuya SILUETA en negro, sin colores, se reconozca al instante como el concepto elegido.
-Prefiere emojis de contorno inconfundible: 🌳 árbol, 🐦 pájaro, 🌙 luna, ✋ mano, 🔥 fuego, 🗝 llave, 🏠 casa, 🐟 pez,
-🌹 rosa, 🦋 mariposa, 🐎 caballo, ⛵ barco, 🍂 hoja, 💀 calavera, 🕊 paloma, ☂ paraguas, 🪶 pluma, 🐚 caracol, 🌊 ola.
-Evita los que sin color son una mancha redonda o cuadrada (caras 😀, ⚽, 🍊, 📦, 🌕, 📱). En "figura" escribe el
-concepto en una o dos palabras."""
-GRID_POLARITY = """Agrega la clave "polaridad": "positivo" (la figura queda hecha de palabras sobre negro) o "negativo"
-(la figura es un hueco negro calado en un muro de palabras). Elige según la estrofa y alterna."""
+GRID_W, GRID_H = 48, 26          # grilla dibujada por el LLM (celda 1 × 2: el doble de alta que ancha)
+LETTER_W, LETTER_H = 64, 30      # arte ASCII con las letras transcriptas (celda ≈ 1 × 1,5, como las letras del muro)
 
-# Parte estética de la grilla: editable desde el panel C.
-DEFAULT_GRID_AESTHETIC = """- Elige UN concepto concreto y dibujable que nazca de lo dicho (un objeto, un animal, una parte del cuerpo, un
-  elemento de la naturaleza); si la estrofa es abstracta, una metáfora visual simple de ella.
-- Silueta sintética y frontal o de perfil, de lectura inmediata a distancia, como un sello o una sombra chinesca.
-- Elige formas con una silueta característica (algo que se reconozca sólo por su sombra: un árbol, un pájaro en
-  vuelo, una mano abierta, una llave), no objetos redondos o cuadrados que sin detalles son una mancha.
-- Formas grandes y macizas, ocupando entre el 40 % y el 70 % de la grilla, centrada, con aire alrededor.
-- Sin detalles de un solo carácter, sin líneas finas sueltas ni ruido; bordes limpios.
+# ── Prompt de la grilla (limpio: sólo lo que el programa usa) ─────────────────────────────────────────
+GRID_BASE = """Eres el director de arte de «Umbral», una instalación de poesía en vivo: una persona lee en voz alta y sus
+palabras forman un muro de texto proyectado. Por cada estrofa eliges UNA imagen que nazca de lo dicho; el programa la
+compone con esas mismas palabras (en positivo, la figura hecha de palabras sobre negro; en negativo, un hueco negro
+con la forma de la figura calado en el muro).
+
+Responde SOLO con un objeto JSON válido, sin texto antes ni después, con estas claves:
+{{
+  "figura": "el concepto dibujado, una o dos palabras",
+{forma_claves}
+  "fisica": {{"modo": "lluvia_text_rain" | "enjambre_lozano" | "vortice_sandison" | "dispersion_ceniza", "intensidad": 0..1}},
+  "palabras_clave": [hasta 6 palabras de la estrofa, en minúsculas],
+  "duracion_s": 8..30{polaridad_clave}
+}}
+fisica: lluvia = caída, llanto, peso · enjambre = multitud, voces, nosotros · vórtice = tiempo, vértigo, cosmos ·
+ceniza = olvido, muerte, memoria que se borra.
+
+{forma_bloque}
+
+Cómo elegir la imagen:
+{estetica}"""
+
+FORM_EMOJI_KEYS = '  "emoji": "un solo emoji",'
+FORM_EMOJI = """Sobre "emoji": UN emoji estándar (un carácter; sin tono de piel, banderas ni combinaciones) cuya SILUETA en
+negro, sin colores, se reconozca al instante como la figura. El programa calca esa silueta. Prefiere contornos
+inconfundibles: 🌳 árbol, 🐦 pájaro, 🌙 luna, ✋ mano, 🔥 fuego, 🗝 llave, 🏠 casa, 🐟 pez, 🌹 rosa, 🦋 mariposa,
+🐎 caballo, ⛵ barco, 🍂 hoja, 💀 calavera, 🕊 paloma, ☂ paraguas, 🪶 pluma, 🐚 caracol, 🌊 ola. Evita los que sin color
+son una mancha redonda o cuadrada (caras 😀, ⚽, 🍊, 📦, 🌕, 📱)."""
+
+FORM_LETTERS_KEYS = f'  "grilla": [{LETTER_H} cadenas de {LETTER_W} caracteres],'
+FORM_LETTERS = f"""Sobre "grilla": una imagen de la figura en ARTE ASCII, EXACTAMENTE {LETTER_H} filas de {LETTER_W} caracteres,
+dibujada SÓLO con las letras del texto transcripto (las «letras disponibles» del mensaje), en MAYÚSCULAS. El espacio
+es el fondo: queda negro. No uses ningún otro signo (ni #, ni puntos, ni números si no están en el texto).
+- Cada carácter es una celda una vez y media más alta que ancha: dibuja la figura más ancha de lo que parece.
+- La figura ocupa el centro, entre la mitad y dos tercios del alto, con aire alrededor.
+- Las letras de trazo pesado (M, W, N, B, H, A, R…) marcan bordes y zonas densas; las livianas (I, L, T, J, F…),
+  los medios tonos. El contorno debe leerse con nitidez.
+- Si se puede, escribe el texto en orden de lectura dentro de la figura (izquierda→derecha, arriba→abajo)."""
+
+# Formatos para que el LLM DIBUJE la grilla (Forma = «dibujada por el LLM»). Los modelos de lenguaje pierden la
+# posición en 2D al escribir carácter por carácter; los formatos de coordenadas o de figuras geométricas suelen
+# funcionar mejor (el programa rasteriza). Se eligen en el panel C para comparar.
+GRID_PRESETS: dict[str, dict[str, Any]] = {
+    "formas": {
+        "nombre": "Figuras geométricas (recomendado)",
+        "desc": "El modelo compone la silueta con elipses, rectángulos, polígonos y trazos en un lienzo 100×100; el "
+                "programa los rasteriza. Es lo que mejor sale: trabaja con coordenadas, no con caracteres.",
+        "claves": '  "formas": [ {"tipo": "elipse"|"rect"|"poligono"|"trazo", ...}, ... ],',
+        "bloque": """Sobre "formas": construye la silueta de la figura sobre un lienzo de 100 × 100 (x de izquierda a
+derecha, y de arriba abajo), sumando y restando formas simples, como un recorte de papel:
+  {"tipo": "elipse", "cx": .., "cy": .., "rx": .., "ry": .., "restar": false}
+  {"tipo": "rect", "x": .., "y": .., "w": .., "h": .., "restar": false}
+  {"tipo": "poligono", "puntos": [[x, y], [x, y], ...], "restar": false}
+  {"tipo": "trazo", "puntos": [[x, y], ...], "grosor": 2..12}   (patas, tallos, ramas, antenas)
+Usa entre 4 y 20 formas. Piensa primero las partes (cuerpo, cabeza, alas, cola…), sus proporciones reales y dónde
+va cada una; "restar": true cala un hueco (ojo, ventana, espacio entre dedos). La figura ocupa 60–80 del alto,
+centrada.""",
+        "tokens": 1400,
+    },
+    "tramos": {
+        "nombre": "Coordenadas por fila (tramos)",
+        "desc": "Por cada fila, de qué columna a qué columna hay figura. Más preciso que dibujar con #, porque son números.",
+        "claves": '  "tramos": [[fila, desde, hasta], ...],',
+        "bloque": f"""Sobre "tramos": la silueta en una grilla de {GRID_W} columnas × {GRID_H} filas (fila 0 arriba, columna 0 a la
+izquierda; cada celda es el doble de alta que ancha). Para cada fila con figura, uno o más tramos [fila, desde,
+hasta] (columnas inclusive). Ejemplo, un rombo chico: [[3,23,24],[4,21,26],[5,19,28],[6,21,26],[7,23,24]].
+Recorre la figura de arriba abajo pensando su ancho en cada altura; la figura ocupa 16–22 filas, centrada.""",
+        "tokens": 1800,
+    },
+    "filas": {
+        "nombre": "Filas de # y . (clásico)",
+        "desc": "La grilla escrita tal cual, fila por fila. Simple, pero el modelo suele deformar o correr las filas.",
+        "claves": f'  "grilla": [{GRID_H} cadenas de {GRID_W} caracteres],',
+        "bloque": f"""Sobre "grilla": EXACTAMENTE {GRID_H} cadenas de EXACTAMENTE {GRID_W} caracteres, sólo "#" (figura) y "." (fondo).
+Cada carácter es una celda el doble de alta que ancha: dibuja la figura más ancha de lo que parece en texto. Una
+sola silueta rellena (no sólo el contorno), centrada, con aire alrededor; bordes limpios, sin celdas sueltas.""",
+        "tokens": 1600,
+    },
+    "numeradas": {
+        "nombre": "Filas numeradas con regla",
+        "desc": "Como el clásico, pero cada fila lleva su número y hay una regla de columnas: ayuda al modelo a no perder la cuenta.",
+        "claves": f'  "grilla": [{GRID_H} cadenas "NN|" + {GRID_W} caracteres],',
+        "bloque": f"""Sobre "grilla": {GRID_H} filas; cada una empieza con su número de dos cifras y una barra, seguido de
+EXACTAMENTE {GRID_W} caracteres "#" (figura) o "." (fondo). Regla de columnas (no la incluyas):
+   000000000011111111112222222222333333333344444444
+   012345678901234567890123456789012345678901234567
+Ejemplo de fila: "07|..........######..............######..........".
+Antes de cada fila, piensa qué ancho tiene la figura a esa altura y en qué columnas empieza y termina. Celdas el doble
+de altas que anchas; silueta rellena y centrada.""",
+        "tokens": 1800,
+    },
+    "plan": {
+        "nombre": "Plan y después dibujo",
+        "desc": "El modelo primero describe las partes y sus proporciones (\"plan\") y recién después dibuja la grilla.",
+        "claves": f'  "plan": "partes, proporciones y posición de cada una",\n  "grilla": [{GRID_H} cadenas de {GRID_W} caracteres],',
+        "bloque": f"""Primero escribe en "plan" la silueta en palabras: qué partes tiene, su tamaño relativo y en qué filas y
+columnas va cada una (por ejemplo: «cabeza: filas 3–8, columnas 20–28; cuerpo: filas 8–18…»). Después dibuja en
+"grilla" EXACTAMENTE {GRID_H} cadenas de {GRID_W} caracteres "#" (figura) y "." (fondo) siguiendo ese plan al pie de la
+letra. Celdas el doble de altas que anchas; silueta rellena, centrada, bordes limpios.""",
+        "tokens": 2000,
+    },
+    "densidad": {
+        "nombre": "Arte ASCII con rampa de densidad",
+        "desc": "ASCII clásico con escala de tonos \" .:-=+*#%@\"; el programa toma los tonos oscuros como figura.",
+        "claves": f'  "grilla": [{GRID_H} cadenas de {GRID_W} caracteres],',
+        "bloque": f"""Sobre "grilla": arte ASCII de EXACTAMENTE {GRID_H} filas × {GRID_W} columnas con la rampa de densidad
+" .:-=+*#%@" (de vacío a lleno). La figura en tonos densos (+ * # % @), el fondo en espacio; usa los tonos medios sólo
+para el borde, como un sombreado. Cada carácter es una celda el doble de alta que ancha. Fuerte contraste figura /
+fondo, silueta inconfundible, centrada.""",
+        "tokens": 1800,
+    },
+}
+DEFAULT_GRID_PRESET = "formas"
+
+GRID_POLARITY = """Sobre "polaridad": "positivo" (la figura queda hecha de palabras sobre negro) o "negativo" (la figura es
+un hueco negro en el muro). Elige según la estrofa y alterna."""
+
+# Parte estética: editable desde el panel C (sección Grilla de texto). Vale para las tres formas.
+DEFAULT_GRID_AESTHETIC = """- Un concepto concreto que nazca de lo dicho: un objeto, un animal, una parte del cuerpo, un elemento de la
+  naturaleza. Si la estrofa es abstracta, una metáfora visual simple de ella.
+- Que se reconozca sólo por su sombra, de lejos: perfil o frente característico, como un sello o una sombra chinesca
+  (un pájaro en vuelo, una mano abierta, una llave, un árbol). Nada que sin detalles sea una mancha redonda o cuadrada.
 - Varía de una estrofa a otra: no repitas la figura anterior."""
+
+
+def grid_form_parts(forma: str, preset: str) -> tuple[str, str, int]:
+    """(claves JSON, bloque de instrucciones, max_tokens) de la forma elegida."""
+    if forma == "emoji":
+        return FORM_EMOJI_KEYS, FORM_EMOJI, 500
+    if forma == "letras":
+        return FORM_LETTERS_KEYS, FORM_LETTERS, 2600
+    p = GRID_PRESETS.get(preset) or GRID_PRESETS[DEFAULT_GRID_PRESET]
+    return p["claves"], p["bloque"], int(p["tokens"])
+
+
+def build_grid_prompt(forma: str, preset: str, aesthetic: str | None, curaduria: str | None,
+                      polaridad: str) -> str:
+    claves, bloque, _ = grid_form_parts(forma, preset)
+    pol = polaridad == "llm" and forma != "letras"
+    text = GRID_BASE.format(forma_claves=claves, forma_bloque=bloque,
+                            polaridad_clave=',\n  "polaridad": "positivo" | "negativo"' if pol else "",
+                            estetica=(aesthetic or "").strip() or DEFAULT_GRID_AESTHETIC)
+    if pol:
+        text += "\n\n" + GRID_POLARITY
+    cur = (curaduria or "").strip()
+    if cur:
+        text += ("\n\nTEXTO CURATORIAL de la muestra (guía principal: cada figura debe poder leerse desde aquí):\n«"
+                 + cur + "»")
+    return text
+
 
 # Parte estética: editable en vivo desde el panel C del frontend (se guarda en settings.local.json).
 DEFAULT_AESTHETIC = """- "concreto": la figura se dibuja nítida con las letras (caligrama, ASCII, glitch o marca).
@@ -1255,16 +1382,10 @@ STYLE_HELP = {
 
 
 def build_system_prompt(aesthetic: str | None, curaduria: str | None = None, imagenes: str = "llm",
-                        estilos: list[str] | None = None, grid_aesthetic: str | None = None,
-                        polaridad: str = "alternar", forma: str = "emoji") -> str:
+                        estilos: list[str] | None = None) -> str:
+    """Prompt de los modos caligrama / curadas. La grilla usa build_grid_prompt (más corto y limpio)."""
     text = (aesthetic or "").strip() or DEFAULT_AESTHETIC
-    if imagenes == "grilla":
-        parts = [SCHEMA_PROMPT, IMAGES_GRID_EMOJI if forma == "emoji" else IMAGES_GRID]
-        if polaridad == "llm":
-            parts.append(GRID_POLARITY)
-        parts.append("Estética de la grilla:\n" + ((grid_aesthetic or "").strip() or DEFAULT_GRID_AESTHETIC))
-    else:
-        parts = [SCHEMA_PROMPT, IMAGES_LIBRARY if imagenes == "biblioteca" else IMAGES_LIVE]
+    parts = [SCHEMA_PROMPT, IMAGES_LIBRARY if imagenes == "biblioteca" else IMAGES_LIVE]
     est = [e for e in (estilos or []) if e in STYLE_HELP]
     if len(est) > 1:
         parts.append('Agrega la clave "estilo" con uno de ' + str(est) + ". Elige el que la estrofa pida y alterna:\n"
@@ -1483,6 +1604,149 @@ def check_grid(raw: Any) -> tuple[list[str] | None, str]:
     if filled > 0.9:
         return None, f"grilla casi llena ({filled:.0%}): sin figura reconocible"
     return out, ""
+
+
+def grid_from_preset(raw: Any, preset: str) -> tuple[list[str] | None, str]:
+    """Convierte la respuesta del LLM según el formato elegido en una grilla '#'/'.' de GRID_H × GRID_W."""
+    if not isinstance(raw, dict):
+        return None, "respuesta no es un objeto JSON"
+    if preset == "formas":
+        return _grid_from_shapes(raw.get("formas"))
+    if preset == "tramos":
+        spans = raw.get("tramos")
+        if not isinstance(spans, list) or not spans:
+            return None, "el modelo no devolvió «tramos»"
+        bits = [["."] * GRID_W for _ in range(GRID_H)]
+        for sp in spans:
+            try:
+                r, a, b = int(sp[0]), int(sp[1]), int(sp[2])
+            except (TypeError, ValueError, IndexError):
+                continue
+            if 0 <= r < GRID_H:
+                for c in range(max(0, min(a, b)), min(GRID_W, max(a, b) + 1)):
+                    bits[r][c] = "#"
+        return check_grid(["".join(r) for r in bits])
+    rows = raw.get("grilla")
+    if preset == "numeradas" and isinstance(rows, list):
+        rows = [re.sub(r"^\s*\d+\s*[|:]", "", str(r)).rstrip("|") for r in rows]
+    if preset == "densidad" and isinstance(rows, list):
+        ramp = " .:-=+*#%@"
+        rows = ["".join("#" if (ch in ramp and ramp.index(ch) >= 5) or (ch not in ramp and ch.isalnum()) else "."
+                        for ch in str(r)) for r in rows]
+    return check_grid(rows)
+
+
+def _grid_from_shapes(shapes: Any) -> tuple[list[str] | None, str]:
+    """Rasteriza figuras geométricas (lienzo 100 × 100) en la grilla de celdas 1 × 2."""
+    if not isinstance(shapes, list) or not shapes:
+        return None, "el modelo no devolvió «formas»"
+    # la grilla de GRID_W × GRID_H celdas (1 × 2) es casi cuadrada: se mapea al lienzo 100 × 100
+    side = max(GRID_W / 2, GRID_H)
+    ox, oy = (side - GRID_W / 2) / 2, (side - GRID_H) / 2
+
+    def f(v: Any, d: float = 0.0) -> float:
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return d
+
+    def inside(sh: dict[str, Any], x: float, y: float) -> bool:
+        t = str(sh.get("tipo", "")).lower()
+        if t.startswith("elip") or t.startswith("circ"):
+            rx = max(0.5, f(sh.get("rx", sh.get("r", 0)))); ry = max(0.5, f(sh.get("ry", sh.get("r", rx))))
+            return ((x - f(sh.get("cx"))) / rx) ** 2 + ((y - f(sh.get("cy"))) / ry) ** 2 <= 1
+        if t.startswith("rect"):
+            x0, y0 = f(sh.get("x")), f(sh.get("y"))
+            return x0 <= x <= x0 + f(sh.get("w")) and y0 <= y <= y0 + f(sh.get("h"))
+        pts = sh.get("puntos") or []
+        try:
+            pts = [(float(p[0]), float(p[1])) for p in pts]
+        except (TypeError, ValueError, IndexError):
+            return False
+        if t.startswith("pol") and len(pts) >= 3:
+            hit = False
+            for k in range(len(pts)):
+                (x1, y1), (x2, y2) = pts[k], pts[k - 1]
+                if (y1 > y) != (y2 > y) and x < (x2 - x1) * (y - y1) / ((y2 - y1) or 1e-9) + x1:
+                    hit = not hit
+            return hit
+        if t.startswith("traz") or t.startswith("lin"):
+            g = max(1.0, f(sh.get("grosor"), 3)) / 2
+            for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
+                dx, dy = x2 - x1, y2 - y1
+                L = dx * dx + dy * dy
+                u = 0 if L == 0 else max(0.0, min(1.0, ((x - x1) * dx + (y - y1) * dy) / L))
+                if (x - x1 - u * dx) ** 2 + (y - y1 - u * dy) ** 2 <= g * g:
+                    return True
+        return False
+
+    shapes = [s for s in shapes if isinstance(s, dict)][:40]
+    rows = []
+    for gy in range(GRID_H):
+        line = []
+        for gx in range(GRID_W):
+            x = ((gx + 0.5) / 2 + ox) / side * 100
+            y = (gy + 0.5 + oy) / side * 100
+            on = False
+            for sh in shapes:  # en orden: lo que se resta después calada lo anterior
+                if inside(sh, x, y):
+                    on = not bool(sh.get("restar"))
+            line.append("#" if on else ".")
+        rows.append("".join(line))
+    return check_grid(rows)
+
+
+def letters_of(text: str) -> str:
+    """Letras disponibles (mayúsculas, sin repetir, en orden de aparición) del texto transcripto."""
+    seen: list[str] = []
+    for ch in (text or "").upper():
+        if ch.isalpha() and ch not in seen:
+            seen.append(ch)
+    return "".join(seen)
+
+
+def clean_letters(raw: Any, text: str) -> tuple[list[str] | None, str]:
+    """Arte ASCII hecho sólo con las letras transcriptas → LETTER_H filas × LETTER_W, espacio = fondo.
+    Un signo que no está en el texto se reemplaza por la letra que toca del texto (en orden de lectura)."""
+    rows = _grid_rows(raw)
+    if not rows:
+        return None, "el modelo no devolvió «grilla»"
+    allowed = set(letters_of(text))
+    if not allowed:
+        return None, "no hay letras transcriptas todavía"
+    stream = [ch for ch in (text or "").upper() if ch.isalpha()]
+    k = 0
+    out = []
+    for r in rows[:LETTER_H + 6]:
+        line = []
+        for ch in str(r).upper()[:LETTER_W + 8]:
+            if ch in " .·_-":
+                line.append(" ")
+            elif ch in allowed:
+                line.append(ch)
+            else:
+                line.append(stream[k % len(stream)])
+                k += 1
+        out.append("".join(line))
+    # recortar a la figura y centrar en LETTER_H × LETTER_W (sin escalar: las letras son las elegidas)
+    ys = [i for i, r in enumerate(out) if r.strip()]
+    if not ys:
+        return None, "la grilla vino vacía"
+    out = out[ys[0]:ys[-1] + 1]
+    x0 = min(len(r) - len(r.lstrip()) for r in out if r.strip())
+    out = [r[x0:].rstrip() for r in out]
+    w = max(len(r) for r in out)
+    if len(out) > LETTER_H or w > LETTER_W:
+        out = [r[:LETTER_W] for r in out[:LETTER_H]]
+        w = min(w, LETTER_W)
+    pad_t = (LETTER_H - len(out)) // 2
+    pad_l = (LETTER_W - w) // 2
+    grid = [" " * LETTER_W] * pad_t + [(" " * pad_l + r).ljust(LETTER_W) for r in out]
+    grid += [" " * LETTER_W] * (LETTER_H - len(grid))
+    filled = sum(len(r.replace(" ", "")) for r in grid) / (LETTER_W * LETTER_H)
+    if filled < 0.015:
+        return None, f"figura demasiado chica ({filled:.0%})"
+    return grid, ""
 
 
 def clean_grid(raw: Any) -> list[str] | None:
@@ -1727,32 +1991,52 @@ class ArtDirector:
             await self.http.aclose()
 
     def _messages(self, text: str, mode: str | None = None) -> list[dict[str, str]]:
+        mode = mode or self._images_mode()
+        st = self.settings or {}
         context = " / ".join(self.history) if self.history else "(inicio del poema)"
+        if mode == "grilla":
+            forma = self._grid_form()
+            user = (f"Versos anteriores: {context}\nEstrofa actual (versos separados por /): «{text}»\n"
+                    "Una sola imagen para toda la estrofa. Devuelve sólo el JSON.")
+            if forma == "letras":
+                corpus = self._letters_text(text)
+                user += (f"\n\nTexto transcripto (la imagen se dibuja sólo con estas letras): «{corpus}»"
+                         f"\nLetras disponibles: {' '.join(letters_of(corpus))}")
+            prompt = build_grid_prompt(forma, self._grid_preset(), st.get("prompt_grilla"), st.get("curaduria"),
+                                       st.get("polaridad") or "alternar")
+            return [{"role": "system", "content": prompt}, {"role": "user", "content": user}]
         recent = ", ".join(self.modes) if self.modes else "ninguno"
         user = (f"Versos anteriores: {context}\nModos visuales recientes: {recent}\n"
                 f"Estrofa actual (versos separados por /): «{text}»\nUna sola imagen para toda la estrofa. "
                 f"Devuelve sólo el JSON.")
-        st = self.settings
-        est = (st.get("estilos") or {}) if st else {}
+        est = st.get("estilos") or {}
         allowed = est.get("activos") if est.get("modo", "llm") == "llm" else None
-        prompt = build_system_prompt(st.get("prompt_estetica") if st else None, st.get("curaduria") if st else None,
-                                     mode or self._images_mode(), allowed, st.get("prompt_grilla") if st else None,
-                                     (st.get("polaridad") or "alternar") if st else "alternar", self._grid_form())
+        prompt = build_system_prompt(st.get("prompt_estetica"), st.get("curaduria"), mode, allowed)
         return [{"role": "system", "content": prompt}, {"role": "user", "content": user}]
+
+    def _letters_text(self, text: str) -> str:
+        """Lo transcripto con que se dibuja en «letras»: lo último dicho, hasta ~400 caracteres."""
+        return (" / ".join(list(self.history)[-4:] + [text]) if self.history else text)[-400:]
 
     def _images_mode(self) -> str:
         mode = (self.settings or {}).get("imagenes") or "grilla"
         return mode if mode in ("biblioteca", "llm", "grilla") else "grilla"
 
     def _grid_form(self) -> str:
-        """Grilla: «emoji» = el LLM elige un emoji y se calca su silueta (reconocible) · «llm» = el LLM la dibuja."""
-        return "llm" if (self.settings or {}).get("forma_grilla") == "llm" else "emoji"
+        """Grilla: «emoji» (se calca la silueta) · «llm» (el LLM la dibuja, ver GRID_PRESETS) · «letras» (ASCII con
+        las letras transcriptas)."""
+        f = (self.settings or {}).get("forma_grilla")
+        return f if f in ("emoji", "llm", "letras") else "emoji"
+
+    def _grid_preset(self) -> str:
+        p = (self.settings or {}).get("grilla_preset")
+        return p if p in GRID_PRESETS else DEFAULT_GRID_PRESET
 
     def _max_tokens(self, mode: str | None = None) -> int:
         mode = mode or self._images_mode()
-        if mode == "biblioteca" or (mode == "grilla" and self._grid_form() == "emoji"):
-            return 700
-        return 2600  # dibujar SVG o la grilla necesita más salida
+        if mode == "grilla":
+            return grid_form_parts(self._grid_form(), self._grid_preset())[2]
+        return 700 if mode == "biblioteca" else 2600  # dibujar SVG necesita más salida
 
     async def _ollama(self, text: str, messages: list[dict[str, str]] | None = None,
                       max_tokens: int | None = None) -> Any:
@@ -1820,12 +2104,8 @@ class ArtDirector:
                 if self.hub.status.get("llm") != name:
                     self.hub.set_status(llm=name)
                 direction = sanitize_direction(raw, text, list(self.modes))
-                if mode == "grilla" and self._grid_form() == "emoji":
-                    if not direction.get("emoji"):
-                        direction["grilla_problema"] = "el modelo no devolvió «emoji»"
-                elif mode == "grilla" and not direction.get("grilla"):
-                    direction.setdefault("grilla_problema", "el modelo no devolvió «grilla»")
-                    await self._retry_grid(fn, direction, text)
+                if mode == "grilla":
+                    await self._grid_of(fn, raw, direction, text)
                 return self._always_image(direction), name
             except Exception as exc:
                 log.warning("LLM %s falló: %s", name, exc)
@@ -1833,27 +2113,48 @@ class ArtDirector:
             self.hub.set_status(llm="heuristic")
         return self._always_image(heuristic_direction(text, list(self.modes))), "heuristic"
 
-    async def _retry_grid(self, fn: Callable[..., Awaitable[Any]], direction: dict[str, Any], text: str) -> None:
-        """Segundo intento, sólo la grilla: pedido corto y enfocado (a menor resolución, que el modelo dibuja mejor)."""
-        concept = direction.get("figura_libre") or direction.get("figura") or "luna"
-        st = self.settings or {}
-        aesthetic = (st.get("prompt_grilla") or "").strip() or DEFAULT_GRID_AESTHETIC
-        w, h = GRID_W // 2, GRID_H // 2
-        system = (f"Dibujas siluetas como arte ASCII. Responde SOLO con JSON: {{\"grilla\": [{h} cadenas de {w} "
-                  f"caracteres]}} usando \"#\" para la figura y \".\" para el fondo. Cada carácter es una celda el doble "
-                  f"de alta que ancha. Una sola silueta maciza, centrada, reconocible.\nEstética:\n{aesthetic}")
-        user = f"Dibuja: «{concept}» (nace de estos versos: «{text[:300]}»)."
-        try:
-            raw = await fn(text, [{"role": "system", "content": system}, {"role": "user", "content": user}], 900)
-            grid, why = check_grid(raw if isinstance(raw, dict) else {"grilla": raw})
-        except Exception as exc:  # noqa: BLE001
-            grid, why = None, f"reintento falló: {exc}"
+    async def _grid_of(self, fn: Callable[..., Awaitable[Any]], raw: Any, direction: dict[str, Any],
+                       text: str) -> None:
+        """Interpreta la respuesta según la forma elegida; si no sirve, un segundo pedido sólo de la forma."""
+        forma, preset = self._grid_form(), self._grid_preset()
+        direction.pop("grilla", None)
+        direction.pop("grilla_problema", None)
+        direction["forma"] = forma
+        if forma == "emoji":
+            if not direction.get("emoji"):
+                direction["grilla_problema"] = "el modelo no devolvió «emoji»"
+            return
+        corpus = self._letters_text(text)
+
+        def parse(r: Any) -> tuple[list[str] | None, str]:
+            if forma == "letras":
+                return clean_letters(r.get("grilla") if isinstance(r, dict) else r, corpus)
+            return grid_from_preset(r, preset)
+
+        grid, why = parse(raw)
+        if not grid:
+            # segundo intento: sólo la forma, con el mismo formato y la misma estética
+            concept = direction.get("figura_libre") or direction.get("figura") or "luna"
+            st = self.settings or {}
+            claves, bloque, tokens = grid_form_parts(forma, preset)
+            system = ("Responde SOLO con un objeto JSON válido, con la clave:\n{\n" + claves.rstrip(",") + "\n}\n\n"
+                      + bloque + "\n\nEstética:\n" + ((st.get("prompt_grilla") or "").strip() or DEFAULT_GRID_AESTHETIC))
+            user = f"Figura: «{concept}» (nace de estos versos: «{text[:300]}»)."
+            if forma == "letras":
+                user += f"\nTexto transcripto: «{corpus}»\nLetras disponibles: {' '.join(letters_of(corpus))}"
+            try:
+                raw2 = await fn(text, [{"role": "system", "content": system}, {"role": "user", "content": user}], tokens)
+                grid, why2 = parse(raw2)
+            except Exception as exc:  # noqa: BLE001
+                grid, why2 = None, f"falló: {exc}"
+            if grid:
+                direction["grilla_origen"] = "reintento"
+            else:
+                why = f"{why}; reintento: {why2}"
         if grid:
-            direction["grilla"] = grid
-            direction["grilla_origen"] = "reintento"
-            direction.pop("grilla_problema", None)
+            direction["grilla_letras" if forma == "letras" else "grilla"] = grid
         else:
-            direction["grilla_problema"] = f"{direction.get('grilla_problema')}; reintento: {why}"
+            direction["grilla_problema"] = why
 
     @staticmethod
     def _always_image(direction: dict[str, Any]) -> dict[str, Any]:
@@ -1908,6 +2209,8 @@ async def main_async(args: argparse.Namespace) -> None:
 
     hub.hello_extra = lambda: {"settings": settings.data, "default_prompt": DEFAULT_AESTHETIC,
                                      "default_prompt_grilla": DEFAULT_GRID_AESTHETIC, "key": key_status(),
+                               "grid_presets": [{"id": k, "nombre": v["nombre"], "desc": v["desc"]}
+                                                for k, v in GRID_PRESETS.items()],
                                "user_dir": USER_DIR,
                                "grabacion": recorder.info() if recorder else None,
                                "session": hub.session}
@@ -1992,12 +2295,17 @@ async def main_async(args: argparse.Namespace) -> None:
             except Exception as exc:  # nunca tumbar el servidor por una prueba
                 await hub.reply(ws, "grid_test", ok=False, error=str(exc))
                 return
-            await hub.reply(ws, "grid_test", ok=bool(direction.get("grilla") or direction.get("emoji")), provider=provider, text=text,
+            await hub.reply(ws, "grid_test", ok=bool(direction.get("grilla") or direction.get("emoji") or direction.get("grilla_letras")), provider=provider, text=text,
                             problema=direction.get("grilla_problema", ""),
                             ms=int((time.perf_counter() - t0) * 1000), direction=direction)
         elif kind == "get_settings":
             await hub.reply(ws, "settings", settings=settings.data, default_prompt=DEFAULT_AESTHETIC,
                             default_prompt_grilla=DEFAULT_GRID_AESTHETIC)
+        elif kind == "get_prompt":  # panel C: ver exactamente lo que se le manda al LLM
+            text = str(msg.get("text", "")).strip()[:600] or "la luna se moja en el agua quieta del patio"
+            msgs = director._messages(text, "grilla")
+            await hub.reply(ws, "prompt_preview", system=msgs[0]["content"], user=msgs[1]["content"],
+                            max_tokens=director._max_tokens("grilla"))
 
     hub.on_message = on_frontend
     tasks: list[Awaitable[Any]] = [director.run()]
@@ -2338,6 +2646,9 @@ async def run_check() -> None:
         if d.get("grilla"):
             dibujo = f"grilla de texto «{d.get('figura_libre') or d.get('figura')}»"
             print("\n".join("    " + r for r in d["grilla"]))
+        elif d.get("grilla_letras"):
+            dibujo = f"arte ASCII con las letras transcriptas «{d.get('figura_libre') or d.get('figura')}»"
+            print("\n".join("    " + r for r in d["grilla_letras"]))
         elif d.get("grilla_problema"):
             print(f"  ⚠ la grilla del LLM no sirvió: {d['grilla_problema']}")
         mark = "✓" if prov != "heuristic" else "⚠"

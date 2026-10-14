@@ -137,9 +137,12 @@ async function boot() {
       const fromLib = () =>
         fromEmoji(LIB_EMOJI[lib], `biblioteca (${lib} ${LIB_EMOJI[lib]}) → grilla`) || { grid: maskToGrid(sampleFigure(SHAPES[lib], {})), origen: `biblioteca (${lib}) → grilla` };
       const emo = () => (raw.emoji ? fromEmoji(raw.emoji, `emoji ${raw.emoji} → grilla`) : null);
-      const pick = (settings.forma_grilla === 'llm' ? [() => llmGrid, fromSvg, emo] : [emo, () => llmGrid, fromSvg]).reduce((a, f) => a || f(), null) || fromLib();
+      // «letras»: arte ASCII hecho con las letras transcriptas; se muestra tal cual (sólo positivo)
+      const letras = Array.isArray(raw.grilla_letras) && raw.grilla_letras.length ? { grid: raw.grilla_letras, origen: `letras transcriptas (ASCII)${raw.grilla_origen === 'reintento' ? ' · 2.º intento' : ''}`, chars: true } : null;
+      const order = settings.forma_grilla === 'llm' ? [() => llmGrid, fromSvg, emo] : [emo, () => llmGrid, fromSvg];
+      const pick = [() => letras, ...order].reduce((a, f) => a || f(), null) || fromLib();
       const grid = pick.grid, origen = pick.origen;
-      const pol = choosePolarity(dir);
+      const pol = pick.chars ? 'positivo' : choosePolarity(dir);
       lastGrid = grid ? { grid, origen, pol } : null;
       // el contorno de la forma va en el color de acento de la marca
       field.edgeAccent = settings.contorno_acento !== false;
@@ -147,7 +150,7 @@ async function boot() {
       field.releaseFigure(true);
       field.setBackdrop(true); // la ilustración se cala en el muro: tiene que estar visible
       field.refillSecs = (settings.cadencia && settings.cadencia.min_s) || 14;
-      field.setShape(grid, { polaridad: pol, duracion: Math.max(8, +dir.duracion_s || 16) });
+      field.setShape(grid, { polaridad: pol, duracion: Math.max(8, +dir.duracion_s || 16), chars: !!pick.chars });
       config.setLastDirection({ ...dir, origen: `${origen} · ${pol}`, pidio: 'grilla', estiloVisto: 'grilla' });
       debug.setDirection(dir);
       return;
@@ -408,6 +411,7 @@ async function boot() {
       config.setMicStatus(m.status || {});
       config.setDefaultPrompt(m.default_prompt);
       config.setDefaultPromptGrid(m.default_prompt_grilla);
+      if (m.grid_presets) config.setGridPresets(m.grid_presets);
       config.setUserDir(m.user_dir);
       if (m.key) {
         config.setKeyStatus(m.key);
@@ -442,6 +446,7 @@ async function boot() {
     },
     replay_settings: (m) => setSettings({ ...settings, ...(m.settings || {}) }, { persist: false }),
     replay_end: () => notify('Fin de la re-proyección'),
+    prompt_preview: (m) => config.setPromptPreview(m),
     grid_test: (m) => {
       lastGrid = null;
       // verla también en la pared: si la grilla del LLM falló, se usa su silueta SVG o la biblioteca
@@ -484,6 +489,7 @@ async function boot() {
     onSaveKey: (key) => socket.send({ type: 'set_api_key', key }),
     onOpenFolder: (que) => socket.send({ type: 'open_folder', que }),
     onTestGrid: (text) => {
+      socket.send({ type: 'save_settings', settings }); // primero lo último elegido en el panel
       if (!socket.send({ type: 'test_grid', text })) config.setGridTest({ ok: false, error: 'sin conexión con el backend' });
     },
     onPreviewStyle: (estilo) => {
@@ -503,6 +509,7 @@ async function boot() {
       show.stop();
       config.setState(show.label());
     },
+    onShowPrompt: (text) => (socket.send({ type: 'save_settings', settings }), socket.send({ type: 'get_prompt', text })) || config.setPromptPreview({ error: 'sin conexión con el backend' }),
     onScanLogos: (carpeta) => fetchLogos(carpeta).catch(() => config.setLogoCount(carpeta, 0)),
   });
   setInterval(() => config.tick(), 400);

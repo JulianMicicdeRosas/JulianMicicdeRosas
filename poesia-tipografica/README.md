@@ -158,16 +158,33 @@ queda negro. El muro de palabras, el título, los nombres y la transcripción qu
 
 ## Forma de las ilustraciones
 
-Panel C → Grilla de texto → **Forma**:
+Panel C → Grilla de texto → **Forma** (y «Ver el prompt exacto que se envía» muestra el pedido completo al LLM):
 
-- **Silueta de emoji (recomendado, por defecto)**: el LLM elige el concepto y un emoji que lo represente (🌳 🐦 ✋ 🦋
-  🔥 🗝…); el programa calca la silueta del emoji del sistema (Segoe UI Emoji en Windows, Apple Color Emoji en Mac) y
-  la compone con las palabras. Son formas diseñadas para leerse al instante; el pedido al modelo es corto y rápido.
-- **Dibujada por el LLM**: el modelo dibuja la grilla carácter a carácter (más libre, bastante menos legible).
+| Forma | Qué pide al LLM | Cómo se ve |
+| --- | --- | --- |
+| **Silueta de emoji** (por defecto) | el concepto y un emoji (🌳 🐦 ✋ 🦋…) | el programa calca la silueta del emoji del sistema y la compone con las palabras, en positivo o negativo |
+| **Dibujada por el LLM** | la silueta en el **formato** elegido (abajo) | grilla de figura/fondo, en positivo o negativo |
+| **Letras transcriptas** | una imagen en arte ASCII de 30 × 64 hecha **sólo con las letras de lo que se dijo** | se muestra tal cual, letra por letra, sobre negro (el texto es la imagen) |
 
-El muro tiene 34 filas (más resolución que antes) y el borde de la forma se dibuja con letras plenas en el color de
-acento de la marca (#ff9898). Mientras hay una ilustración casi no caen letras sueltas, para que la forma se lea limpia.
-«Probar» usa siempre la grilla y avisa si «Imágenes» está en otro modo.
+**Formatos de dibujo** (Forma = «Dibujada por el LLM»), para comparar con «Probar»:
+
+1. **Figuras geométricas** (recomendado): elipses, rectángulos, polígonos y trazos en un lienzo 100 × 100, sumando y
+   restando como un recorte de papel; el programa los rasteriza.
+2. **Coordenadas por fila (tramos)**: `[fila, desde, hasta]` por cada tramo de figura.
+3. **Filas de # y .** (clásico): la grilla escrita tal cual.
+4. **Filas numeradas con regla**: cada fila con su número y una regla de columnas para no perder la cuenta.
+5. **Plan y después dibujo**: primero describe partes, proporciones y posición; después dibuja siguiendo el plan.
+6. **Arte ASCII con rampa de densidad** `" .:-=+*#%@"`: los tonos densos se toman como figura.
+
+Por qué estos formatos: los modelos de lenguaje pierden la posición en 2D cuando escriben carácter por carácter;
+pedir coordenadas o figuras geométricas y que el programa dibuje es lo que mejor resultado da según lo publicado
+(ASCIIEval, ICLR 2026; SVE-ASCII, arXiv 2603.14505; notas sobre «code canvas» y coordenadas en lugar de dibujo).
+Los formatos 3–6 son las variantes de prompt directo más usadas, para comparar.
+
+El prompt de la grilla es corto y limpio: sólo pide lo que el programa usa (figura, la forma, física, palabras clave
+y duración). El texto de «Cómo elegir la imagen» es el editable del panel; la curaduría se agrega si existe.
+El muro tiene 34 filas, el borde de la forma va en el acento de la marca (#ff9898) y mientras hay una ilustración
+casi no caen letras sueltas.
 
 ## Si la grilla de texto falla
 

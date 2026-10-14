@@ -25,7 +25,7 @@ export const CADENCE_PRESETS = {
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 export class ConfigPanel {
-  constructor({ getSettings, onChange, onDevice, onChannel, requestDevices, onScanLogos, onSaveKey, onRecord, onStop, onPreviewStyle, defaultPrompt }) {
+  constructor({ getSettings, onChange, onDevice, onChannel, onShowPrompt, requestDevices, onScanLogos, onSaveKey, onRecord, onStop, onPreviewStyle, defaultPrompt }) {
     this.onPreviewStyle = onPreviewStyle;
     this.onOpenFolder = arguments[0].onOpenFolder;
     this.onTestGrid = arguments[0].onTestGrid;
@@ -37,6 +37,7 @@ export class ConfigPanel {
     this.onChange = onChange;
     this.onDevice = onDevice;
     this.onChannel = onChannel;
+    this.onShowPrompt = onShowPrompt;
     this.requestDevices = requestDevices;
     this.defaultPrompt = defaultPrompt || '';
     this.devices = [];
@@ -219,10 +220,16 @@ export class ConfigPanel {
         <div class="row">
           <span>Forma:</span>
           <select data-sopt="forma_grilla">
-            <option value="emoji">Silueta de emoji elegido por el LLM (recomendado: se reconoce al instante)</option>
-            <option value="llm">Dibujada por el LLM carácter a carácter (más libre, menos legible)</option>
+            <option value="emoji">Silueta de emoji elegido por el LLM (se reconoce al instante)</option>
+            <option value="llm">Dibujada por el LLM (elegir el formato abajo)</option>
+            <option value="letras">Arte ASCII sólo con las letras transcriptas (la imagen es el texto)</option>
           </select>
         </div>
+        <div class="row" data-preset-row>
+          <span>Formato del dibujo:</span>
+          <select data-sopt="grilla_preset"></select>
+        </div>
+        <p class="hint" data-preset-desc></p>
         <div class="row">
           <span>Polaridad:</span>
           <select data-sopt="polaridad">
@@ -239,6 +246,8 @@ export class ConfigPanel {
           <button data-act="test-grid">Probar</button>
         </div>
         <pre data-grid-preview class="grid-preview"></pre>
+        <div class="row"><button data-act="show-prompt">Ver el prompt exacto que se envía</button></div>
+        <pre data-prompt-preview class="grid-preview prompt-preview"></pre>
       </section>
       <section>
         <h2>Reglas visuales (avanzado)</h2>
@@ -320,7 +329,9 @@ export class ConfigPanel {
     if (document.activeElement !== cur) cur.value = s.curaduria || '';
     for (const r of this.el.querySelectorAll('input[data-sopt="imagenes"]')) r.checked = r.value === (s.imagenes || 'grilla');
     this.$('select[data-sopt="polaridad"]').value = s.polaridad || 'alternar';
-    this.$('select[data-sopt="forma_grilla"]').value = s.forma_grilla === 'llm' ? 'llm' : 'emoji';
+    const forma = ['emoji', 'llm', 'letras'].includes(s.forma_grilla) ? s.forma_grilla : 'emoji';
+    this.$('select[data-sopt="forma_grilla"]').value = forma;
+    this._renderPresets(s, forma);
     const fmt = s.formato || '1822x737';
     const fsel = this.$('select[data-formato]');
     fsel.value = [...fsel.options].some((o) => o.value === fmt) ? fmt : 'otro';
@@ -453,6 +464,31 @@ export class ConfigPanel {
     pre.textContent = u
       ? `${head}\nForma: ${u.origen} · ${u.pol}${prob}${hint}${aviso}\n\n${u.grid.join('\n')}`
       : `${head}\nSin forma.${prob}${hint}${aviso}`;
+  }
+
+  /** Formatos de dibujo de la grilla (vienen del backend: GRID_PRESETS). */
+  setGridPresets(list) {
+    this.gridPresets = list || [];
+    if (this.isOpen) this._renderPresets(this.getSettings());
+  }
+
+  _renderPresets(s, forma = s.forma_grilla || 'emoji') {
+    const sel = this.$('select[data-sopt="grilla_preset"]');
+    if (!sel) return;
+    const list = this.gridPresets || [];
+    if (sel.options.length !== list.length) sel.innerHTML = list.map((p) => `<option value="${esc(p.id)}">${esc(p.nombre)}</option>`).join('');
+    const cur = list.some((p) => p.id === s.grilla_preset) ? s.grilla_preset : list[0]?.id || '';
+    sel.value = cur;
+    this.$('[data-preset-row]').style.display = forma === 'llm' ? '' : 'none';
+    const p = list.find((x) => x.id === cur);
+    this.$('[data-preset-desc]').textContent = forma === 'llm' && p ? p.desc : forma === 'letras' ? 'El modelo dibuja la figura en arte ASCII usando sólo las letras de lo que se dijo; se muestra tal cual, en positivo, sobre negro.' : forma === 'emoji' ? 'El modelo elige un emoji para el concepto y el programa calca su silueta.' : '';
+  }
+
+  /** «Ver el prompt exacto»: system + user tal como salen hacia el LLM. */
+  setPromptPreview(m) {
+    const pre = this.$('[data-prompt-preview]');
+    if (!pre) return;
+    pre.textContent = m.error ? `Error: ${m.error}` : `── SISTEMA (max_tokens ${m.max_tokens}) ──\n${m.system}\n\n── USUARIO ──\n${m.user}`;
   }
 
   setDefaultPromptGrid(p) {
@@ -605,6 +641,7 @@ export class ConfigPanel {
     };
     if (act === 'close') this.toggle(false);
     else if (act === 'devices') this.requestDevices();
+    else if (act === 'show-prompt') this.onShowPrompt?.(this.$('[data-grid-text]')?.value || '');
     else if (act === 'add-artist') this._commit((s) => (s.artists = [...(s.artists || []), { name: '' }]));
     else if (act === 'add-step') this._commit((s) => (s.loop = [...(s.loop || []), { tipo: 'texto', contenido: '', render: 'letras', duracion: 10, letras: '' }]));
     else if (act === 'up') this._commit((s) => move(s[list], -1));
@@ -766,6 +803,7 @@ export class ConfigPanel {
       if (t.type === 'radio' && !t.checked) return;
       const k = t.dataset.sopt;
       this._commit((s) => (s[k] = t.value), false);
+      if (k === 'forma_grilla' || k === 'grilla_preset') this._renderPresets(this.getSettings());
       return;
     }
     if (t.matches('[data-curaduria]')) {

@@ -432,6 +432,7 @@ export class Show {
     this.loopToken++;
     this._hideImage();
     const f = this.field;
+    f.setBackdropHoles([]); // el hueco del logo (paso FLAT) no sigue en la performance
     if (this.state !== 'perform') {
       // desde el loop o el nombre: el título se disuelve y su nombre queda en el corpus
       f.releaseFigure(true);

@@ -508,3 +508,9 @@ body.hide-cursor * {
   overflow-x: auto;
   min-height: 1em;
 }
+
+#config .prompt-preview {
+  white-space: pre-wrap;
+  max-height: 340px;
+  overflow-y: auto;
+}
