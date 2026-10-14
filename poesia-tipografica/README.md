@@ -156,6 +156,19 @@ Panel C → **Formato de salida**: 1822 × 737 (por defecto, la pantalla del FLA
 otro («ancho x alto»). Con formato fijo todo se compone para esa proporción y se centra en la ventana; lo que sobra
 queda negro. El muro de palabras, el título, los nombres y la transcripción quedan centrados en el cuadro.
 
+## Forma de las ilustraciones
+
+Panel C → Grilla de texto → **Forma**:
+
+- **Silueta de emoji (recomendado, por defecto)**: el LLM elige el concepto y un emoji que lo represente (🌳 🐦 ✋ 🦋
+  🔥 🗝…); el programa calca la silueta del emoji del sistema (Segoe UI Emoji en Windows, Apple Color Emoji en Mac) y
+  la compone con las palabras. Son formas diseñadas para leerse al instante; el pedido al modelo es corto y rápido.
+- **Dibujada por el LLM**: el modelo dibuja la grilla carácter a carácter (más libre, bastante menos legible).
+
+El muro tiene 34 filas (más resolución que antes) y el borde de la forma se dibuja con letras plenas en el color de
+acento de la marca (#ff9898). Mientras hay una ilustración casi no caen letras sueltas, para que la forma se lea limpia.
+«Probar» usa siempre la grilla y avisa si «Imágenes» está en otro modo.
+
 ## Si la grilla de texto falla
 
 «Probar» (panel C → Grilla de texto) muestra por qué no sirvió la grilla del modelo (vacía, casi llena, formato raro…).

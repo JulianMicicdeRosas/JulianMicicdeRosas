@@ -217,6 +217,13 @@ export class ConfigPanel {
         de palabras la compone. <b>Positivo</b>: la figura hecha de palabras sobre negro. <b>Negativo</b>: la figura es
         un hueco negro en el muro. Abajo, la parte estética del pedido (el formato técnico se agrega solo).</p>
         <div class="row">
+          <span>Forma:</span>
+          <select data-sopt="forma_grilla">
+            <option value="emoji">Silueta de emoji elegido por el LLM (recomendado: se reconoce al instante)</option>
+            <option value="llm">Dibujada por el LLM carácter a carácter (más libre, menos legible)</option>
+          </select>
+        </div>
+        <div class="row">
           <span>Polaridad:</span>
           <select data-sopt="polaridad">
             <option value="alternar">Alternar positivo / negativo</option>
@@ -313,6 +320,7 @@ export class ConfigPanel {
     if (document.activeElement !== cur) cur.value = s.curaduria || '';
     for (const r of this.el.querySelectorAll('input[data-sopt="imagenes"]')) r.checked = r.value === (s.imagenes || 'grilla');
     this.$('select[data-sopt="polaridad"]').value = s.polaridad || 'alternar';
+    this.$('select[data-sopt="forma_grilla"]').value = s.forma_grilla === 'llm' ? 'llm' : 'emoji';
     const fmt = s.formato || '1822x737';
     const fsel = this.$('select[data-formato]');
     fsel.value = [...fsel.options].some((o) => o.value === fmt) ? fmt : 'otro';
@@ -431,22 +439,20 @@ export class ConfigPanel {
   setGridTest(m) {
     const pre = this.$('[data-grid-preview]');
     if (!pre) return;
-    const d = m.direction || {};
     if (m.error) {
       pre.textContent = `Error: ${m.error}`;
       return;
     }
+    const d = m.direction || {};
     const u = m.usada;
-    const head = `${d.figura_libre || d.figura || ''} · director: ${m.provider || '?'}${m.ms ? ` · ${m.ms} ms` : ''}`;
-    if (m.ok) {
-      pre.textContent = `${head} · ${u ? u.origen + ' · ' + u.pol : 'grilla del LLM'}\n\n` + d.grilla.join('\n');
-      return;
-    }
-    const why = m.problema || 'el modelo no devolvió una grilla';
+    const modo = this.getSettings().imagenes || 'grilla';
+    const aviso = modo !== 'grilla' ? `\n⚠ «Imágenes» está en «${modo}»: en vivo NO se usa la grilla. Elige «Grilla de texto» arriba.` : '';
     const hint = m.provider === 'heuristic' ? '\n(No respondió ningún LLM: revisa la clave de OpenAI con el diagnóstico.)' : '';
+    const head = `${d.figura_libre || d.figura || ''}${d.emoji ? ' ' + d.emoji : ''} · director: ${m.provider || '?'}${m.ms ? ` · ${m.ms} ms` : ''}`;
+    const prob = m.problema ? `\nAviso del modelo: ${m.problema}.` : '';
     pre.textContent = u
-      ? `${head}\nLa grilla del LLM no sirvió: ${why}.${hint}\nSe usa respaldo: ${u.origen} · ${u.pol}\n\n${u.grid.join('\n')}`
-      : `${head}\nSin grilla: ${why}.${hint}`;
+      ? `${head}\nForma: ${u.origen} · ${u.pol}${prob}${hint}${aviso}\n\n${u.grid.join('\n')}`
+      : `${head}\nSin forma.${prob}${hint}${aviso}`;
   }
 
   setDefaultPromptGrid(p) {

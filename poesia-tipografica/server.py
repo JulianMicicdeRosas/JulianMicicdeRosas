@@ -228,7 +228,9 @@ class SettingsStore:
 
     KEYS = ("device", "artists", "loop", "prompt_estetica", "avisos", "pointcloud", "profundidad", "nube", "orbita",
             "curaduria", "imagenes", "prompt_grilla", "polaridad", "director", "cadencia", "estilos", "glitch_ambiente", "ascii_filas",
-            "marca", "muro", "formato", "canal")
+            "marca", "muro", "formato", "canal", "forma_grilla",
+            # marcas de migración: que una corrección automática se aplique una sola vez (y no pise lo elegido)
+            "imagenes_v4", "imagenes_v5", "loop_grupos_v2", "loop_flat_v3", "loop_flat_v4")
 
     def __init__(self, path: str) -> None:
         self.path = path
@@ -1214,6 +1216,13 @@ caracteres cada una, usando SOLO "#" (figura) y "." (fondo). Además, en svg_pat
 MISMA silueta rellena (respaldo si la grilla falla; 40 comandos como máximo en total). Cada carácter es una celda el doble de alta que ancha:
 dibuja la figura más ancha de lo que parece en texto para que no quede estirada. Una sola silueta, rellena (no sólo el
 contorno), sin texto ni letras dentro de la grilla. En "figura" escribe el concepto dibujado."""
+IMAGES_GRID_EMOJI = """Imágenes como SILUETA DE EMOJI: cada estrofa DEBE producir una imagen (modo_visual "concreto" o
+"hibrido"). Deja svg_paths como []. Agrega la clave "emoji": UN solo emoji estándar (un carácter, sin tono de piel,
+sin banderas ni combinaciones) cuya SILUETA en negro, sin colores, se reconozca al instante como el concepto elegido.
+Prefiere emojis de contorno inconfundible: 🌳 árbol, 🐦 pájaro, 🌙 luna, ✋ mano, 🔥 fuego, 🗝 llave, 🏠 casa, 🐟 pez,
+🌹 rosa, 🦋 mariposa, 🐎 caballo, ⛵ barco, 🍂 hoja, 💀 calavera, 🕊 paloma, ☂ paraguas, 🪶 pluma, 🐚 caracol, 🌊 ola.
+Evita los que sin color son una mancha redonda o cuadrada (caras 😀, ⚽, 🍊, 📦, 🌕, 📱). En "figura" escribe el
+concepto en una o dos palabras."""
 GRID_POLARITY = """Agrega la clave "polaridad": "positivo" (la figura queda hecha de palabras sobre negro) o "negativo"
 (la figura es un hueco negro calado en un muro de palabras). Elige según la estrofa y alterna."""
 
@@ -1221,6 +1230,8 @@ GRID_POLARITY = """Agrega la clave "polaridad": "positivo" (la figura queda hech
 DEFAULT_GRID_AESTHETIC = """- Elige UN concepto concreto y dibujable que nazca de lo dicho (un objeto, un animal, una parte del cuerpo, un
   elemento de la naturaleza); si la estrofa es abstracta, una metáfora visual simple de ella.
 - Silueta sintética y frontal o de perfil, de lectura inmediata a distancia, como un sello o una sombra chinesca.
+- Elige formas con una silueta característica (algo que se reconozca sólo por su sombra: un árbol, un pájaro en
+  vuelo, una mano abierta, una llave), no objetos redondos o cuadrados que sin detalles son una mancha.
 - Formas grandes y macizas, ocupando entre el 40 % y el 70 % de la grilla, centrada, con aire alrededor.
 - Sin detalles de un solo carácter, sin líneas finas sueltas ni ruido; bordes limpios.
 - Varía de una estrofa a otra: no repitas la figura anterior."""
@@ -1245,10 +1256,10 @@ STYLE_HELP = {
 
 def build_system_prompt(aesthetic: str | None, curaduria: str | None = None, imagenes: str = "llm",
                         estilos: list[str] | None = None, grid_aesthetic: str | None = None,
-                        polaridad: str = "alternar") -> str:
+                        polaridad: str = "alternar", forma: str = "emoji") -> str:
     text = (aesthetic or "").strip() or DEFAULT_AESTHETIC
     if imagenes == "grilla":
-        parts = [SCHEMA_PROMPT, IMAGES_GRID]
+        parts = [SCHEMA_PROMPT, IMAGES_GRID_EMOJI if forma == "emoji" else IMAGES_GRID]
         if polaridad == "llm":
             parts.append(GRID_POLARITY)
         parts.append("Estética de la grilla:\n" + ((grid_aesthetic or "").strip() or DEFAULT_GRID_AESTHETIC))
@@ -1505,6 +1516,9 @@ def sanitize_direction(raw: Any, text: str, last_modes: list[str]) -> dict[str, 
             out["grilla"] = grid
         else:
             out["grilla_problema"] = why
+    emo = str(raw.get("emoji", "")).strip()[:8]
+    if emo and any(ord(ch) > 0x2000 for ch in emo):
+        out["emoji"] = emo
     pol = strip_accents(str(raw.get("polaridad", "")).lower().strip())
     if pol in ("positivo", "negativo"):
         out["polaridad"] = pol
@@ -1712,7 +1726,7 @@ class ArtDirector:
             cadence.cancel()
             await self.http.aclose()
 
-    def _messages(self, text: str) -> list[dict[str, str]]:
+    def _messages(self, text: str, mode: str | None = None) -> list[dict[str, str]]:
         context = " / ".join(self.history) if self.history else "(inicio del poema)"
         recent = ", ".join(self.modes) if self.modes else "ninguno"
         user = (f"Versos anteriores: {context}\nModos visuales recientes: {recent}\n"
@@ -1722,16 +1736,23 @@ class ArtDirector:
         est = (st.get("estilos") or {}) if st else {}
         allowed = est.get("activos") if est.get("modo", "llm") == "llm" else None
         prompt = build_system_prompt(st.get("prompt_estetica") if st else None, st.get("curaduria") if st else None,
-                                     self._images_mode(), allowed, st.get("prompt_grilla") if st else None,
-                                     (st.get("polaridad") or "alternar") if st else "alternar")
+                                     mode or self._images_mode(), allowed, st.get("prompt_grilla") if st else None,
+                                     (st.get("polaridad") or "alternar") if st else "alternar", self._grid_form())
         return [{"role": "system", "content": prompt}, {"role": "user", "content": user}]
 
     def _images_mode(self) -> str:
         mode = (self.settings or {}).get("imagenes") or "grilla"
         return mode if mode in ("biblioteca", "llm", "grilla") else "grilla"
 
-    def _max_tokens(self) -> int:
-        return 700 if self._images_mode() == "biblioteca" else 2600  # dibujar SVG necesita más salida
+    def _grid_form(self) -> str:
+        """Grilla: «emoji» = el LLM elige un emoji y se calca su silueta (reconocible) · «llm» = el LLM la dibuja."""
+        return "llm" if (self.settings or {}).get("forma_grilla") == "llm" else "emoji"
+
+    def _max_tokens(self, mode: str | None = None) -> int:
+        mode = mode or self._images_mode()
+        if mode == "biblioteca" or (mode == "grilla" and self._grid_form() == "emoji"):
+            return 700
+        return 2600  # dibujar SVG o la grilla necesita más salida
 
     async def _ollama(self, text: str, messages: list[dict[str, str]] | None = None,
                       max_tokens: int | None = None) -> Any:
@@ -1779,7 +1800,8 @@ class ArtDirector:
             return extract_json(r.json()["choices"][0]["message"]["content"])
         raise last or RuntimeError("OpenAI no respondió")
 
-    async def direct(self, text: str) -> tuple[dict[str, Any], str]:
+    async def direct(self, text: str, mode: str | None = None) -> tuple[dict[str, Any], str]:
+        mode = mode or self._images_mode()
         providers = {"ollama": self._ollama, "openai": self._openai, "deepseek": self._deepseek}
         default = "openai" if self.cfg.openai_api_key else self.cfg.llm_provider
         first = (self.settings.get("director") if self.settings else None) or default
@@ -1794,11 +1816,14 @@ class ArtDirector:
             chain.append((name, providers[name]))
         for name, fn in chain:
             try:
-                raw = await fn(text)
+                raw = await fn(text, self._messages(text, mode), self._max_tokens(mode))
                 if self.hub.status.get("llm") != name:
                     self.hub.set_status(llm=name)
                 direction = sanitize_direction(raw, text, list(self.modes))
-                if self._images_mode() == "grilla" and not direction.get("grilla"):
+                if mode == "grilla" and self._grid_form() == "emoji":
+                    if not direction.get("emoji"):
+                        direction["grilla_problema"] = "el modelo no devolvió «emoji»"
+                elif mode == "grilla" and not direction.get("grilla"):
                     direction.setdefault("grilla_problema", "el modelo no devolvió «grilla»")
                     await self._retry_grid(fn, direction, text)
                 return self._always_image(direction), name
@@ -1963,11 +1988,11 @@ async def main_async(args: argparse.Namespace) -> None:
             text = str(msg.get("text", "")).strip()[:600] or "la luna se moja en el agua quieta del patio"
             t0 = time.perf_counter()
             try:
-                direction, provider = await director.direct(text)
+                direction, provider = await director.direct(text, "grilla")  # «Probar»: siempre la grilla
             except Exception as exc:  # nunca tumbar el servidor por una prueba
                 await hub.reply(ws, "grid_test", ok=False, error=str(exc))
                 return
-            await hub.reply(ws, "grid_test", ok=bool(direction.get("grilla")), provider=provider, text=text,
+            await hub.reply(ws, "grid_test", ok=bool(direction.get("grilla") or direction.get("emoji")), provider=provider, text=text,
                             problema=direction.get("grilla_problema", ""),
                             ms=int((time.perf_counter() - t0) * 1000), direction=direction)
         elif kind == "get_settings":
@@ -2308,6 +2333,8 @@ async def run_check() -> None:
         ms = int((time.perf_counter() - t0) * 1000)
         paths = len(d.get("svg_paths") or [])
         dibujo = f"dibujó {paths} trazo(s) SVG" if paths else "sin dibujo propio (usa la biblioteca)"
+        if d.get("emoji"):
+            dibujo = f"silueta del emoji {d['emoji']} («{d.get('figura_libre') or d.get('figura')}»)"
         if d.get("grilla"):
             dibujo = f"grilla de texto «{d.get('figura_libre') or d.get('figura')}»"
             print("\n".join("    " + r for r in d["grilla"]))

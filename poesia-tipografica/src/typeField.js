@@ -134,7 +134,8 @@ export class TypeField {
     this.backdropHoles = [];
     this.shape = null;       // grilla de texto del LLM: { grid, gw, gh, pol: 'positivo'|'negativo', until }
     this.bdFill = null;      // llenado progresivo del telón hasta la próxima imagen: { t0, dur }
-    this.bdRows = 26;
+    this.bdRows = 34;
+    this.edgeAccent = true; // contorno de las ilustraciones en el color de acento // filas del muro = resolución de las ilustraciones en grilla
     this.glitchMoves = true; // toda letra que cambia de lugar lo hace a saltos con cortes, no volando
     this.ambientRain = true; // sin letras flotando: el ambiente es sólo lluvia que cae del telón
     this.gph = new Int32Array(N).fill(-1);
@@ -877,7 +878,7 @@ export class TypeField {
     this._bdUpdate(dt, t);
     const { intensidad: inten, velocidad: vel, turbulencia: turb, densidad: dens } = this.phys;
     const corpusFactor = clamp(0.1 + this.corpusChars / 2600, 0.1, 1);
-    const density = corpusFactor * (0.3 + 0.7 * dens) * this.figureDensity * this.sceneDensity * (wR > 0.5 ? 0.75 : 1);
+    const density = corpusFactor * (0.3 + 0.7 * dens) * this.figureDensity * this.sceneDensity * (wR > 0.5 ? 0.75 : 1) * (this.shape ? 0.12 : 1); // con ilustración: casi sin letras sueltas (la forma se lee limpia)
     const ambient = 0.42 + 0.4 * inten;
     const W = this.W, H = this.H, halfW = W / 2, halfH = H / 2;
 
@@ -1249,6 +1250,12 @@ export class TypeField {
     this.bdFill = segundos > 0 ? { t0: this.time, dur: segundos } : null;
   }
 
+  /** ¿La celda visible (x, y) toca el borde de la ilustración? (alguna vecina queda vacía) */
+  _shapeEdge(x, y) {
+    const B = this.backdrop;
+    return this._shapeHides(x + B.cw, y) || this._shapeHides(x - B.cw, y) || this._shapeHides(x, y + B.rh) || this._shapeHides(x, y - B.rh);
+  }
+
   /** ¿La celda (x, y) del telón queda vacía por la ilustración en grilla? */
   _shapeHides(x, y) {
     const S = this.shape, B = this.backdrop;
@@ -1335,8 +1342,18 @@ export class TypeField {
         c.at = t + 1;
       }
       if ((holes.length && this._inHoles(c.x, c.y, B.cw * 0.5, holes)) || (this.shape && this._shapeHides(c.x, c.y))) {
-        if (c.i >= 0) this._bdDrop(c, t, Math.random() < 0.12); // la mayoría se apaga; sólo algunas caen
+        if (c.i >= 0) this._bdDrop(c, t, Math.random() < 0.05); // casi todas se apagan; pocas caen (forma limpia)
         continue;
+      }
+      // contorno de la ilustración: letras plenas y en el color de acento (dibuja el borde de la forma)
+      if (c.i >= 0) {
+        const edge = this.shape && this.edgeAccent ? this._shapeEdge(c.x, c.y) : false;
+        const a = edge ? 1 : 0;
+        if (this.accent[c.i] !== a) {
+          this.accent[c.i] = a;
+          this.talpha[c.i] = edge ? 1 : 0.82;
+          this.metaDirty = true;
+        }
       }
       if (c.i < 0 && c.ch !== ' ' && j < limit && t >= c.at && budget-- > 0) this._bdPlace(c, t);
     }

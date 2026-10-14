@@ -120,17 +120,30 @@ async function boot() {
     field.setPhysics(dir.fisica);
     // cada estrofa produce una imagen: si llegara «simbolico», se dibuja igual (más tenue)
     if (dir.modo_visual === 'simbolico' && raw.source !== 'forzar-simbolico') dir = { ...dir, modo_visual: 'hibrido' };
-    if ((settings.imagenes || 'grilla') === 'grilla') {
+    if ((settings.imagenes || 'grilla') === 'grilla' || raw.forzar_grilla) {
       // ilustración en grilla de texto: compuesta con las palabras del muro (positivo o negativo)
-      let grid = dir.grilla, origen = raw.grilla_origen === 'reintento' ? 'grilla del LLM (2.º intento)' : 'grilla del LLM';
-      if (!grid) {
-        const svg = dir.svg_paths?.length && sampleFigure(dir.svg_paths.map((d) => ({ d, op: 'fill' })), {});
-        const fig = svg || sampleFigure(SHAPES[dir.figura] || SHAPES.luna, {});
-        grid = fig ? maskToGrid(fig) : null;
-        origen = svg ? 'silueta SVG del LLM → grilla' : `biblioteca (${SHAPES[dir.figura] ? dir.figura : 'luna'}) → grilla`;
-      }
+      // forma: «emoji» (silueta del emoji que eligió el LLM) o «llm» (la grilla dibujada); el resto, respaldo
+      const llmGrid = dir.grilla ? { grid: dir.grilla, origen: raw.grilla_origen === 'reintento' ? 'grilla del LLM (2.º intento)' : 'grilla del LLM' } : null;
+      const fromEmoji = (e, o) => {
+        const g = maskToGrid(emojiFigure(e));
+        return g ? { grid: g, origen: o } : null;
+      };
+      const fromSvg = () => {
+        const f = dir.svg_paths?.length && sampleFigure(dir.svg_paths.map((d) => ({ d, op: 'fill' })), {});
+        const g = f && maskToGrid(f);
+        return g ? { grid: g, origen: 'silueta SVG del LLM → grilla' } : null;
+      };
+      const lib = SHAPES[dir.figura] ? dir.figura : 'luna';
+      const fromLib = () =>
+        fromEmoji(LIB_EMOJI[lib], `biblioteca (${lib} ${LIB_EMOJI[lib]}) → grilla`) || { grid: maskToGrid(sampleFigure(SHAPES[lib], {})), origen: `biblioteca (${lib}) → grilla` };
+      const emo = () => (raw.emoji ? fromEmoji(raw.emoji, `emoji ${raw.emoji} → grilla`) : null);
+      const pick = (settings.forma_grilla === 'llm' ? [() => llmGrid, fromSvg, emo] : [emo, () => llmGrid, fromSvg]).reduce((a, f) => a || f(), null) || fromLib();
+      const grid = pick.grid, origen = pick.origen;
       const pol = choosePolarity(dir);
       lastGrid = grid ? { grid, origen, pol } : null;
+      // el contorno de la forma va en el color de acento de la marca
+      field.edgeAccent = settings.contorno_acento !== false;
+      field.setPalette({ ...(dir.paleta || {}), acento: (settings.marca && settings.marca.acento) || '#ff9898' });
       field.releaseFigure(true);
       field.setBackdrop(true); // la ilustración se cala en el muro: tiene que estar visible
       field.refillSecs = (settings.cadencia && settings.cadencia.min_s) || 14;
@@ -169,23 +182,83 @@ async function boot() {
   }
 
   /** Máscara de una figura (SVG o biblioteca) → grilla 48×26 de '#'/'.' (celdas el doble de altas que anchas). */
-  function maskToGrid(fig, gw = 48, gh = 26) {
-    if (!fig.mask) return null;
+  // resolución de la ilustración = filas del muro (cada celda de la grilla es una letra del muro)
+  const GRID_ROWS = 34, GRID_COLS = 102;
+
+  /**
+   * Máscara (SVG, emoji o biblioteca) → grilla de '#'/'.' con celdas el doble de altas que anchas.
+   * Cobertura promediada (bordes sin dientes) y un pase de suavizado: sin celdas sueltas ni agujeritos.
+   */
+  function maskToGrid(fig, gw = GRID_COLS, gh = GRID_ROWS, alto = 0.8) {
+    if (!fig || !fig.mask) return null;
     const R = 512, bb = fig.bbox || { x: 0, y: 0, w: R, h: R };
-    // la figura ocupa ~70 % del alto; el ancho respeta la proporción real (celda = 1 × 2)
-    const cell = Math.max(bb.h / (gh * 0.72), bb.w / (gw * 2 * 0.9));
+    // la figura ocupa ~80 % del alto; el ancho respeta la proporción real (cada celda cubre cell/2 × cell)
+    const cell = Math.max(bb.h / (gh * alto), (2 * bb.w) / (gw * 0.92));
     const cx = bb.x + bb.w / 2, cy = bb.y + bb.h / 2;
+    const at = (mx, my) => (mx >= 0 && mx < R && my >= 0 && my < R ? fig.mask[(my | 0) * R + (mx | 0)] : 0);
+    const on = [];
+    for (let y = 0; y < gh; y++) {
+      const row = new Uint8Array(gw);
+      for (let x = 0; x < gw; x++) {
+        const x0 = cx + (x - gw / 2) * (cell / 2), y0 = cy + (y - gh / 2) * cell;
+        let c = 0;
+        for (const fy of [0.2, 0.5, 0.8]) for (const fx of [0.25, 0.75]) c += at(x0 + fx * (cell / 2), y0 + fy * cell) > 0.5 ? 1 : 0;
+        row[x] = c >= 3 ? 1 : 0; // ≥ la mitad de la celda cubierta
+      }
+      on.push(row);
+    }
+    // suavizado: una celda sola se apaga, un hueco aislado se rellena
     const rows = [];
     for (let y = 0; y < gh; y++) {
-      let row = '';
+      let line = '';
       for (let x = 0; x < gw; x++) {
-        const mx = Math.round(cx + (x + 0.5 - gw / 2) * (cell / 2)), my = Math.round(cy + (y + 0.5 - gh / 2) * cell);
-        row += mx >= 0 && mx < R && my >= 0 && my < R && fig.mask[my * R + mx] > 0.5 ? '#' : '.';
+        let n = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && on[y + dy]?.[x + dx]) n++;
+        const v = on[y][x] ? n >= 2 : n >= 6;
+        line += v ? '#' : '.';
       }
-      rows.push(row);
+      rows.push(line);
     }
-    return rows;
+    return rows.some((r) => r.includes('#')) ? rows : null;
   }
+
+  // silueta de un emoji del sistema (Apple / Segoe / Noto): formas diseñadas para leerse al instante
+  const emojiCache = new Map();
+  function emojiFigure(emoji) {
+    if (!emoji) return null;
+    if (emojiCache.has(emoji)) return emojiCache.get(emoji);
+    const R = 512, c = document.createElement('canvas');
+    c.width = c.height = R;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.font = `${Math.round(R * 0.74)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Segoe UI Symbol",sans-serif`;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillStyle = '#fff'; // si sale el glifo monocromo, también tiene alfa
+    g.fillText(emoji, R / 2, R / 2);
+    const d = g.getImageData(0, 0, R, R).data;
+    const mask = new Float32Array(R * R);
+    let x0 = R, y0 = R, x1 = -1, y1 = -1, n = 0;
+    for (let y = 0; y < R; y++) {
+      for (let x = 0; x < R; x++) {
+        if (d[(y * R + x) * 4 + 3] > 110) {
+          mask[y * R + x] = 1;
+          n++;
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+      }
+    }
+    let fig = null;
+    const w = x1 - x0 + 1, h = y1 - y0 + 1;
+    // sin glifo (cuadradito «tofu») o casi nada: no sirve
+    if (n > R * R * 0.01 && !(n / (w * h) > 0.93 && Math.abs(w / h - 1) < 0.35)) fig = { mask, bbox: { x: x0, y: y0, w, h }, res: R };
+    emojiCache.set(emoji, fig);
+    return fig;
+  }
+  // figuras de la biblioteca → su emoji (respaldo cuando no hay nada del LLM)
+  const LIB_EMOJI = { luna: '🌙', corazon: '❤', gota: '💧', ojo: '👁', sol: '☀', estrella: '⭐', espiral: '🌀', ola: '🌊', arbol: '🌳', pajaro: '🐦', pez: '🐟', hoja: '🍃', flor: '🌷', montana: '⛰', llama: '🔥', mariposa: '🦋', reloj: '⌛', casa: '🏠', mano: '✋', nube: '☁' };
 
   function requestDirection(text, itemId) {
     clearTimeout(pendingDirection);
@@ -247,7 +320,7 @@ async function boot() {
     const old = (s.loop || []).some((st) => st && (st.contenido === 'loop/flat.png' || st.carpeta === 'public/loop/sponsors'));
     if (old) s = { ...s, loop: structuredClone(DEFAULT_SETTINGS.loop) };
     // v4: las ilustraciones pasan a ser grilla de texto (una sola vez; después se respeta lo elegido en el panel)
-    if (!s.imagenes_v4) s = { ...s, imagenes: 'grilla', imagenes_v4: true };
+    if (!s.imagenes_v5) s = { ...s, imagenes: 'grilla', imagenes_v4: true, imagenes_v5: true }; // la ilustración es la grilla de texto
     return s;
   }
 
@@ -345,6 +418,10 @@ async function boot() {
         // el archivo del backend manda; lo de este navegador sólo completa lo que falte
         backendSettingsLoaded = true;
         setSettings({ ...settings, ...remote }, { persist: false });
+        // si una migración cambió algo (p. ej. imágenes → grilla), el backend tiene que enterarse
+        if (!m.replay && Object.keys(settings).some((k) => JSON.stringify(settings[k]) !== JSON.stringify(remote[k]))) {
+          socket.send({ type: 'save_settings', settings });
+        }
         if (config.isOpen) config.render();
         if (show.state === 'loop') show.goLoop();
       } else if (!Object.keys(remote).length) {
@@ -368,7 +445,7 @@ async function boot() {
     grid_test: (m) => {
       lastGrid = null;
       // verla también en la pared: si la grilla del LLM falló, se usa su silueta SVG o la biblioteca
-      if (m.direction) applyDirection({ ...m.direction, verso: m.text });
+      if (m.direction) applyDirection({ ...m.direction, verso: m.text, forzar_grilla: true });
       config.setGridTest({ ...m, usada: lastGrid });
     },
     cadence: (m) => config.setCadence(m),
@@ -688,7 +765,7 @@ async function boot() {
 
   // acceso desde consola para calibración
   window.poesia = {
-    field, show, config, applyDirection, simulateVerse, simulatePoem, advance, CONFIG,
+    field, show, config, applyDirection, simulateVerse, simulatePoem, advance, CONFIG, emojiFigure, maskToGrid,
     // pruebas / calibración: forzar un estilo
     setStyleForTest: (e) => (settings = { ...settings, estilos: { activos: [e], modo: 'azar' } }),
     glitchNow: (secs = 0.6, amp = 0.9) => Object.assign(glitch, { burst: secs, amp }),
