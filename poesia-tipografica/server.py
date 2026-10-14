@@ -27,6 +27,7 @@ import math
 import os
 import random
 import re
+import subprocess
 import sys
 import time
 import unicodedata
@@ -79,9 +80,66 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+# ── Clave de OpenAI: fuera de la carpeta del proyecto ────────────────────────
+# macOS → Llavero (servicio "poesia-tipografica"); otros sistemas → ~/.poesia-tipografica/openai_key (600).
+# Así actualizar o volver a descargar el proyecto no borra la clave, y se puede cambiar desde el panel C.
+KEY_SERVICE = "poesia-tipografica"
+KEY_ACCOUNT = "openai"
+KEY_FILE = os.path.join(os.path.expanduser("~"), ".poesia-tipografica", "openai_key")
+PLACEHOLDER_KEYS = {"", "sk-...", "sk-…", "tu-clave", "TU_CLAVE"}
+
+
+def _read_stored_key() -> str:
+    if sys.platform == "darwin":
+        try:
+            r = subprocess.run(["security", "find-generic-password", "-s", KEY_SERVICE, "-a", KEY_ACCOUNT, "-w"],
+                               capture_output=True, text=True, timeout=5)
+            if r.returncode == 0 and r.stdout.strip():
+                return r.stdout.strip()
+        except Exception:
+            pass
+    try:
+        with open(KEY_FILE, encoding="utf-8") as fh:
+            return fh.read().strip()
+    except OSError:
+        return ""
+
+
+def load_api_key(env_value: str) -> tuple[str, str]:
+    """(clave, origen). La guardada (Llavero/archivo) manda sobre .env: es la última que se pegó."""
+    stored = _read_stored_key()
+    if stored:
+        return stored, "Llavero de macOS" if sys.platform == "darwin" else KEY_FILE
+    env_value = (env_value or "").strip()
+    if env_value not in PLACEHOLDER_KEYS:
+        return env_value, ".env"
+    return "", ""
+
+
+def save_api_key(key: str) -> str:
+    """Guarda la clave fuera del proyecto. Devuelve dónde quedó."""
+    if sys.platform == "darwin":
+        r = subprocess.run(["security", "add-generic-password", "-U", "-s", KEY_SERVICE, "-a", KEY_ACCOUNT,
+                            "-l", "Poesía Tipográfica · OpenAI", "-w", key],
+                           capture_output=True, text=True, timeout=10)
+        if r.returncode == 0:
+            return "Llavero de macOS"
+        log.warning("No pude guardar en el Llavero (%s); uso archivo", r.stderr.strip())
+    os.makedirs(os.path.dirname(KEY_FILE), exist_ok=True)
+    fd = os.open(KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(key)
+    return KEY_FILE
+
+
+def mask_key(key: str) -> str:
+    return f"{key[:7]}…{key[-4:]}" if len(key) > 14 else ("(vacía)" if not key else "…")
+
+
 @dataclass
 class Config:
     openai_api_key: str
+    openai_key_source: str
     realtime_api: str
     realtime_ga_url: str
     realtime_url: str
@@ -117,7 +175,8 @@ class Config:
     @classmethod
     def from_env(cls) -> "Config":
         return cls(
-            openai_api_key=_env("OPENAI_API_KEY"),
+            openai_api_key=(_key := load_api_key(_env("OPENAI_API_KEY")))[0],
+            openai_key_source=_key[1],
             realtime_api=_env("OPENAI_REALTIME_API", "auto").lower(),
             realtime_ga_url=_env("OPENAI_REALTIME_GA_URL", "wss://api.openai.com/v1/realtime?intent=transcription"),
             realtime_url=_env("OPENAI_REALTIME_URL",
@@ -580,6 +639,17 @@ class RealtimeTranscriber:
         self.pi = 0
         self.configured = False
         self.fatal = False  # clave rechazada: no tiene sentido alternar protocolo
+        self.key_event: asyncio.Event | None = None
+        self.ws = None
+
+    def set_key(self, key: str) -> None:
+        """Clave nueva desde el panel C: reconectar ya, sin reiniciar nada."""
+        self.cfg.openai_api_key = key
+        self.pi = 0
+        if self.key_event is not None:
+            self.key_event.set()
+        if self.ws is not None:
+            asyncio.ensure_future(self.ws.close())
 
     @property
     def protocol(self) -> str:
@@ -634,12 +704,15 @@ class RealtimeTranscriber:
         self.hub.set_status(openai=state, openai_detail=detail[:240])
 
     async def run(self) -> None:
-        if not self.cfg.openai_api_key:
-            log.warning("OPENAI_API_KEY vacío: transcripción desactivada (usa el modo D del navegador).")
-            self._report("disabled", "falta OPENAI_API_KEY en .env")
-            return
+        self.key_event = asyncio.Event()
         backoff = 1.0
         while True:
+            if not self.cfg.openai_api_key:
+                log.warning("Sin clave de OpenAI: pégala en el panel C (tecla C) → Clave de OpenAI.")
+                self._report("sin clave", "pega la clave en el panel C → Clave de OpenAI")
+                await self.key_event.wait()
+                self.key_event.clear()
+                continue
             proto = self.protocol
             url, headers = self._endpoint(proto)
             self.configured = False
@@ -649,6 +722,7 @@ class RealtimeTranscriber:
                 async with ws_connect(url, additional_headers=headers, max_size=None,
                                       open_timeout=15, ping_interval=20, ping_timeout=20,
                                       close_timeout=5) as ws:
+                    self.ws = ws
                     await ws.send(json.dumps(self._session_update(proto)))
                     # audio acumulado mientras estábamos desconectados: conservar sólo ~0.5 s
                     keep = max(1, 500 // self.cfg.openai_chunk_ms)
@@ -697,9 +771,17 @@ class RealtimeTranscriber:
             self.fatal = False
             if self.hub.status.get("openai") == "connected":
                 self._report("reconnecting", f"API {proto}")
+            self.ws = None
             delay = backoff + random.uniform(0, 0.5)
             log.info("Reconectando a OpenAI en %.1fs", delay)
-            await asyncio.sleep(delay)
+            self.key_event.clear()
+            try:  # una clave nueva interrumpe la espera
+                await asyncio.wait_for(self.key_event.wait(), timeout=delay)
+                self.key_event.clear()
+                backoff = 1.0
+                continue
+            except asyncio.TimeoutError:
+                pass
             backoff = min(backoff * 2, 30.0)
 
     async def _sender(self, ws) -> None:  # noqa: ANN001
@@ -1144,19 +1226,25 @@ async def main_async(args: argparse.Namespace) -> None:
     settings = SettingsStore(args.settings)
     hub = FrontendHub(cfg)
     director = ArtDirector(cfg, hub, settings)
-    use_openai = not args.no_openai and bool(cfg.openai_api_key)
+    use_openai = not args.no_openai
     oa_queue: asyncio.Queue[bytes] | None = asyncio.Queue(maxsize=300) if use_openai else None
     audio = AudioEngine(cfg, hub, oa_queue, loop) if not args.no_audio else None
     if audio is not None and settings.get("device") not in (None, ""):
         audio.device_override = str(settings.get("device"))
 
-    hub.hello_extra = lambda: {"settings": settings.data, "default_prompt": DEFAULT_AESTHETIC,
+    def key_status() -> dict[str, Any]:
+        return {"has_key": bool(cfg.openai_api_key), "masked": mask_key(cfg.openai_api_key),
+                "source": cfg.openai_key_source}
+
+    hub.hello_extra = lambda: {"settings": settings.data, "default_prompt": DEFAULT_AESTHETIC, "key": key_status(),
                                "session": hub.session}
 
     def on_verse(text: str, item_id: str, source: str) -> None:
         # Sólo se dirige arte si se está grabando en modo poema (en modo palabras no hace falta el LLM).
         if hub.session.get("recording") and hub.session.get("mode") == "poema":
             director.submit(text, item_id, source)
+
+    transcriber = RealtimeTranscriber(cfg, hub, oa_queue, on_verse) if oa_queue is not None else None
 
     async def on_frontend(msg: dict[str, Any], ws: ServerConnection) -> None:
         kind = msg.get("type")
@@ -1184,6 +1272,18 @@ async def main_async(args: argparse.Namespace) -> None:
         elif kind == "save_settings" and isinstance(msg.get("settings"), dict):
             settings.update(msg["settings"])
             hub.emit("settings", settings=settings.data)
+        elif kind == "set_api_key":
+            key = str(msg.get("key", "")).strip()
+            if not key.startswith("sk-") or len(key) < 20 or any(c.isspace() for c in key):
+                await hub.reply(ws, "key_status", ok=False, error="La clave debe empezar con sk- y estar completa.",
+                                **key_status())
+                return
+            where = await asyncio.to_thread(save_api_key, key)
+            cfg.openai_api_key, cfg.openai_key_source = key, where
+            log.info("Clave de OpenAI actualizada (%s) → %s", mask_key(key), where)
+            if transcriber is not None:
+                transcriber.set_key(key)
+            hub.emit("key_status", ok=True, **key_status())
         elif kind == "list_logos":
             folder = str(msg.get("carpeta", ""))[:200]
             logos = await asyncio.to_thread(read_logo_folder, folder)
@@ -1197,12 +1297,10 @@ async def main_async(args: argparse.Namespace) -> None:
         tasks.append(audio.run())
     else:
         hub.status["mic"] = "disabled"
-    if oa_queue is not None:
-        tasks.append(RealtimeTranscriber(cfg, hub, oa_queue, on_verse).run())
+    if transcriber is not None:
+        tasks.append(transcriber.run())
     else:
         hub.status["openai"] = "disabled"
-        if not args.no_openai:
-            log.warning("OPENAI_API_KEY vacío: sin transcripción. Usa la tecla D en el navegador.")
 
     # 16 MB: el panel C puede subir logos del loop como data URL
     async with serve(hub.handler, cfg.ws_host, cfg.ws_port, max_size=16 * 2 ** 20,

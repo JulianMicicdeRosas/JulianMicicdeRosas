@@ -6,11 +6,8 @@ REM ─────────────────────────�
 chcp 65001 >nul
 cd /d "%~dp0"
 
-if not exist .env (
-  echo [!] Falta .env  ^(copia .env.example a .env y completa OPENAI_API_KEY^)
-  pause
-  exit /b 1
-)
+if not exist .env copy .env.example .env >nul
+REM La clave de OpenAI se pega en el panel C del show (tecla C).
 if not exist .venv (
   py -3 -m venv .venv || goto :error
   .venv\Scripts\python -m pip install --upgrade pip

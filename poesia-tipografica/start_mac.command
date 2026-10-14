@@ -86,15 +86,22 @@ if [ ! -d dist ] || [ -n "$(find src index.html public -newer dist -print -quit 
   npm run build || fail "Falló el build"
 fi
 
-# ── .env (la clave nunca va al repositorio) ──────────────────────────────────
-if [ ! -f .env ]; then
-  say "Primera vez: pega tu clave de OpenAI (no se mostrará) y Enter."
-  read -r -s -p "OPENAI_API_KEY: " KEY; echo
-  [ -z "$KEY" ] && fail "Sin clave no hay transcripción. Vuelve a abrir el script."
-  sed "s|^OPENAI_API_KEY=.*|OPENAI_API_KEY=$KEY|" .env.example > .env
-  chmod 600 .env
-  unset KEY
-  say ".env creado (sólo en esta Mac)."
+# ── Clave de OpenAI: en el Llavero de la Mac (nunca en el repositorio) ────────
+# El resto de la configuración (.env) se crea solo con valores por defecto.
+[ -f .env ] || cp .env.example .env
+has_keychain_key() { security find-generic-password -s poesia-tipografica -a openai -w >/dev/null 2>&1; }
+store_key() { security add-generic-password -U -s poesia-tipografica -a openai -l "Poesía Tipográfica · OpenAI" -w "$1"; }
+if ! has_keychain_key; then
+  OLD="$(grep -E '^OPENAI_API_KEY=sk-' .env | head -1 | cut -d= -f2-)"
+  if [ -n "$OLD" ] && [ "$OLD" != "sk-..." ]; then
+    store_key "$OLD" && sed -i '' 's|^OPENAI_API_KEY=.*|OPENAI_API_KEY=|' .env && say "Clave movida del .env al Llavero."
+  else
+    say "Pega tu clave de OpenAI (no se mostrará) y Enter."
+    echo "(o Enter para saltear y pegarla después en el panel C del show)"
+    read -r -s -p "Clave: " KEY; echo
+    if [ -n "$KEY" ]; then store_key "$KEY" && say "Clave guardada en el Llavero ✓"; fi
+    unset KEY
+  fi
 fi
 
 # ── Ollama (opcional: director de arte local) ────────────────────────────────

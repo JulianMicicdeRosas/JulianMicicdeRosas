@@ -426,3 +426,7 @@ body.hide-cursor * {
   padding: 0 4px;
   font-size: 10px;
 }
+#config input[data-key] {
+  flex: 1;
+  min-width: 220px;
+}

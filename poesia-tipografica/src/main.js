@@ -201,6 +201,10 @@ async function boot() {
       debug.setStatus({ backend: 'connected', ...(m.status || {}) });
       config.setMicStatus(m.status || {});
       config.setDefaultPrompt(m.default_prompt);
+      if (m.key) {
+        config.setKeyStatus(m.key);
+        if (!m.key.has_key) config.toggle(true); // sin clave: abrir el panel para pegarla
+      }
       const remote = m.settings || {};
       if (!backendSettingsLoaded && Object.keys(remote).length) {
         // el archivo del backend manda; lo de este navegador sólo completa lo que falte
@@ -212,6 +216,7 @@ async function boot() {
         socket.send({ type: 'save_settings', settings }); // primera vez: sembrar el archivo
       }
     },
+    key_status: (m) => config.setKeyStatus(m),
     status: (m) => {
       debug.setStatus(m.status || {});
       config.setMicStatus(m.status || {});
@@ -242,6 +247,7 @@ async function boot() {
     onChange: (next) => setSettings(next),
     onDevice: (dev) => socket.send({ type: 'set_device', device: dev }),
     requestDevices: () => socket.send({ type: 'list_devices' }),
+    onSaveKey: (key) => socket.send({ type: 'set_api_key', key }),
     onScanLogos: (carpeta) => fetchLogos(carpeta).catch(() => config.setLogoCount(carpeta, 0)),
   });
   setInterval(() => config.tick(), 400);

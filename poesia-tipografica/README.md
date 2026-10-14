@@ -61,7 +61,9 @@ Después, cada noche: **doble clic en `poesia-tipografica/start_mac.command`** (
 Abrir, porque macOS bloquea scripts descargados). El script:
 
 1. crea `.venv`, instala dependencias y compila el frontend si hace falta;
-2. la primera vez **pide la clave de OpenAI** (sin mostrarla) y crea `.env` sólo en esa Mac;
+2. la primera vez **pide la clave de OpenAI** (sin mostrarla) y la guarda en el **Llavero de macOS**, fuera de la
+   carpeta: actualizar o volver a descargar el proyecto no la borra. También se puede pegar o cambiar en el
+   **panel C → Clave de OpenAI** (si falta, el panel se abre solo);
 3. arranca Ollama y descarga el modelo si falta (`OLLAMA_MODEL`, por defecto `qwen2.5:7b`; con 8 GB de RAM
    usar `qwen2.5:3b`);
 4. arranca backend y frontend, **impide que la Mac se duerma** (`caffeinate`) y abre Chrome en kiosk;
@@ -99,7 +101,7 @@ clave contra OpenAI, graba 2 s del micrófono y dice qué falla. En los paneles 
 Requisitos: Python 3.10+, Node.js 18+, Google Chrome, y opcionalmente [Ollama](https://ollama.com).
 
 ```bat
-copy .env.example .env          :: completar OPENAI_API_KEY
+copy .env.example .env          :: opcional: el arranque lo crea solo. La clave se pega en el panel C
 py -3 -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
 .venv\Scripts\python server.py --list-devices   :: elegir el micrófono → AUDIO_DEVICE en .env

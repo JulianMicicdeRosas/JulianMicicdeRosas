@@ -17,7 +17,8 @@ const SHORTCUTS = [
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 export class ConfigPanel {
-  constructor({ getSettings, onChange, onDevice, requestDevices, onScanLogos, defaultPrompt }) {
+  constructor({ getSettings, onChange, onDevice, requestDevices, onScanLogos, onSaveKey, defaultPrompt }) {
+    this.onSaveKey = onSaveKey;
     this.onScanLogos = onScanLogos;
     this.getSettings = getSettings;
     this.onChange = onChange;
@@ -40,9 +41,19 @@ export class ConfigPanel {
         <div class="state">Estado: <b data-state>—</b></div>
       </section>
       <section>
+        <h2>Clave de OpenAI</h2>
+        <div class="row">
+          <input data-key type="password" placeholder="pega acá tu clave (sk-…)" autocomplete="off" spellcheck="false">
+          <button data-act="save-key">Guardar clave</button>
+        </div>
+        <div class="vu-info"><span data-key-status>—</span></div>
+        <p class="hint">Se guarda en el Llavero de la Mac (fuera de la carpeta del proyecto): actualizar o volver a
+        descargar no la borra. Al guardarla, la transcripción se reconecta sola.</p>
+      </section>
+      <section>
         <h2>Micrófono</h2>
         <div class="row">
-          <select data-device><option value="">(dispositivo por defecto de Windows)</option></select>
+          <select data-device><option value="">(micrófono por defecto del sistema)</option></select>
           <button data-act="devices">Actualizar lista</button>
         </div>
         <div class="vu"><i data-vu></i><b data-peak></b></div>
@@ -194,7 +205,7 @@ export class ConfigPanel {
 
   _renderDevices() {
     const sel = this.$('[data-device]');
-    const opts = ['<option value="">(dispositivo por defecto de Windows)</option>'].concat(
+    const opts = ['<option value="">(micrófono por defecto del sistema)</option>'].concat(
       this.devices.map((d) => `<option value="${d.index}">[${d.index}] ${esc(d.name)} — ${esc(d.hostapi)}${d.default ? ' ★' : ''}</option>`),
     );
     sel.innerHTML = opts.join('');
@@ -231,6 +242,18 @@ export class ConfigPanel {
       oa.textContent = st === 'connected' ? `conectada · ${status.openai_detail || ''}` : `${st}${status.openai_detail ? ` — ${status.openai_detail}` : ''}`;
       oa.className = st === 'connected' ? 'ok' : st === 'error' || st === 'reconnecting' ? 'bad' : '';
     }
+  }
+
+  /** Estado de la clave: {has_key, masked, source, ok?, error?} */
+  setKeyStatus(k = {}) {
+    const el = this.$('[data-key-status]');
+    if (k.ok === false) {
+      el.textContent = k.error || 'clave no válida';
+      el.className = 'bad';
+      return;
+    }
+    el.textContent = k.has_key ? `guardada ✓ ${k.masked} · ${k.source || ''}` : 'sin clave: pégala arriba';
+    el.className = k.has_key ? 'ok' : 'bad';
   }
 
   setBackend(on) {
@@ -306,7 +329,16 @@ export class ConfigPanel {
     else if (act === 'down') this._commit((s) => move(s[list], +1));
     else if (act === 'del') this._commit((s) => s[list].splice(i, 1));
     else if (act === 'reset-prompt') this._commit((s) => (s.prompt_estetica = ''));
-    else if (act === 'scan') this.onScanLogos?.(this.getSettings().loop[i].carpeta);
+    else if (act === 'save-key') {
+      const input = this.$('[data-key]');
+      const key = input.value.trim();
+      if (!key) return;
+      if (!this.onSaveKey(key)) this.setKeyStatus({ ok: false, error: 'backend desconectado: abre start_mac.command' });
+      else {
+        input.value = '';
+        this.$('[data-key-status]').textContent = 'guardando…';
+      }
+    } else if (act === 'scan') this.onScanLogos?.(this.getSettings().loop[i].carpeta);
     else if (act === 'del-logo') this._commit((s) => s.loop[i].imagenes.splice(+ev.target.dataset.k, 1));
     else if (act === 'upload-logos') {
       const input = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/*', multiple: true });
