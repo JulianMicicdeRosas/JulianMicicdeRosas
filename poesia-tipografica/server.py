@@ -230,7 +230,7 @@ class SettingsStore:
             "curaduria", "imagenes", "prompt_grilla", "polaridad", "director", "cadencia", "estilos", "glitch_ambiente", "ascii_filas",
             "marca", "muro", "formato", "canal", "forma_grilla", "grilla_preset",
             # marcas de migración: que una corrección automática se aplique una sola vez (y no pise lo elegido)
-            "imagenes_v4", "imagenes_v5", "loop_grupos_v2", "loop_flat_v3", "loop_flat_v4")
+            "imagenes_v4", "imagenes_v5", "loop_grupos_v2", "loop_flat_v3", "loop_flat_v4", "loop_umbral_v6")
 
     def __init__(self, path: str) -> None:
         self.path = path
@@ -605,6 +605,15 @@ class LinearResampler:
         return out
 
 
+_VIRTUAL_RE = re.compile(r"zoom|teams|blackhole|loopback|soundflower|virtual|aggregate|agregad|obs |discord|krisp|"
+                         r"camo|ndi|cable|voicemeeter|vb-audio|webex|meet", re.I)
+
+
+def is_virtual_device(name: str) -> bool:
+    """Dispositivos de audio virtuales (de apps de videollamada, ruteo, etc.): no son micrófonos."""
+    return bool(_VIRTUAL_RE.search(name or ""))
+
+
 class AudioEngine:
     VOICE_LO_HZ = 70.0
     VOICE_HI_HZ = 1100.0
@@ -671,6 +680,7 @@ class AudioEngine:
                                 "hostapi": sd.query_hostapis(info["hostapi"])["name"],
                                 "samplerate": int(info["default_samplerate"]),
                                 "channels": int(info["max_input_channels"]),
+                                "virtual": is_virtual_device(info["name"]),
                                 "default": idx == default_in})
         except Exception as exc:
             log.warning("No pude listar dispositivos: %s", exc)
@@ -695,7 +705,7 @@ class AudioEngine:
     def _resolve_device(self) -> int | str | None:
         dev = self.cfg.audio_device if self.device_override is None else self.device_override
         if not dev:
-            return None
+            return self._real_default()
         if dev.lstrip("-").isdigit():
             return int(dev)
         needle = dev.lower()
@@ -703,6 +713,23 @@ class AudioEngine:
             if info.get("max_input_channels", 0) > 0 and needle in info.get("name", "").lower():
                 return idx
         log.warning("Dispositivo '%s' no encontrado; uso el de entrada por defecto", dev)
+        return self._real_default()
+
+    @staticmethod
+    def _real_default() -> int | None:
+        """Entrada por defecto del sistema, salvo que sea un dispositivo virtual (Zoom, Teams, BlackHole…): ésos
+        entregan silencio. En ese caso se usa el primer micrófono real."""
+        try:
+            default_in = sd.default.device[0] if sd.default.device else None
+            if default_in is None or default_in < 0 or not is_virtual_device(sd.query_devices(default_in)["name"]):
+                return None
+            for idx, info in enumerate(sd.query_devices()):
+                if info.get("max_input_channels", 0) > 0 and not is_virtual_device(info["name"]):
+                    log.warning("La entrada por defecto es virtual (%s); uso %s",
+                                sd.query_devices(default_in)["name"], info["name"])
+                    return idx
+        except Exception:  # noqa: BLE001
+            pass
         return None
 
     def _open_stream(self):  # noqa: ANN202
@@ -781,8 +808,13 @@ class AudioEngine:
             return
         self.zero_blocks += 1
         if self.zero_blocks == 300:  # ~3 s
-            hint = ("macOS: Ajustes del Sistema → Privacidad y seguridad → Micrófono → activar Terminal"
-                    if sys.platform == "darwin" else "revisa que el micrófono no esté silenciado")
+            if is_virtual_device(self.device_name):
+                hint = (f"«{self.device_name}» es un dispositivo virtual (no es un micrófono): elige el micrófono real "
+                        "en el panel C → Micrófono")
+            elif sys.platform == "darwin":
+                hint = "macOS: Ajustes del Sistema → Privacidad y seguridad → Micrófono → activar Terminal"
+            else:
+                hint = "revisa que el micrófono no esté silenciado"
             log.warning("El micrófono entrega silencio digital absoluto. %s", hint)
             self.hub.set_status(mic="silencio", mic_device=hint)
 
@@ -2199,7 +2231,14 @@ async def main_async(args: argparse.Namespace) -> None:
     oa_queue: asyncio.Queue[bytes] | None = asyncio.Queue(maxsize=300) if use_openai else None
     audio = AudioEngine(cfg, hub, oa_queue, loop) if not args.no_audio else None
     if audio is not None and settings.get("device") not in (None, ""):
-        audio.device_override = str(settings.get("device"))
+        saved = str(settings.get("device"))
+        try:  # un índice viejo que hoy apunta a un dispositivo virtual (Zoom…) no se usa: los índices cambian
+            if saved.isdigit() and sd is not None and is_virtual_device(sd.query_devices(int(saved))["name"]):
+                log.warning("El micrófono guardado (%s) es hoy un dispositivo virtual; uso el micrófono real", saved)
+                saved = ""
+        except Exception:  # noqa: BLE001
+            saved = ""
+        audio.device_override = saved or None
     if audio is not None and settings.get("canal") not in (None, ""):
         audio.request_channel(settings.get("canal"))
 
@@ -2242,6 +2281,12 @@ async def main_async(args: argparse.Namespace) -> None:
                 oa_queue.put_nowait(b"")  # centinela → input_audio_buffer.clear
         elif kind == "list_devices":
             current = audio.device_override if audio and audio.device_override is not None else cfg.audio_device
+            if audio is not None and sd is not None:  # mostrar en la lista el que de verdad está abierto
+                try:
+                    idx = audio._resolve_device()
+                    current = str(idx) if idx is not None else (current or "")
+                except Exception:  # noqa: BLE001
+                    pass
             await hub.reply(ws, "devices", devices=AudioEngine.list_devices(), current=current or "",
                             active=audio.device_name if audio else "",
                             channel=(audio.channel_override or cfg.audio_channel) if audio else cfg.audio_channel)
@@ -2253,6 +2298,11 @@ async def main_async(args: argparse.Namespace) -> None:
         elif kind == "set_device":
             dev = msg.get("device")
             dev = "" if dev in (None, "") else str(dev)
+            if dev.isdigit() and sd is not None:  # guardar por nombre: los índices cambian de un arranque a otro
+                try:
+                    dev = sd.query_devices(int(dev))["name"]
+                except Exception:  # noqa: BLE001
+                    pass
             settings.update({"device": dev})
             if audio is not None:
                 audio.request_device(dev)

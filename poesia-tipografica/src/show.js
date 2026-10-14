@@ -18,13 +18,13 @@ export const DEFAULT_SETTINGS = {
   loop: [
     // FLAT es el centro del evento: abre el loop. Si falta el PNG (logos/flat), se escribe «FLAT».
     { tipo: 'logos', carpeta: 'logos/flat', imagenes: [], render: 'imagen', duracion: 10, por_pagina: 1, de_a_uno: true, monocromo: true, letras: '', alt: 'FLAT', fondo: true },
+    { tipo: 'texto', contenido: 'UMBRAL', render: 'letras', duracion: 12, letras: 'UMBRAL' },
     { tipo: 'logos', carpeta: 'logos/organizadores', imagenes: [], render: 'imagen', duracion: 8, por_pagina: 6, de_a_uno: false, monocromo: true, letras: '', alt: 'ORGANIZAN' },
     { tipo: 'logos', carpeta: 'logos/socio-cultural', imagenes: [], render: 'imagen', duracion: 16, por_pagina: 6, de_a_uno: false, monocromo: true, letras: '', alt: 'SOCIO CULTURAL' },
     { tipo: 'logos', carpeta: 'logos/patrocinadores', imagenes: [], render: 'imagen', duracion: 8, por_pagina: 8, de_a_uno: false, monocromo: true, letras: '', alt: 'PATROCINAN' },
     { tipo: 'logos', carpeta: 'logos/acompanan', imagenes: [], render: 'imagen', duracion: 8, por_pagina: 10, de_a_uno: false, monocromo: true, letras: '', alt: 'ACOMPAÑAN' },
     { tipo: 'logos', carpeta: 'logos/embajadas', imagenes: [], render: 'imagen', duracion: 8, por_pagina: 8, de_a_uno: false, monocromo: true, letras: '', alt: 'EMBAJADAS' },
     { tipo: 'logos', carpeta: 'logos/media-partner', imagenes: [], render: 'imagen', duracion: 6, por_pagina: 6, de_a_uno: false, monocromo: true, letras: '', alt: 'MEDIA PARTNER' },
-    { tipo: 'texto', contenido: 'UMBRAL', render: 'letras', duracion: 12, letras: 'UMBRAL' },
   ],
   prompt_estetica: '',
   curaduria: '', // texto curatorial en lenguaje normal (guía principal del director de arte)
@@ -106,6 +106,20 @@ export class Show {
     this._addNewLogoGroups();
     this._addFlatStep();
     this._flatLogoCentered();
+    this._umbralAfterFlat();
+  }
+
+  /** El loop: FLAT → UMBRAL → grupos de logos (las flechas alternan FLAT ↔ UMBRAL). */
+  _umbralAfterFlat() {
+    const loop = this.settings.loop;
+    if (!Array.isArray(loop) || this.settings.loop_umbral_v6) return;
+    const t = loop.findIndex((s) => s && s.tipo === 'texto');
+    if (t >= 0) {
+      const [umbral] = loop.splice(t, 1);
+      const f = loop.findIndex((s) => s && s.carpeta === 'logos/flat');
+      loop.splice(f + 1, 0, umbral);
+    }
+    this.settings.loop_umbral_v6 = true;
   }
 
   /** FLAT: su logo al centro con el muro de palabras alrededor (ya no la palabra escrita). */
@@ -202,23 +216,21 @@ export class Show {
    * Flecha derecha: avanza al paso siguiente del loop; desde el último paso pasa al título UMBRAL
    * (que queda fijo hasta T). Flecha izquierda: paso anterior.
    */
+  /**
+   * → / ←: alternan FLAT ↔ UMBRAL (desde cualquier otro paso o estado, vuelven a FLAT: el loop empieza de nuevo).
+   * Los grupos de logos pasan sólo en el loop automático, después de UMBRAL.
+   */
   step(dir = 1) {
-    if (this.state === 'title' && dir < 0) {
-      this.goLoop(this._loopSteps().length - 2);
-      return;
-    }
+    const steps = this._loopSteps();
+    const flat = steps.findIndex((s) => s.tipo === 'logos' && /flat/i.test(s.carpeta || ''));
+    const umbral = steps.findIndex((s) => s.tipo === 'texto');
+    const onFlat = this.state === 'loop' && this.loopIndex === flat;
+    const target = onFlat && umbral >= 0 ? umbral : Math.max(0, flat);
     if (this.state !== 'loop') {
-      if (this.state !== 'title') this.goLoop();
+      this.goLoop(target - 1);
       return;
     }
-    const n = this._loopSteps().length;
-    if (dir > 0 && this.loopIndex >= n - 1) {
-      const cur = this._loopSteps()[this.loopIndex];
-      if (cur && cur.tipo === 'texto') this._holdTitle(cur.contenido || 'UMBRAL');
-      else this.goTitle();
-      return;
-    }
-    this.loopIndex = dir > 0 ? this.loopIndex : Math.max(-1, this.loopIndex - 2);
+    this.loopIndex = target - 1;
     this._nextLoop();
   }
 

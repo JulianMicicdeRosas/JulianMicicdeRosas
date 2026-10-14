@@ -6,7 +6,7 @@
 
 const SHORTCUTS = [
   ['C', 'abrir / cerrar este panel'],
-  ['→ / ←', 'loop: paso siguiente / anterior. Desde el último paso, → fija el título UMBRAL'],
+  ['→ / ←', 'loop: alterna FLAT ↔ UMBRAL (desde otro paso vuelve a FLAT). Los logos pasan solos en el loop automático'],
   ['T', 'desde el título (o cuando sea): empieza a grabar en modo palabras, hasta elegir artista'],
   ['1 … 9, 0', 'nombre del artista (0 = artista 10): deja de grabar y espera la S'],
   ['S', 'grabar / dejar de grabar (el poema dibuja; lo dibujado queda en pantalla)'],
@@ -414,7 +414,7 @@ export class ConfigPanel {
   _renderDevices() {
     const sel = this.$('[data-device]');
     const opts = ['<option value="">(micrófono por defecto del sistema)</option>'].concat(
-      this.devices.map((d) => `<option value="${d.index}">[${d.index}] ${esc(d.name)} — ${esc(d.hostapi)}${d.default ? ' ★' : ''}</option>`),
+      this.devices.map((d) => `<option value="${d.index}">[${d.index}] ${esc(d.name)} — ${esc(d.hostapi)}${d.default ? ' ★' : ''}${d.virtual ? '  (virtual: NO es un micrófono)' : ''}</option>`),
     );
     sel.innerHTML = opts.join('');
     sel.value = String(this.currentDevice ?? '');
