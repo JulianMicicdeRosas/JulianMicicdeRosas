@@ -133,12 +133,34 @@ Producción: `start_instalacion.bat` compila el frontend, abre el backend minimi
 | --- | --- |
 | `C` | panel de operación (y recordatorio de atajos) |
 | `1`…`9`, `0` | ir al nombre del artista N (0 = 10). Otra vez un número: reinicia a ese nombre y deja de grabar |
-| `S` | comenzar a grabar: el poema dibuja con sus letras |
+| `S` | comenzar a grabar (o reanudar): el poema dibuja con sus letras |
+| `P` | detener la grabación (lo dibujado queda) |
 | `T` | modo palabras: todo lo dicho, disperso por la pared con tamaños sutilmente distintos (otra vez `T`: vuelve a poema) |
 | `L` | volver al loop (deja de grabar) |
 | `F` | pantalla completa · `D` panel técnico / simulación · `Esc` cierra paneles |
 
 Sólo se envía audio a OpenAI mientras se graba (`S` o `T`): el loop y los nombres no consumen la API.
+
+### Curaduría, imágenes en vivo y cadencia
+
+- **Curaduría** (panel C): texto libre, en tus palabras, sobre la muestra. El director de arte lo recibe antes de
+  cada estrofa como guía principal.
+- **Imágenes en vivo**: el LLM dibuja cada figura (SVG) a partir de la estrofa y la curaduría. Si el dibujo no sirve
+  (vacío, ilegible), se usa la biblioteca. Modo **Curadas**: elige entre 20 figuras (más rápido). El panel muestra la
+  latencia y el origen de la última imagen.
+- **Director de arte**: OpenAI (por defecto, misma clave, modelo `OPENAI_DIRECTOR_MODEL`, por defecto `gpt-4.1-mini`
+  con respaldo `gpt-4o-mini`), Ollama local o DeepSeek; si falla, el siguiente disponible y al final la heurística.
+- **Cadencia** (cada cuánto una imagen): por estrofa. Se acumulan versos hasta reunir N palabras y una pausa de cierre;
+  nunca antes del mínimo entre imágenes; un tope fuerza la imagen si se lee de corrido.
+
+| Preset | mínimo entre imágenes | palabras | pausa de cierre | tope |
+| --- | --- | --- | --- | --- |
+| Cada verso | 0 s | 1 | 0 s | — |
+| **Por estrofa** (por defecto) | 14 s | 10 | 1,8 s | 45 s |
+| Contemplativa | 25 s | 20 | 2,5 s | 70 s |
+
+- **Grabar / detener**: `S` graba (o reanuda), `P` detiene; también hay botones en el panel C. El estado del show no se
+  muestra nunca en la pared.
 
 ### Panel C
 

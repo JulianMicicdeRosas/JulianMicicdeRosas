@@ -81,20 +81,25 @@ async function boot() {
     if (dir.modo_visual === 'concreto' || dir.modo_visual === 'hibrido') {
       const interiorTarget = Math.min(4200, CONFIG.pool * 0.32);
       let fig = null;
-      if (dir.svg_paths.length) fig = sampleFigure(dir.svg_paths.map((d) => ({ d, op: 'fill' })), { interiorTarget });
+      let origen = 'biblioteca';
+      if (dir.svg_paths.length) {
+        fig = sampleFigure(dir.svg_paths.map((d) => ({ d, op: 'fill' })), { interiorTarget });
+        if (fig) origen = 'llm';
+      }
       if (!fig) fig = sampleFigure(SHAPES[dir.figura], { interiorTarget }); // biblioteca de respaldo
-      if (fig) field.formFigure(fig, dir);
+      if (fig) field.formFigure(fig, { ...dir, figura: dir.figura_libre || dir.figura });
+      config.setLastDirection({ ...dir, origen, pidio: dir.imagenes });
     } else {
       field.releaseFigure(true);
+      config.setLastDirection({ ...dir, origen: 'sin figura' });
     }
     debug.setDirection(dir);
   }
 
   function requestDirection(text, itemId) {
     clearTimeout(pendingDirection);
-    if (socket.send({ type: 'inject_verse', text, item_id: itemId })) {
-      pendingDirection = setTimeout(() => applyDirection(localArtDirection(text)), 9000); // LLM colgado
-    } else {
+    // con backend: el verso entra a la cadencia (estrofa) y la imagen llega cuando corresponda
+    if (!socket.send({ type: 'inject_verse', text, item_id: itemId })) {
       pendingDirection = setTimeout(() => applyDirection(localArtDirection(text)), 300);
     }
   }
@@ -144,17 +149,9 @@ async function boot() {
     saveTimer = setTimeout(() => socket.send({ type: 'save_settings', settings }), 400);
   }
 
-  let toastTimer = 0;
-  const toast = document.createElement('div');
-  toast.id = 'toast';
-  document.body.appendChild(toast);
+  // El estado del show nunca se escribe en la pared: sólo en el panel C.
   function notify(text) {
     config?.setState(show?.label?.() || text);
-    if (settings.avisos === false) return;
-    toast.textContent = text;
-    toast.classList.add('on');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toast.classList.remove('on'), 2200);
   }
 
   // pedir al backend los logos de una carpeta (responde con data URLs)
@@ -217,6 +214,7 @@ async function boot() {
       }
     },
     key_status: (m) => config.setKeyStatus(m),
+    cadence: (m) => config.setCadence(m),
     status: (m) => {
       debug.setStatus(m.status || {});
       config.setMicStatus(m.status || {});
@@ -248,6 +246,14 @@ async function boot() {
     onDevice: (dev) => socket.send({ type: 'set_device', device: dev }),
     requestDevices: () => socket.send({ type: 'list_devices' }),
     onSaveKey: (key) => socket.send({ type: 'set_api_key', key }),
+    onRecord: () => {
+      show.start(show.state === 'perform' ? show.mode : 'poema');
+      config.setState(show.label());
+    },
+    onStop: () => {
+      show.stop();
+      config.setState(show.label());
+    },
     onScanLogos: (carpeta) => fetchLogos(carpeta).catch(() => config.setLogoCount(carpeta, 0)),
   });
   setInterval(() => config.tick(), 400);
@@ -334,7 +340,8 @@ async function boot() {
       if (document.fullscreenElement) document.exitFullscreen();
       else document.documentElement.requestFullscreen?.().catch(() => {});
     } else if (/^[0-9]$/.test(k)) show.goArtist(k === '0' ? 10 : +k);
-    else if (k === 's') show.start('poema');
+    else if (k === 's') show.start(show.state === 'perform' ? show.mode : 'poema');
+    else if (k === 'p') show.stop();
     else if (k === 't') show.toggleWords();
     else if (k === 'l') show.goLoop();
     else if (k === 'escape') {

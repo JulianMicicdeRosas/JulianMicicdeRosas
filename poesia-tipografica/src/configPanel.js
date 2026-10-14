@@ -7,17 +7,26 @@
 const SHORTCUTS = [
   ['C', 'abrir / cerrar este panel'],
   ['1 … 9, 0', 'ir al nombre del artista (0 = artista 10). Otra vez: reinicia el nombre'],
-  ['S', 'comenzar a grabar: el poema dibuja con sus letras'],
+  ['S', 'comenzar a grabar: el poema dibuja con sus letras (si estaba detenido, reanuda)'],
+  ['P', 'detener la grabación (lo dibujado queda en pantalla)'],
   ['T', 'modo palabras: todo lo dicho, disperso y sutil (otra vez T: vuelve a poema)'],
   ['L', 'volver al loop (deja de grabar)'],
   ['F', 'pantalla completa'],
   ['D', 'panel técnico / simulación sin micrófono'],
 ];
 
+export const CADENCE_PRESETS = {
+  verso: { min_s: 0, palabras: 1, pausa_s: 0, max_s: 0 },
+  estrofa: { min_s: 14, palabras: 10, pausa_s: 1.8, max_s: 45 },
+  contemplativa: { min_s: 25, palabras: 20, pausa_s: 2.5, max_s: 70 },
+};
+
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 export class ConfigPanel {
-  constructor({ getSettings, onChange, onDevice, requestDevices, onScanLogos, onSaveKey, defaultPrompt }) {
+  constructor({ getSettings, onChange, onDevice, requestDevices, onScanLogos, onSaveKey, onRecord, onStop, defaultPrompt }) {
+    this.onRecord = onRecord;
+    this.onStop = onStop;
     this.onSaveKey = onSaveKey;
     this.onScanLogos = onScanLogos;
     this.getSettings = getSettings;
@@ -39,6 +48,51 @@ export class ConfigPanel {
         <h2>Atajos</h2>
         <dl class="keys">${SHORTCUTS.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
         <div class="state">Estado: <b data-state>—</b></div>
+        <div class="row rec">
+          <button data-act="record" class="rec-on">● Grabar (S)</button>
+          <button data-act="stop" class="rec-off">■ Detener (P)</button>
+        </div>
+      </section>
+      <section>
+        <h2>Curaduría</h2>
+        <p class="hint">Escribe con tus palabras de qué trata la muestra, qué buscas que se vea y qué no. El director de
+        arte lo lee antes de cada verso y lo toma como guía principal. Se aplica al siguiente verso.</p>
+        <textarea data-curaduria rows="7" spellcheck="true" placeholder="Ej.: Umbral es una muestra sobre lo que pasa en el borde entre decir y callar. Me interesa que las imágenes sean frágiles, a medio formar, como si la voz las sostuviera. Nada literal ni decorativo; preferir el cuerpo, la casa y el agua. Que el silencio también ocupe lugar."></textarea>
+      </section>
+      <section>
+        <h2>Imágenes</h2>
+        <label><input type="radio" name="imagenes" value="llm" data-sopt="imagenes"> Generadas en vivo por el LLM (dibuja cada figura)</label><br>
+        <label><input type="radio" name="imagenes" value="biblioteca" data-sopt="imagenes"> Curadas: biblioteca de 20 figuras (más rápido)</label>
+        <div class="row">
+          <span>Director de arte:</span>
+          <select data-sopt="director">
+            <option value="openai">OpenAI (rápido, misma clave)</option>
+            <option value="ollama">Ollama (local, sin internet)</option>
+            <option value="deepseek">DeepSeek (requiere su clave)</option>
+          </select>
+        </div>
+        <div class="vu-info"><span>Última imagen</span><span data-last>—</span></div>
+        <h2>Cadencia: cada cuánto una imagen nueva</h2>
+        <div class="row">
+          <select data-cad="preset">
+            <option value="estrofa">Por estrofa (recomendado)</option>
+            <option value="verso">Cada verso</option>
+            <option value="contemplativa">Contemplativa</option>
+            <option value="personalizada">Personalizada</option>
+          </select>
+        </div>
+        <div class="cad">
+          <label>mínimo entre imágenes <input data-cad="min_s" type="number" min="0" max="300" step="1"> s</label>
+          <label>palabras para una imagen <input data-cad="palabras" type="number" min="1" max="200" step="1"></label>
+          <label>pausa que cierra la estrofa <input data-cad="pausa_s" type="number" min="0" max="15" step="0.1"> s</label>
+          <label>tope sin imagen <input data-cad="max_s" type="number" min="0" max="600" step="1"> s (0 = sin tope)</label>
+        </div>
+        <div class="vu-info"><span>Próxima imagen</span><span data-cadence>—</span></div>
+        <p class="hint">Se juntan los versos hasta reunir esas palabras y una pausa de cierre; el LLM recibe la estrofa
+        entera y hace una sola imagen. Nunca antes del mínimo entre imágenes; si se lee de corrido, la fuerza el tope
+        (o el triple de palabras). Entre imágenes las letras siguen vivas con la física.</p>
+        <p class="hint">Si las imágenes en vivo tardan demasiado (más de ~6 s), prueba OpenAI como director o pasa a «Curadas».
+        Si el director falla, se usa el siguiente disponible y, al final, la biblioteca.</p>
       </section>
       <section>
         <h2>Clave de OpenAI</h2>
@@ -76,9 +130,9 @@ export class ConfigPanel {
         <button data-act="add-step">+ Agregar paso</button>
       </section>
       <section>
-        <h2>Prompt estético del director de arte</h2>
-        <p class="hint">Cómo debe interpretar los versos (figuras, físicas, paleta). El formato técnico de la respuesta se
-        agrega solo y no hace falta escribirlo. Se aplica al siguiente verso.</p>
+        <h2>Reglas visuales (avanzado)</h2>
+        <p class="hint">Reglas finas para el director (modos, físicas, paleta). Lo habitual es dejarlas como están y
+        escribir arriba, en «Curaduría». El formato técnico se agrega solo.</p>
         <textarea data-prompt spellcheck="false" rows="10"></textarea>
         <div class="row"><button data-act="reset-prompt">Restaurar por defecto</button></div>
       </section>
@@ -89,10 +143,6 @@ export class ConfigPanel {
         <div class="slider"><span>Intensidad de la nube</span><input type="range" min="0" max="1.5" step="0.01" data-opt="nube"><output></output></div>
         <div class="slider"><span>Órbita de cámara</span><input type="range" min="0" max="1" step="0.01" data-opt="orbita"><output></output></div>
         <p class="hint">Se aplica a la próxima figura (la profundidad) o al instante (intensidad, órbita).</p>
-      </section>
-      <section>
-        <h2>Opciones</h2>
-        <label><input type="checkbox" data-avisos> Mostrar avisos de operador en pantalla (2 s, discretos)</label>
       </section>
     `;
     document.body.appendChild(el);
@@ -155,7 +205,15 @@ export class ConfigPanel {
       .join('');
     const prompt = this.$('[data-prompt]');
     if (document.activeElement !== prompt) prompt.value = s.prompt_estetica || this.defaultPrompt;
-    this.$('[data-avisos]').checked = s.avisos !== false;
+    const cur = this.$('[data-curaduria]');
+    if (document.activeElement !== cur) cur.value = s.curaduria || '';
+    for (const r of this.el.querySelectorAll('input[data-sopt="imagenes"]')) r.checked = r.value === (s.imagenes || 'llm');
+    this.$('select[data-sopt="director"]').value = s.director || 'openai';
+    const cad = this._cadence(s);
+    for (const el of this.el.querySelectorAll('[data-cad]')) {
+      if (document.activeElement !== el) el.value = cad[el.dataset.cad];
+      if (el.type === 'number') el.disabled = cad.preset !== 'personalizada';
+    }
     for (const el of this.el.querySelectorAll('[data-opt]')) {
       const k = el.dataset.opt;
       if (el.type === 'checkbox') el.checked = s[k] !== false;
@@ -256,6 +314,36 @@ export class ConfigPanel {
     el.className = k.has_key ? 'ok' : 'bad';
   }
 
+  /** Latencia y origen de la última imagen (para decidir entre en vivo y curadas). */
+  setLastDirection(d) {
+    const el = this.$('[data-last]');
+    const secs = Number.isFinite(d.latencia_ms) ? `${(d.latencia_ms / 1000).toFixed(1)} s` : '—';
+    const origen = d.origen === 'llm' ? `dibujada por el LLM («${d.figura_libre || d.figura}»)`
+      : d.origen === 'biblioteca' ? (d.pidio === 'llm' ? `biblioteca (el dibujo del LLM no sirvió) · ${d.figura}` : `biblioteca · ${d.figura}`)
+      : 'sin figura (modo simbólico)';
+    el.textContent = `${secs} · ${origen} · ${d.provider || ''}`;
+    el.className = d.latencia_ms > 6000 ? 'bad' : 'ok';
+  }
+
+  _cadence(s) {
+    const c = s.cadencia || {};
+    const preset = c.preset || 'estrofa';
+    return { preset, ...(CADENCE_PRESETS[preset] || CADENCE_PRESETS.estrofa), ...(preset === 'personalizada' ? c : {}) };
+  }
+
+  /** Estado en vivo de la estrofa que se está acumulando. */
+  setCadence(m) {
+    const el = this.$('[data-cadence]');
+    if (m.disparo) {
+      el.textContent = `pedida (${m.disparo}) · dibujando…`;
+      el.className = 'ok';
+      return;
+    }
+    const falta = Math.max(0, (m.min_s || 0) - (m.desde_imagen || 0));
+    el.textContent = `${m.palabras}/${m.objetivo} palabras` + (falta > 0.5 ? ` · faltan ${Math.ceil(falta)} s de mínimo` : ' · al cerrar la estrofa');
+    el.className = '';
+  }
+
   setBackend(on) {
     this.backend = on;
   }
@@ -329,6 +417,8 @@ export class ConfigPanel {
     else if (act === 'down') this._commit((s) => move(s[list], +1));
     else if (act === 'del') this._commit((s) => s[list].splice(i, 1));
     else if (act === 'reset-prompt') this._commit((s) => (s.prompt_estetica = ''));
+    else if (act === 'record') this.onRecord?.();
+    else if (act === 'stop') this.onStop?.();
     else if (act === 'save-key') {
       const input = this.$('[data-key]');
       const key = input.value.trim();
@@ -393,8 +483,26 @@ export class ConfigPanel {
       this._commit((s) => (s[k] = t.type === 'checkbox' ? t.checked : +t.value), false);
       return;
     }
-    if (t.matches('[data-avisos]')) {
-      this._commit((s) => (s.avisos = t.checked), false);
+    if (t.dataset.cad) {
+      if (ev.type === 'input' && t.tagName === 'SELECT') return;
+      const k = t.dataset.cad;
+      this._commit((s) => {
+        const cad = this._cadence(s);
+        if (k === 'preset') Object.assign(cad, { preset: t.value }, CADENCE_PRESETS[t.value] || {});
+        else cad[k] = Math.max(0, +t.value || 0);
+        s.cadencia = cad;
+      }, k === 'preset');
+      return;
+    }
+    if (t.dataset.sopt) {
+      if (t.type === 'radio' && !t.checked) return;
+      const k = t.dataset.sopt;
+      this._commit((s) => (s[k] = t.value), false);
+      return;
+    }
+    if (t.matches('[data-curaduria]')) {
+      clearTimeout(this._curT);
+      this._curT = setTimeout(() => this._commit((s) => (s.curaduria = t.value.trim()), false), 500);
       return;
     }
     const field = t.dataset.field;

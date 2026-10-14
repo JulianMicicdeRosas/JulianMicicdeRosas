@@ -169,6 +169,7 @@ class Config:
     ollama_model: str
     ollama_keep_alive: str
     deepseek_key: str
+    openai_director_model: str
     deepseek_base_url: str
     deepseek_model: str
 
@@ -204,6 +205,7 @@ class Config:
             ollama_model=_env("OLLAMA_MODEL", "qwen2.5:7b"),
             ollama_keep_alive=_env("OLLAMA_KEEP_ALIVE", "30m"),
             deepseek_key=_env("DEEPSEEK_API_KEY"),
+            openai_director_model=_env("OPENAI_DIRECTOR_MODEL", "gpt-4.1-mini"),
             deepseek_base_url=_env("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1").rstrip("/"),
             deepseek_model=_env("DEEPSEEK_MODEL", "deepseek-chat"),
         )
@@ -220,7 +222,8 @@ def _now_ms() -> int:
 class SettingsStore:
     """settings.local.json junto a server.py. Lo escribe el panel C del frontend."""
 
-    KEYS = ("device", "artists", "loop", "prompt_estetica", "avisos", "pointcloud", "profundidad", "nube", "orbita")
+    KEYS = ("device", "artists", "loop", "prompt_estetica", "avisos", "pointcloud", "profundidad", "nube", "orbita",
+            "curaduria", "imagenes", "director", "cadencia")
 
     def __init__(self, path: str) -> None:
         self.path = path
@@ -864,7 +867,7 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional, con est
 
 {{
   "modo_visual": "concreto" | "simbolico" | "hibrido",
-  "figura": uno de {FIGURES},
+  "figura": "nombre corto de lo que se dibuja (una o dos palabras)",
   "svg_paths": [ "d de un <path> SVG cerrado en un viewBox 0 0 512 512", ... ],
   "relleno": "contorno" | "volumen" | "ambos",
   "fisica": {{
@@ -878,9 +881,14 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional, con est
   "duracion_s": 8..30
 }}
 
-Reglas técnicas:
-- svg_paths es opcional: déjalo [] si no estás seguro; la figura de la biblioteca se usará. Si lo das: máximo 3 paths,
-  sólo comandos M L C Q A Z con coordenadas absolutas dentro de 0..512, formas cerradas y simples."""
+Reglas técnicas de svg_paths: sólo comandos M L C Q Z en MAYÚSCULA, coordenadas ENTERAS absolutas dentro de 0..512,
+formas cerradas con Z, sin transformaciones."""
+
+# Cómo se generan las imágenes (se elige en el panel C).
+IMAGES_LIVE = """Imágenes EN VIVO: tú dibujas la figura. En modo "concreto" o "hibrido", svg_paths es OBLIGATORIO:
+1 a 4 paths que formen una silueta reconocible y sintética de lo que evoca el verso (no un ícono genérico: interpreta),
+con 60 comandos como máximo en total, ocupando buena parte del lienzo 512×512. Sé conciso: nada de texto extra."""
+IMAGES_LIBRARY = f"""Imágenes CURADAS: deja svg_paths como [] y elige "figura" EXACTAMENTE de esta lista: {FIGURES}."""
 
 # Parte estética: editable en vivo desde el panel C del frontend (se guarda en settings.local.json).
 DEFAULT_AESTHETIC = """- "concreto": el verso nombra algo visible (luna, ojo, pájaro…). La figura se dibuja con las letras (caligrama).
@@ -892,9 +900,15 @@ DEFAULT_AESTHETIC = """- "concreto": el verso nombra algo visible (luna, ojo, p�
 - Estética de museo: base hueso, grises ceniza; el acento ámbar o carmín es muy puntual (uso_acento bajo)."""
 
 
-def build_system_prompt(aesthetic: str | None) -> str:
+def build_system_prompt(aesthetic: str | None, curaduria: str | None = None, imagenes: str = "llm") -> str:
     text = (aesthetic or "").strip() or DEFAULT_AESTHETIC
-    return f"{SCHEMA_PROMPT}\n\nDirección estética (prioritaria sobre tus gustos por defecto):\n{text}"
+    parts = [SCHEMA_PROMPT, IMAGES_LIBRARY if imagenes == "biblioteca" else IMAGES_LIVE]
+    cur = (curaduria or "").strip()
+    if cur:
+        parts.append("TEXTO CURATORIAL de la muestra, escrito por el curador. Es la guía principal: cada figura, "
+                     "movimiento y color debe poder leerse desde este texto:\n«" + cur + "»")
+    parts.append("Reglas visuales:\n" + text)
+    return "\n\n".join(parts)
 
 
 def strip_accents(text: str) -> str:
@@ -1046,14 +1060,18 @@ def sanitize_direction(raw: Any, text: str, last_modes: list[str]) -> dict[str, 
     mode = strip_accents(mode)
     if mode in MODES:
         out["modo_visual"] = mode
-    fig = strip_accents(str(raw.get("figura", "")).lower().strip())
+    fig_raw = str(raw.get("figura", "")).strip()
+    fig = strip_accents(fig_raw.lower())
     if fig in FIGURES:
         out["figura"] = fig
+    elif fig_raw:
+        # imágenes en vivo: nombre libre; la biblioteca de respaldo usa la heurística si el dibujo falla
+        out["figura_libre"] = re.sub(r"[^\w\s-]", "", fig_raw, flags=re.UNICODE)[:32]
     paths = raw.get("svg_paths", [])
     if isinstance(paths, str):
         paths = [paths]
     if isinstance(paths, list):
-        out["svg_paths"] = [p.strip() for p in paths if valid_svg_path(p)][:3]
+        out["svg_paths"] = [p.strip() for p in paths if valid_svg_path(p)][:4]
     fill = strip_accents(str(raw.get("relleno", "")).lower())
     if fill in FILLS:
         out["relleno"] = fill
@@ -1122,6 +1140,30 @@ def extract_json(text: str) -> Any:
         raise
 
 
+# ── Cadencia: cada cuánto se pide una imagen nueva ─────────────────────────────
+# Criterio por ESTROFA: se acumulan versos hasta tener material (palabras) y una pausa de cierre;
+# además un tiempo mínimo entre imágenes (para que cada figura se vea) y un tope (lectura de corrido).
+CADENCE_PRESETS = {
+    "verso": {"min_s": 0, "palabras": 1, "pausa_s": 0, "max_s": 0},
+    "estrofa": {"min_s": 14, "palabras": 10, "pausa_s": 1.8, "max_s": 45},
+    "contemplativa": {"min_s": 25, "palabras": 20, "pausa_s": 2.5, "max_s": 70},
+}
+
+
+def cadence_params(raw: Any) -> dict[str, float]:
+    base = dict(CADENCE_PRESETS["estrofa"])
+    if isinstance(raw, dict):
+        if raw.get("preset") in CADENCE_PRESETS:
+            base.update(CADENCE_PRESETS[raw["preset"]])
+        for k, lo, hi in (("min_s", 0, 300), ("palabras", 1, 200), ("pausa_s", 0, 15), ("max_s", 0, 600)):
+            try:
+                if raw.get(k) is not None and raw.get("preset") in (None, "personalizada"):
+                    base[k] = min(hi, max(lo, float(raw[k])))
+            except (TypeError, ValueError):
+                pass
+    return base
+
+
 class ArtDirector:
     def __init__(self, cfg: Config, hub: FrontendHub, settings: SettingsStore | None = None) -> None:
         self.cfg = cfg
@@ -1131,6 +1173,68 @@ class ArtDirector:
         self.history: deque[str] = deque(maxlen=4)
         self.modes: deque[str] = deque(maxlen=4)
         self.http: httpx.AsyncClient | None = None
+        # estrofa en curso
+        self.stanza: list[str] = []
+        self.stanza_item = ""
+        self.stanza_source = "voice"
+        self.last_verse_t = 0.0
+        self.last_image_t = 0.0
+
+    # ── cadencia ─────────────────────────────────────────────────────────────
+    def reset_stanza(self) -> None:
+        """Al empezar a grabar / cambiar de artista: estrofa vacía y reloj listo para la primera imagen."""
+        self.stanza.clear()
+        p = cadence_params(self.settings.get("cadencia") if self.settings else None)
+        self.last_image_t = time.monotonic() - p["min_s"]
+        self._emit_cadence()
+
+    def add_verse(self, text: str, item_id: str = "", source: str = "voice") -> None:
+        text = (text or "").strip()
+        if not text:
+            return
+        self.stanza.append(text)
+        self.stanza_item, self.stanza_source = item_id, source
+        self.last_verse_t = time.monotonic()
+        self._emit_cadence()
+
+    def _words(self) -> int:
+        return sum(len(v.split()) for v in self.stanza)
+
+    def _ready(self) -> str:
+        """Motivo para pedir imagen ahora, o '' si hay que seguir acumulando."""
+        if not self.stanza:
+            return ""
+        p = cadence_params(self.settings.get("cadencia") if self.settings else None)
+        now = time.monotonic()
+        since_img, since_verse, words = now - self.last_image_t, now - self.last_verse_t, self._words()
+        if since_img < p["min_s"]:
+            return ""
+        if words >= p["palabras"] and since_verse >= p["pausa_s"]:
+            return "estrofa"
+        if words >= 3 * p["palabras"]:
+            return "lectura de corrido"
+        if p["max_s"] and since_img >= p["max_s"]:
+            return "tope de tiempo"
+        return ""
+
+    def _emit_cadence(self, fired: str = "") -> None:
+        p = cadence_params(self.settings.get("cadencia") if self.settings else None)
+        self.hub.emit("cadence", palabras=self._words(), objetivo=int(p["palabras"]),
+                      desde_imagen=round(time.monotonic() - self.last_image_t, 1) if self.last_image_t else None,
+                      min_s=p["min_s"], disparo=fired)
+
+    async def cadence_loop(self) -> None:
+        self.reset_stanza()
+        while True:
+            await asyncio.sleep(0.3)
+            why = self._ready()
+            if why:
+                text = " / ".join(self.stanza)
+                self.stanza.clear()
+                self.last_image_t = time.monotonic()
+                log.info("Imagen pedida (%s): %s", why, text[:90])
+                self.submit(text, self.stanza_item, self.stanza_source)
+                self._emit_cadence(why)
 
     def submit(self, text: str, item_id: str = "", source: str = "voice") -> None:
         text = (text or "").strip()
@@ -1144,6 +1248,7 @@ class ArtDirector:
 
     async def run(self) -> None:
         self.http = httpx.AsyncClient(timeout=httpx.Timeout(self.cfg.llm_timeout, connect=4.0))
+        cadence = asyncio.create_task(self.cadence_loop(), name="cadence")
         try:
             while True:
                 job = await self.queue.get()
@@ -1158,26 +1263,37 @@ class ArtDirector:
                 self.modes.append(direction["modo_visual"])
                 direction.update({"verso": text, "item_id": item_id, "source": source, "provider": provider,
                                   "latencia_ms": int((time.perf_counter() - t0) * 1000), "t": _now_ms()})
+                direction["imagenes"] = self._images_mode()
                 log.info("Dirección [%s %dms] %s / %s / %s", provider, direction["latencia_ms"],
                          direction["modo_visual"], direction["figura"], direction["fisica"]["modo"])
                 self.hub.emit("art_direction", data=direction)
         finally:
+            cadence.cancel()
             await self.http.aclose()
 
     def _messages(self, text: str) -> list[dict[str, str]]:
         context = " / ".join(self.history) if self.history else "(inicio del poema)"
         recent = ", ".join(self.modes) if self.modes else "ninguno"
         user = (f"Versos anteriores: {context}\nModos visuales recientes: {recent}\n"
-                f"Verso actual: «{text}»\nDevuelve sólo el JSON.")
-        aesthetic = self.settings.get("prompt_estetica") if self.settings else None
-        return [{"role": "system", "content": build_system_prompt(aesthetic)}, {"role": "user", "content": user}]
+                f"Estrofa actual (versos separados por /): «{text}»\nUna sola imagen para toda la estrofa. "
+                f"Devuelve sólo el JSON.")
+        st = self.settings
+        prompt = build_system_prompt(st.get("prompt_estetica") if st else None, st.get("curaduria") if st else None,
+                                     self._images_mode())
+        return [{"role": "system", "content": prompt}, {"role": "user", "content": user}]
+
+    def _images_mode(self) -> str:
+        return "biblioteca" if self.settings and self.settings.get("imagenes") == "biblioteca" else "llm"
+
+    def _max_tokens(self) -> int:
+        return 700 if self._images_mode() == "biblioteca" else 1600  # dibujar SVG necesita más salida
 
     async def _ollama(self, text: str) -> Any:
         assert self.http is not None
         r = await self.http.post(self.cfg.ollama_url, json={
             "model": self.cfg.ollama_model, "messages": self._messages(text), "format": "json",
             "stream": False, "keep_alive": self.cfg.ollama_keep_alive,
-            "options": {"temperature": self.cfg.llm_temperature, "num_predict": 900},
+            "options": {"temperature": self.cfg.llm_temperature, "num_predict": self._max_tokens()},
         })
         r.raise_for_status()
         return extract_json(r.json()["message"]["content"])
@@ -1190,19 +1306,44 @@ class ArtDirector:
             "Authorization": f"Bearer {self.cfg.deepseek_key}"}, json={
             "model": self.cfg.deepseek_model, "messages": self._messages(text),
             "response_format": {"type": "json_object"}, "temperature": self.cfg.llm_temperature,
-            "max_tokens": 900, "stream": False,
+            "max_tokens": self._max_tokens(), "stream": False,
         })
         r.raise_for_status()
         return extract_json(r.json()["choices"][0]["message"]["content"])
 
+    async def _openai(self, text: str) -> Any:
+        """Director con la misma clave de OpenAI (rápido: recomendado para imágenes en vivo)."""
+        assert self.http is not None
+        if not self.cfg.openai_api_key:
+            raise RuntimeError("sin clave de OpenAI")
+        models = list(dict.fromkeys([self.cfg.openai_director_model, "gpt-4.1-mini", "gpt-4o-mini"]))
+        last: Exception | None = None
+        for model in models:
+            r = await self.http.post("https://api.openai.com/v1/chat/completions", headers={
+                "Authorization": f"Bearer {self.cfg.openai_api_key}"}, json={
+                "model": model, "messages": self._messages(text), "response_format": {"type": "json_object"},
+                "temperature": self.cfg.llm_temperature, "max_tokens": self._max_tokens(),
+            })
+            if r.status_code in (400, 404) and "model" in r.text:
+                last = RuntimeError(f"modelo {model} no disponible")
+                continue  # probar el siguiente modelo
+            r.raise_for_status()
+            return extract_json(r.json()["choices"][0]["message"]["content"])
+        raise last or RuntimeError("OpenAI no respondió")
+
     async def direct(self, text: str) -> tuple[dict[str, Any], str]:
+        providers = {"ollama": self._ollama, "openai": self._openai, "deepseek": self._deepseek}
+        default = "openai" if self.cfg.openai_api_key else self.cfg.llm_provider
+        first = (self.settings.get("director") if self.settings else None) or default
+        first = first if first in providers else "ollama"
+        order = [first] + [p for p in ("openai", "ollama", "deepseek") if p != first]
         chain: list[tuple[str, Callable[[str], Awaitable[Any]]]] = []
-        if self.cfg.llm_provider == "deepseek":
-            chain.append(("deepseek", self._deepseek))
-        else:
-            chain.append(("ollama", self._ollama))
-            if self.cfg.llm_fallback_deepseek and self.cfg.deepseek_key:
-                chain.append(("deepseek", self._deepseek))
+        for name in order:  # respaldo: los que estén disponibles
+            if name == "openai" and not self.cfg.openai_api_key:
+                continue
+            if name == "deepseek" and not self.cfg.deepseek_key:
+                continue
+            chain.append((name, providers[name]))
         for name, fn in chain:
             try:
                 raw = await fn(text)
@@ -1242,19 +1383,21 @@ async def main_async(args: argparse.Namespace) -> None:
     def on_verse(text: str, item_id: str, source: str) -> None:
         # Sólo se dirige arte si se está grabando en modo poema (en modo palabras no hace falta el LLM).
         if hub.session.get("recording") and hub.session.get("mode") == "poema":
-            director.submit(text, item_id, source)
+            director.add_verse(text, item_id, source)
 
     transcriber = RealtimeTranscriber(cfg, hub, oa_queue, on_verse) if oa_queue is not None else None
 
     async def on_frontend(msg: dict[str, Any], ws: ServerConnection) -> None:
         kind = msg.get("type")
         if kind == "inject_verse":  # modo debug del navegador
-            director.submit(str(msg.get("text", ""))[:600], str(msg.get("item_id", "")), "debug")
+            director.add_verse(str(msg.get("text", ""))[:600], str(msg.get("item_id", "")), "debug")
         elif kind == "session":
             was = hub.session.get("recording")
             hub.session = {"recording": bool(msg.get("recording")),
                            "mode": "palabras" if msg.get("mode") == "palabras" else "poema"}
             log.info("Sesión: %s", hub.session)
+            if hub.session["recording"] and not was:
+                director.reset_stanza()
             if oa_queue is not None and was and not hub.session["recording"]:
                 while not oa_queue.empty():
                     oa_queue.get_nowait()

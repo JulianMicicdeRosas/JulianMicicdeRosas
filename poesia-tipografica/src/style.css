@@ -430,3 +430,36 @@ body.hide-cursor * {
   flex: 1;
   min-width: 220px;
 }
+#config .rec button {
+  flex: 1;
+  padding: 9px 10px;
+  font-size: 13px;
+}
+#config .rec .rec-on {
+  border-color: #6b2a2a;
+  color: #e7b0a8;
+}
+#config .rec .rec-off {
+  border-color: #3a3936;
+}
+#config textarea[data-curaduria] {
+  font: 15px/1.45 'Cormorant Garamond', Georgia, serif;
+}
+#config input[type='radio'] {
+  padding: 0;
+  margin-right: 6px;
+}
+#config .cad {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 14px;
+  margin: 6px 0;
+  color: #a8a398;
+}
+#config .cad input {
+  width: 58px;
+  margin-left: 4px;
+}
+#config .cad input:disabled {
+  opacity: 0.55;
+}

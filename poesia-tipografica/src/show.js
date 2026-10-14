@@ -19,7 +19,10 @@ export const DEFAULT_SETTINGS = {
     { tipo: 'texto', contenido: 'UMBRAL', render: 'letras', duracion: 12, letras: 'UMBRAL' },
   ],
   prompt_estetica: '',
-  avisos: true,
+  curaduria: '', // texto curatorial en lenguaje normal (guía principal del director de arte)
+  imagenes: 'llm', // 'llm' = el LLM dibuja cada figura en vivo · 'biblioteca' = figuras curadas
+  director: 'openai', // openai | ollama | deepseek
+  cadencia: { preset: 'estrofa' }, // cada cuánto una imagen: verso | estrofa | contemplativa | personalizada
   pointcloud: true, // estética nube de puntos (TouchDesigner)
   profundidad: 0.45, // extrusión en Z de las figuras
   nube: 1, // intensidad de la nube
@@ -85,7 +88,16 @@ export class Show {
   label() {
     if (this.state === 'loop') return 'loop';
     if (this.state === 'artist') return `artista ${this.artistIdx + 1}`;
-    return `${this.mode} · grabando`;
+    return `${this.mode} · ${this.recording ? 'grabando' : 'detenido'}`;
+  }
+
+  /** Detener la grabación (tecla P): la composición queda en pantalla; S reanuda. */
+  stop() {
+    if (!this.recording) return;
+    this._setRecording(false);
+    this.field.cursorEnabled = false;
+    this.field.setSpeaking(false);
+    this.notify('detenido');
   }
 
   // ── loop ─────────────────────────────────────────────────────────────────
