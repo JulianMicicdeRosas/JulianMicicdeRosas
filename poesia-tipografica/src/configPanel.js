@@ -6,10 +6,11 @@
 
 const SHORTCUTS = [
   ['C', 'abrir / cerrar este panel'],
-  ['1 … 9, 0', 'ir al nombre del artista (0 = artista 10). Otra vez: reinicia el nombre'],
-  ['S', 'comenzar a grabar: el poema dibuja con sus letras (si estaba detenido, reanuda)'],
-  ['P', 'detener la grabación (lo dibujado queda en pantalla)'],
-  ['T', 'modo palabras: todo lo dicho, disperso y sutil (otra vez T: vuelve a poema)'],
+  ['→ / ←', 'loop: paso siguiente / anterior. Desde el último paso, → fija el título UMBRAL'],
+  ['T', 'desde el título (o cuando sea): empieza a grabar en modo palabras, hasta elegir artista'],
+  ['1 … 9, 0', 'nombre del artista (0 = artista 10): deja de grabar y espera la S'],
+  ['S', 'grabar / dejar de grabar (el poema dibuja; lo dibujado queda en pantalla)'],
+  ['P', 'detener la grabación (igual que S cuando está grabando)'],
   ['L', 'volver al loop (deja de grabar)'],
   ['F', 'pantalla completa'],
   ['D', 'panel técnico / simulación sin micrófono'],

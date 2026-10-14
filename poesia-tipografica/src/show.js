@@ -16,6 +16,8 @@ export const DEFAULT_SETTINGS = {
   // tiempo) → patrocinadores → acompañan → embajadas → media partner → UMBRAL. Carpeta vacía = se salta.
   // Las carpetas se leen de Documentos/Umbral/logos/… (fuera del programa: no se pierden al actualizar).
   loop: [
+    // FLAT es el centro del evento: abre el loop. Si falta el PNG (logos/flat), se escribe «FLAT».
+    { tipo: 'logos', carpeta: 'logos/flat', imagenes: [], render: 'imagen', duracion: 10, por_pagina: 1, de_a_uno: true, monocromo: true, letras: '', alt: 'FLAT', si_vacia: 'texto' },
     { tipo: 'logos', carpeta: 'logos/organizadores', imagenes: [], render: 'imagen', duracion: 8, por_pagina: 6, de_a_uno: false, monocromo: true, letras: '', alt: 'ORGANIZAN' },
     { tipo: 'logos', carpeta: 'logos/socio-cultural', imagenes: [], render: 'imagen', duracion: 16, por_pagina: 6, de_a_uno: false, monocromo: true, letras: '', alt: 'SOCIO CULTURAL' },
     { tipo: 'logos', carpeta: 'logos/patrocinadores', imagenes: [], render: 'imagen', duracion: 8, por_pagina: 8, de_a_uno: false, monocromo: true, letras: '', alt: 'PATROCINAN' },
@@ -99,6 +101,15 @@ export class Show {
   setSettings(settings) {
     this.settings = { ...structuredClone(DEFAULT_SETTINGS), ...settings };
     this._addNewLogoGroups();
+    this._addFlatStep();
+  }
+
+  /** Loops guardados antes de que FLAT tuviera su paso propio: se le agrega al principio. */
+  _addFlatStep() {
+    const loop = this.settings.loop;
+    if (!Array.isArray(loop) || this.settings.loop_flat_v3) return;
+    if (!loop.some((s) => s && s.carpeta === 'logos/flat')) loop.unshift(structuredClone(DEFAULT_SETTINGS.loop[0]));
+    this.settings.loop_flat_v3 = true;
   }
 
   /** Un loop guardado con una versión anterior (3 grupos) recibe los grupos nuevos detrás del último. */
@@ -120,11 +131,18 @@ export class Show {
 
   label() {
     if (this.state === 'loop') return 'loop';
+    if (this.state === 'title') return 'título (T para comenzar)';
     if (this.state === 'artist') return `artista ${this.artistIdx + 1}`;
     return `${this.mode} · ${this.recording ? 'grabando' : 'detenido'}`;
   }
 
-  /** Detener la grabación (tecla P): la composición queda en pantalla; S reanuda. */
+  /** S: graba / deja de grabar (en el nombre del artista no empieza sola). */
+  toggleRecord() {
+    if (this.recording) this.stop();
+    else this.start(this.state === 'perform' ? this.mode : 'poema');
+  }
+
+  /** Detener la grabación (tecla S o P): la composición queda en pantalla; S reanuda. */
   stop() {
     if (!this.recording) return;
     this._setRecording(false);
@@ -134,31 +152,61 @@ export class Show {
   }
 
   // ── loop ─────────────────────────────────────────────────────────────────
-  goLoop() {
+  goLoop(fromIndex = -1) {
     this._setRecording(false);
     clearTimeout(this.loopTimer);
     const f = this.field;
     f.clearScene();
     f.resetCorpus(this._loopCorpus());
     f.cursorEnabled = false;
-    f.setSceneDensity(0.55);
+    f.setSceneDensity(0.06);
     f.setPalette(this.basePalette());
-    f.setPhysics({ modo: 'dispersion_ceniza', intensidad: 0.35, velocidad: 0.3, turbulencia: 0.35, densidad: 0.55 });
+    f.setPhysics({ modo: 'lluvia_text_rain', intensidad: 0.3, velocidad: 0.35, turbulencia: 0.15, densidad: 0.4 });
     this.state = 'loop';
-    this.loopIndex = -1;
+    this.loopIndex = fromIndex;
     this.notify('LOOP');
     this._nextLoop();
   }
 
+  /** Texto del telón antes de la lectura: títulos del loop + FLAT + la curaduría (no los nombres de las categorías). */
   _loopCorpus() {
-    const words = (this.settings.loop || []).map((s) => s.letras || (s.tipo === 'texto' ? s.contenido : s.alt) || '').filter(Boolean);
-    return words.join('  ') || 'UMBRAL';
+    const words = (this.settings.loop || []).filter((s) => s.tipo === 'texto').map((s) => s.letras || s.contenido || '');
+    words.push('FLAT');
+    const cur = String(this.settings.curaduria || '').replace(/\s+/g, ' ').trim().slice(0, 500);
+    if (cur) words.push(cur);
+    return words.filter(Boolean).join('  ') || 'UMBRAL';
+  }
+
+  _loopSteps() {
+    return (this.settings.loop || []).filter((s) => s && (s.contenido || s.tipo === 'logos'));
+  }
+
+  /**
+   * Flecha derecha: avanza al paso siguiente del loop; desde el último paso pasa al título UMBRAL
+   * (que queda fijo hasta T). Flecha izquierda: paso anterior.
+   */
+  step(dir = 1) {
+    if (this.state === 'title' && dir < 0) {
+      this.goLoop(this._loopSteps().length - 2);
+      return;
+    }
+    if (this.state !== 'loop') {
+      if (this.state !== 'title') this.goLoop();
+      return;
+    }
+    const n = this._loopSteps().length;
+    if (dir > 0 && this.loopIndex >= n - 1) {
+      this.goTitle();
+      return;
+    }
+    this.loopIndex = dir > 0 ? this.loopIndex : Math.max(-1, this.loopIndex - 2);
+    this._nextLoop();
   }
 
   async _nextLoop() {
     clearTimeout(this.loopTimer);
     if (this.state !== 'loop') return;
-    const steps = (this.settings.loop || []).filter((s) => s && (s.contenido || s.tipo === 'logos'));
+    const steps = this._loopSteps();
     if (!steps.length) return;
     this.loopIndex = (this.loopIndex + 1) % steps.length;
     const step = steps[this.loopIndex];
@@ -186,10 +234,19 @@ export class Show {
     this._hideImage(step.tipo === 'logos'); // entre grupos de logos: glitch de logo a logo, sin pasar por negro
     f.clearTitle();
     if (step.tipo === 'logos') {
+      f.setBackdrop(false);
       const total = await this._playLogos(step, token);
+      if (total === null && step.si_vacia === 'texto' && token === this.loopToken) {
+        this.stage.hide();
+        f.releaseFigure(true);
+        f.setBackdrop(true);
+        f.showTitle(step.alt || 'FLAT', { maxSize: 0.2 });
+        return;
+      }
       return total === null ? -1 : total; // -1: carpeta vacía → saltar
     }
     this.stage.hide();
+    f.setBackdrop(true);
     let kind = step.tipo === 'imagen' ? 'imagen' : 'texto';
     let content = String(step.contenido || '');
     let img = null;
@@ -280,6 +337,28 @@ export class Show {
     this.pageTimers = [];
   }
 
+  // ── título ───────────────────────────────────────────────────────────────
+  /** UMBRAL fijo, calado en el telón de palabras, hasta que se aprieta T. */
+  goTitle() {
+    this._setRecording(false);
+    clearTimeout(this.loopTimer);
+    this.loopToken++;
+    this._hideImage();
+    const f = this.field;
+    f.clearScene();
+    const txt = this._loopSteps().find((s) => s.tipo === 'texto');
+    const name = (txt && txt.contenido) || 'UMBRAL';
+    f.resetCorpus(this._loopCorpus());
+    f.cursorEnabled = false;
+    f.setSceneDensity(0.06);
+    f.setPalette(this.basePalette());
+    f.setPhysics({ modo: 'lluvia_text_rain', intensidad: 0.3, velocidad: 0.35, turbulencia: 0.15, densidad: 0.4 });
+    f.setBackdrop(true);
+    f.showTitle(name);
+    this.state = 'title';
+    this.notify(`${name} — T para comenzar`);
+  }
+
   // ── artista ──────────────────────────────────────────────────────────────
   goArtist(n) {
     const a = this.artists[n - 1];
@@ -295,9 +374,10 @@ export class Show {
     f.clearScene();
     f.resetCorpus(a.name);
     f.cursorEnabled = false;
-    f.setSceneDensity(0.5);
+    f.setSceneDensity(0.06);
     f.setPalette(this.basePalette());
-    f.setPhysics({ modo: 'dispersion_ceniza', intensidad: 0.3, velocidad: 0.25, turbulencia: 0.3, densidad: 0.5 });
+    f.setPhysics({ modo: 'lluvia_text_rain', intensidad: 0.3, velocidad: 0.35, turbulencia: 0.15, densidad: 0.4 });
+    f.setBackdrop(true);
     f.showTitle(a.name);
     this.state = 'artist';
     this.artistIdx = n - 1;
@@ -318,14 +398,16 @@ export class Show {
     }
     if (mode === 'palabras') {
       f.releaseFigure(true);
+      f.setBackdrop(false); // el muro de palabras (grilla) es la imagen
       f.cursorEnabled = false;
-      f.setSceneDensity(0.12);
-      f.setPhysics({ modo: 'dispersion_ceniza', intensidad: 0.25, velocidad: 0.2, turbulencia: 0.25, densidad: 0.4 });
+      f.setSceneDensity(0.05);
+      f.setPhysics({ modo: 'lluvia_text_rain', intensidad: 0.25, velocidad: 0.3, turbulencia: 0.1, densidad: 0.4 });
     } else {
       f.clearWords();
+      f.setBackdrop(true);
       f.cursorEnabled = true;
-      f.setSceneDensity(1);
-      f.setPhysics({ modo: 'lluvia_text_rain', intensidad: 0.5, velocidad: 0.45, turbulencia: 0.35, densidad: 0.6 });
+      f.setSceneDensity(0.18);
+      f.setPhysics({ modo: 'lluvia_text_rain', intensidad: 0.5, velocidad: 0.45, turbulencia: 0.2, densidad: 0.6 });
     }
     this.state = 'perform';
     this.mode = mode;
@@ -333,8 +415,10 @@ export class Show {
     this.notify(`● GRABANDO · ${mode === 'palabras' ? 'palabras' : 'poema'}`);
   }
 
-  toggleWords() {
-    this.start(this.state === 'perform' && this.mode === 'palabras' ? 'poema' : 'palabras');
+  /** T: modo palabras grabando (desde el título o en cualquier momento). */
+  startWords() {
+    if (this.state === 'perform' && this.mode === 'palabras' && this.recording) return;
+    this.start('palabras');
   }
 
   _setRecording(on) {

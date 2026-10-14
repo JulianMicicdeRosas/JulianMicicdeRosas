@@ -259,7 +259,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # los logos ni los ajustes. macOS/Windows: Documentos/Umbral (se puede cambiar con UMBRAL_DIR).
 _docs = os.path.join(os.path.expanduser("~"), "Documents")
 USER_DIR = os.path.realpath(os.environ.get("UMBRAL_DIR") or os.path.join(_docs if os.path.isdir(_docs) else os.path.expanduser("~"), "Umbral"))
-LOGO_GROUPS = ("organizadores", "socio-cultural", "patrocinadores", "acompanan", "embajadas", "media-partner")
+LOGO_GROUPS = ("flat", "organizadores", "socio-cultural", "patrocinadores", "acompanan", "embajadas", "media-partner")
 
 
 def ensure_user_dir() -> None:
@@ -275,6 +275,7 @@ def ensure_user_dir() -> None:
         if not os.path.exists(readme):
             with open(readme, "w", encoding="utf-8") as fh:
                 fh.write("Umbral · carpeta de la muestra (no se borra al actualizar el programa)\n\n"
+                         "logos/flat             → abre el loop: el logo de FLAT (centro del evento)\n"
                          "logos/organizadores    → primero\n"
                          "logos/socio-cultural   → segundo (más tiempo en pantalla)\n"
                          "logos/patrocinadores   → tercero\n"

@@ -22,6 +22,7 @@ const LINE = 1;
 const FIGURE = 2;
 const TITLE = 3;  // nombre del artista / títulos tipográficos
 const WORD = 4;   // modo palabras (T): palabras dispersas por la pared
+const BGW = 5;    // telón de fondo: bloque de texto mono del que se desprenden letras
 const CURSOR = 9;
 
 export const PHYSICS_MODES = ['lluvia_text_rain', 'enjambre_lozano', 'vortice_sandison', 'dispersion_ceniza'];
@@ -126,6 +127,16 @@ export class TypeField {
     this.wallUpper = true;
     this.wall = null;
     this.wordSeen = new Set();
+    // telón de fondo (bloque de palabras repetidas, como un muro de texto) y transiciones con glitch
+    this.backdrop = null;
+    this.backdropOn = false;
+    this.backdropHoles = [];
+    this.bdRows = 26;
+    this.glitchMoves = true; // toda letra que cambia de lugar lo hace a saltos con cortes, no volando
+    this.ambientRain = true; // sin letras flotando: el ambiente es sólo lluvia que cae del telón
+    this.gph = new Int32Array(N).fill(-1);
+    this.keepFall = new Uint8Array(N);
+    this.onTransition = null; // (intensidad) → ráfaga de glitch de pantalla
     this.idleText = (idleText || 'la voz escribe en la oscuridad').trim();
 
     this._buildMesh();
@@ -263,7 +274,7 @@ export class TypeField {
   }
 
   setPhysics(f = {}) {
-    const idx = PHYSICS_MODES.indexOf(f.modo);
+    const idx = this.ambientRain ? RAIN : PHYSICS_MODES.indexOf(f.modo);
     if (idx >= 0) this.modeTarget = idx;
     const n = (v, d) => (Number.isFinite(+v) ? clamp(+v, 0, 1) : d);
     this.phys = {
@@ -687,12 +698,14 @@ export class TypeField {
     this.figureDensity = concrete ? 0.18 : 0.62;
     this.figureAlpha = concrete ? 1 : 0.78;
     this.figure = {
-      k, cx, cy, ox, oy, top: fig.top,
+      k, cx, cy, ox, oy, top: fig.top, mask: fig.mask || null,
+      rect: { x0: (bb.x - ox) * k + cx, x1: (bb.x + bb.w - ox) * k + cx, y0: (oy - bb.y - bb.h) * k + cy, y1: (oy - bb.y) * k + cy },
       until: dir.permanente ? Infinity : t + clamp(+dir.duracion_s || 14, 6, 40) + 3.5,
       name: dir.figura || '',
       count: nT,
     };
     this._recomputeFloor();
+    this.onTransition?.(0.7);
     this.onFigure?.(fig, this.figure);
   }
 
@@ -758,6 +771,7 @@ export class TypeField {
     this.figureDensity = 1;
     this.figureAlpha = 1;
     this.transitionBoost = 1;
+    this.onTransition?.(0.45);
     this._recomputeFloor();
   }
 
@@ -797,8 +811,10 @@ export class TypeField {
   _respawn(i, mode) {
     const W = this.W, H = this.H;
     this._unrest(i);
+    this.keepFall[i] = 0;
     if (mode === RAIN) {
-      this.px[i] = (Math.random() - 0.5) * W * 1.02;
+      // con telón, la lluvia ambiente cae sólo en la franja libre (izquierda), como letras sueltas
+      this.px[i] = this.backdropOn ? -W / 2 + Math.random() * W * 0.28 : (Math.random() - 0.5) * W * 1.02;
       this.py[i] = H / 2 + 20 + Math.random() * H * 0.3;
       this.vx[i] = 0;
       this.vy[i] = -40;
@@ -851,6 +867,7 @@ export class TypeField {
     }
     if (this.line && t > this.line.releaseAt) this.releaseLine();
 
+    this._bdUpdate(dt, t);
     const { intensidad: inten, velocidad: vel, turbulencia: turb, densidad: dens } = this.phys;
     const corpusFactor = clamp(0.1 + this.corpusChars / 2600, 0.1, 1);
     const density = corpusFactor * (0.3 + 0.7 * dens) * this.figureDensity * this.sceneDensity * (wR > 0.5 ? 0.75 : 1);
@@ -909,17 +926,22 @@ export class TypeField {
           this.metaDirty = true;
         }
         // resorte críticamente amortiguado hacia el punto del caligrama + respiración mínima
-        const w = 3.6 + s * 2.6, w2 = w * w, c2 = 2 * w;
         const bx = Math.sin(t * 0.8 + s * 40) * 1.6, by = Math.cos(t * 0.7 + s * 23) * 1.6;
-        vx[i] += (w2 * (this.tx[i] + bx - px[i]) - c2 * vx[i]) * dt;
-        vy[i] += (w2 * (this.ty[i] + by - py[i]) - c2 * vy[i]) * dt;
-        vz[i] += (w2 * (this.tz[i] - pz[i]) - c2 * vz[i]) * dt;
-        px[i] += vx[i] * dt; py[i] += vy[i] * dt; pz[i] += vz[i] * dt;
-        rot[i] += angDiff(this.trot[i], rot[i]) * kRot;
-        size[i] += (this.tsize[i] - size[i]) * kSize;
+        let arrived = 1;
+        if (this.glitchMoves) arrived = this._glitchMove(i, t, bx, by);
+        else {
+          const w = 3.6 + s * 2.6, w2 = w * w, c2 = 2 * w;
+          vx[i] += (w2 * (this.tx[i] + bx - px[i]) - c2 * vx[i]) * dt;
+          vy[i] += (w2 * (this.ty[i] + by - py[i]) - c2 * vy[i]) * dt;
+          vz[i] += (w2 * (this.tz[i] - pz[i]) - c2 * vz[i]) * dt;
+          px[i] += vx[i] * dt; py[i] += vy[i] * dt; pz[i] += vz[i] * dt;
+        }
+        rot[i] += angDiff(this.trot[i], rot[i]) * (arrived ? kRot : 1);
+        size[i] += (this.tsize[i] - size[i]) * (arrived ? kSize : 0.5);
         alphaT[i] = this.talpha[i] * this.figureAlpha;
-        alpha[i] += (alphaT[i] - alpha[i]) * kAlpha;
-      } else if ((st === TITLE || st === WORD) && t >= this.delay[i]) {
+        if (arrived) alpha[i] += (alphaT[i] - alpha[i]) * kAlpha;
+        else alpha[i] = alphaT[i] * (Math.random() < 0.3 ? 0.15 : 1); // parpadeo en tránsito
+      } else if ((st === TITLE || st === WORD || st === BGW) && t >= this.delay[i]) {
         if (this.pslot[i] >= 0) {
           this.slot[i] = this.pslot[i];
           this.tint[i] = this.ptint[i];
@@ -928,22 +950,27 @@ export class TypeField {
           this.metaDirty = true;
         }
         const title = st === TITLE;
-        const w = title ? 3 + s * 1.4 : 2.6, w2 = w * w, c2 = 2 * w;
-        const amp = title ? 0.8 : this.wallMode ? 0 : 2.5; // en el muro, grilla estricta
+        const amp = title ? 0.8 : this.wallMode || st === BGW ? 0 : 2.5; // en los muros, grilla estricta
         const g = this.grp[i];
         const bx = Math.sin(t * (title ? 0.6 : 0.17) + g * 40) * amp, by = Math.cos(t * (title ? 0.5 : 0.13) + g * 23) * amp;
-        vx[i] += (w2 * (this.tx[i] + bx - px[i]) - c2 * vx[i]) * dt;
-        vy[i] += (w2 * (this.ty[i] + by - py[i]) - c2 * vy[i]) * dt;
-        vz[i] += (w2 * (this.tz[i] - pz[i]) - c2 * vz[i]) * dt;
-        px[i] += vx[i] * dt; py[i] += vy[i] * dt; pz[i] += vz[i] * dt;
-        rot[i] += angDiff(this.trot[i], rot[i]) * kRot;
-        size[i] += (this.tsize[i] - size[i]) * kSize;
+        let arrived = 1;
+        if (this.glitchMoves) arrived = this._glitchMove(i, t, bx, by);
+        else {
+          const w = title ? 3 + s * 1.4 : 2.6, w2 = w * w, c2 = 2 * w;
+          vx[i] += (w2 * (this.tx[i] + bx - px[i]) - c2 * vx[i]) * dt;
+          vy[i] += (w2 * (this.ty[i] + by - py[i]) - c2 * vy[i]) * dt;
+          vz[i] += (w2 * (this.tz[i] - pz[i]) - c2 * vz[i]) * dt;
+          px[i] += vx[i] * dt; py[i] += vy[i] * dt; pz[i] += vz[i] * dt;
+        }
+        rot[i] += angDiff(this.trot[i], rot[i]) * (arrived ? kRot : 1);
+        size[i] += (this.tsize[i] - size[i]) * (arrived ? kSize : 0.5);
         alphaT[i] = this.talpha[i];
-        alpha[i] += (alphaT[i] - alpha[i]) * (title ? kAlpha : 1 - Math.exp(-dt * 1.4));
+        if (arrived) alpha[i] += (alphaT[i] - alpha[i]) * (title || st === BGW ? kAlpha * 2 : 1 - Math.exp(-dt * 1.4));
+        else alpha[i] = alphaT[i] * (Math.random() < 0.3 ? 0.15 : 1);
       } else {
         // ── FREE (o FIGURE esperando su turno) ─────────────────────────────
         const awaiting = st !== FREE; // reclutada (figura, título o palabra) esperando su turno
-        const vis = awaiting || seed2[i] < density;
+        const vis = awaiting || seed2[i] < density || this.keepFall[i] === 1;
         if (!vis && alpha[i] < 0.004) {
           if (this.rest[i] > 0) this._unrest(i);
           alpha[i] = 0;
@@ -1150,6 +1177,202 @@ export class TypeField {
   // ════════════════════════════════════════════════════════════════════════
   //  Escenas del show: título de artista, modo palabras, limpieza
   // ════════════════════════════════════════════════════════════════════════
+  /**
+   * Desplazamiento con glitch: la letra no vuela; salta en escalones (~12 por segundo, cada una a
+   * su ritmo) con cortes horizontales compartidos por franja, y parpadea hasta llegar.
+   * Devuelve 1 si ya está en su lugar.
+   */
+  _glitchMove(i, t, bx, by) {
+    const dx = this.tx[i] + bx - this.px[i], dy = this.ty[i] + by - this.py[i];
+    const d2 = dx * dx + dy * dy;
+    if (d2 < 9) {
+      this.px[i] += dx;
+      this.py[i] += dy;
+      this.pz[i] += (this.tz[i] - this.pz[i]) * 0.3;
+      this.vx[i] = this.vy[i] = this.vz[i] = 0;
+      return 1;
+    }
+    const ph = Math.floor(t * 12 + this.seed[i] * 5);
+    if (ph !== this.gph[i]) {
+      this.gph[i] = ph;
+      const d = Math.sqrt(d2);
+      const f = d < 30 ? 1 : 0.28 + 0.45 * Math.random();
+      const band = Math.floor(this.py[i] / 36);
+      const tear = (fract(Math.sin(band * 12.9898 + ph * 78.233) * 43758.5453) - 0.5) * Math.min(160, d * 0.7);
+      this.px[i] += dx * f + (f < 1 ? tear : 0);
+      this.py[i] += dy * f;
+      this.pz[i] += (this.tz[i] - this.pz[i]) * f;
+      this.vx[i] = this.vy[i] = this.vz[i] = 0;
+    }
+    return 0;
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  //  Telón de fondo: bloque de texto monoespaciado hecho con lo dicho (palabras repetidas),
+  //  del que se desprenden letras que caen y se apilan. Título y figura lo calan (huecos negros).
+  // ════════════════════════════════════════════════════════════════════════
+  setBackdrop(on) {
+    this.backdropOn = !!on;
+    if (!on) this._bdClear();
+  }
+
+  /** Rectángulos extra (mundo) que el telón deja en negro: {x0, x1, y0, y1}. */
+  setBackdropHoles(rects = []) {
+    this.backdropHoles = rects;
+  }
+
+  _bdBuild() {
+    const rowsN = Math.round(clamp(this.bdRows, 10, 60));
+    const top = this.H * 0.47, bottom = -this.H * 0.3;
+    const rh = (top - bottom) / rowsN;
+    const size = rh * 1.12;
+    const kind = this._k('mono');
+    const cw = this.atlas.adv(this.atlas.slot('M', kind)) * size;
+    const x0 = -this.W * 0.2, x1 = this.W * 0.49;
+    const colsN = Math.max(8, Math.floor((x1 - x0) / cw));
+    const cells = [];
+    for (let r = 0; r < rowsN; r++) {
+      for (let c = 0; c < colsN; c++) cells.push({ x: x0 + (c + 0.5) * cw, y: top - (r + 0.5) * rh, ch: ' ', i: -1, at: 0 });
+    }
+    this.backdrop = { rowsN, colsN, rh, size, cw, kind, cells, tick: 0, ver: this.corpusChars, next: null, rw: 0 };
+    const txt = this._bdText(cells.length);
+    cells.forEach((c, j) => (c.ch = txt[j] || ' '));
+  }
+
+  /**
+   * Texto del telón: las últimas palabras dichas, repetidas en ciclo hasta llenar todas las celdas
+   * (cuantas menos palabras haya, más veces se repite cada una).
+   */
+  _bdText(n) {
+    const words = this.corpus.slice(-1600).split(/\s+/).filter(Boolean).slice(-60);
+    if (!words.length) words.push('umbral');
+    let out = '';
+    let k = (Math.random() * words.length) | 0;
+    while (out.length < n) out += words[k++ % words.length] + ' ';
+    return this._u(out);
+  }
+
+  _bdUpdate(dt, t) {
+    if (!this.backdropOn) return;
+    if (!this.backdrop) this._bdBuild();
+    const B = this.backdrop;
+    B.tick += dt;
+    if (B.tick < 0.06) return;
+    const step = B.tick;
+    B.tick = 0;
+    // lo nuevo que se dice reescribe el telón de arriba abajo (cada letra cambia con un salto)
+    if (this.corpusChars !== B.ver && !B.next) {
+      B.next = this._bdText(B.cells.length);
+      B.rw = 0;
+      B.ver = this.corpusChars;
+    }
+    if (B.next) {
+      for (let q = 0, qn = Math.max(70, Math.round(1000 * step)); q < qn && B.rw < B.cells.length; q++, B.rw++) {
+        const c = B.cells[B.rw];
+        c.ch = B.next[B.rw] || ' ';
+        if (c.i < 0) continue;
+        if (c.ch === ' ') this._bdDrop(c, t);
+        else {
+          this.slot[c.i] = this.atlas.slot(c.ch, B.kind);
+          this.birth[c.i] = t;
+        }
+      }
+      if (B.rw >= B.cells.length) B.next = null;
+      this.metaDirty = true;
+    }
+    const holes = this._bdHoles();
+    let budget = Math.max(60, Math.round(1400 * step)); // ~2 s para llenar el telón, a cualquier FPS
+    for (const c of B.cells) {
+      if (c.i >= 0 && this.state[c.i] !== BGW) {
+        c.i = -1; // otra escena tomó la partícula
+        c.at = t + 1;
+      }
+      if (holes.length && this._inHoles(c.x, c.y, B.cw * 0.5, holes)) {
+        if (c.i >= 0) this._bdDrop(c, t);
+        continue;
+      }
+      if (c.i < 0 && c.ch !== ' ' && t >= c.at && budget-- > 0) this._bdPlace(c, t);
+    }
+    // letras que se desprenden y caen (más con la voz fuerte)
+    const rate = (0.8 + 5 * this.phys.intensidad + 14 * this.rms) * step;
+    let n = Math.floor(rate) + (Math.random() < rate % 1 ? 1 : 0);
+    while (n-- > 0) {
+      const c = B.cells[(Math.random() * B.cells.length) | 0];
+      if (c.i >= 0) this._bdDrop(c, t);
+    }
+  }
+
+  _bdPlace(c, t) {
+    const B = this.backdrop;
+    const i = this._allocParticle(false);
+    if (i < 0) return;
+    this.state[i] = BGW;
+    this.grp[i] = 0;
+    this.px[i] = c.x + (Math.random() - 0.5) * B.cw * 6; // aparece con un salto corto, no cruzando la pantalla
+    this.py[i] = c.y;
+    this.pz[i] = 0;
+    this.alpha[i] = 0;
+    this.tx[i] = c.x;
+    this.ty[i] = c.y;
+    this.tz[i] = 0;
+    this.trot[i] = 0;
+    this.rot[i] = 0;
+    this.tsize[i] = B.size;
+    this.size[i] = B.size;
+    this.talpha[i] = 0.82;
+    this.pslot[i] = this.atlas.slot(c.ch, B.kind);
+    this.ptint[i] = 0;
+    this.paccent[i] = 0;
+    this.delay[i] = t + Math.random() * 0.4;
+    this.birth[i] = this.delay[i];
+    this.level[i] = 0.1;
+    c.i = i;
+    this.metaDirty = true;
+  }
+
+  /** La letra del telón se suelta y cae (lluvia) hasta apilarse abajo. */
+  _bdDrop(c, t) {
+    const i = c.i;
+    c.i = -1;
+    c.at = t + 1.5 + Math.random() * 5;
+    if (i < 0 || this.state[i] !== BGW) return;
+    this.state[i] = FREE;
+    this.pslot[i] = -1;
+    this.keepFall[i] = 1;
+    this.vx[i] = (Math.random() - 0.5) * 10;
+    this.vy[i] = -5;
+    this.life[i] = 0;
+  }
+
+  _bdClear() {
+    if (!this.backdrop) return;
+    for (const c of this.backdrop.cells) if (c.i >= 0) this._bdDrop(c, this.time);
+    this.backdrop = null;
+  }
+
+  _bdHoles() {
+    const H = this.backdropHoles.slice();
+    if (this.title?.rect) H.push(this.title.rect);
+    if (this.figure) H.push(this.figure);
+    return H;
+  }
+
+  /** ¿La celda (x, y) cae dentro de algún hueco? Las figuras se calan por su máscara (con margen r). */
+  _inHoles(x, y, r, holes) {
+    for (const h of holes) {
+      if (h.k) {
+        const R = h.rect;
+        if (x < R.x0 - r || x > R.x1 + r || y < R.y0 - r || y > R.y1 + r) continue;
+        if (!h.mask) return true;
+        for (const [ex, ey] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) {
+          const fx = Math.round((x + ex - h.cx) / h.k + h.ox), fy = Math.round(h.oy - (y + ey - h.cy) / h.k);
+          if (fx >= 0 && fx < RES && fy >= 0 && fy < RES && h.mask[fy * RES + fx] > 0.5) return true;
+        }
+      } else if (x > h.x0 && x < h.x1 && y > h.y0 && y < h.y1) return true;
+    }
+    return false;
+  }
+
   resetCorpus(text) {
     this.corpus = (text || this.idleText).trim() || this.idleText;
     this.corpusChars = 0;
@@ -1240,8 +1463,11 @@ export class TypeField {
         x += adv;
       }
     });
-    this.title = { text, idx };
+    const half = Math.max(...rows.map((row) => widthOf(row.join(' '), S) + S * 0.3 * (row.length - 1))) / 2;
+    const pad = S * 0.35;
+    this.title = { text, idx, rect: { x0: -half - pad, x1: half + pad, y0: y0 - (rows.length - 1) * lineH - S * 0.62 - pad, y1: y0 + S * 0.62 + pad } };
     this.metaDirty = true;
+    this.onTransition?.(0.6);
   }
 
   clearTitle() {
@@ -1255,6 +1481,7 @@ export class TypeField {
       this.life[i] = 0;
     }
     this.title = null;
+    this.onTransition?.(0.4);
   }
 
   // ── modo palabras ───────────────────────────────────────────────────────

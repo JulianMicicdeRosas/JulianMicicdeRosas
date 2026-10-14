@@ -124,20 +124,34 @@ Producción: `start_instalacion.bat` compila el frontend, abre el backend minimi
 ## Operación de la noche
 
 ```
- LOOP (FLAT · sponsors · UMBRAL) ──1…9──► NOMBRE DEL ARTISTA ──S──► POEMA (graba)
-   ▲                                  ▲ número: reinicia el nombre      │ T ⇄
-   └───────────────L──────────────────┴─────────────────────────── PALABRAS (graba)
+ LOOP (FLAT · logos · UMBRAL, se repite)  ──→──→ (desde el último paso)
+   │  → / ← avanza / retrocede                         ▼
+   │                                          TÍTULO UMBRAL (fijo)
+   │                                                   │ T
+   │                                                   ▼
+   │                                      PALABRAS (graba sola)
+   │                                                   │ 1…9, 0
+   │                                                   ▼
+   │                                    NOMBRE DEL ARTISTA (no graba)
+   │                                                   │ S ⇄ S
+   └──────────────── L ──────────────────  POEMA (graba / detenido)
 ```
 
 | Tecla | Acción |
 | --- | --- |
-| `C` | panel de operación (y recordatorio de atajos) |
-| `1`…`9`, `0` | ir al nombre del artista N (0 = 10). Otra vez un número: reinicia a ese nombre y deja de grabar |
-| `S` | comenzar a grabar (o reanudar): el poema dibuja con sus letras |
-| `P` | detener la grabación (lo dibujado queda) |
-| `T` | modo palabras: todo lo dicho, disperso por la pared con tamaños sutilmente distintos (otra vez `T`: vuelve a poema) |
+| `→` / `←` | loop: paso siguiente / anterior. Desde el último paso, `→` fija el título UMBRAL |
+| `T` | empieza a grabar en modo palabras (desde el título o cuando sea), hasta que se elige un artista |
+| `1`…`9`, `0` | nombre del artista N (0 = 10): deja de grabar; no empieza hasta apretar `S` |
+| `S` | grabar / dejar de grabar (el poema dibuja; lo dibujado queda en pantalla) |
+| `P` | detener la grabación (igual que `S` cuando graba) |
 | `L` | volver al loop (deja de grabar) |
+| `C` | panel de operación (y recordatorio de atajos) |
 | `F` | pantalla completa · `D` panel técnico / simulación · `Esc` cierra paneles |
+
+Toda letra que cambia de lugar lo hace con **glitch** (salta en escalones con cortes horizontales y parpadeo; cada
+transición dispara además una ráfaga de glitch de pantalla). El fondo es un **telón de texto**: un bloque
+monoespaciado con las últimas palabras dichas repetidas, del que se desprenden letras que caen y se apilan; el
+título, el nombre y las figuras lo calan (quedan como huecos negros).
 
 Sólo se envía audio a OpenAI mientras se graba (`S` o `T`): el loop y los nombres no consumen la API.
 
@@ -167,6 +181,7 @@ todo a `Documentos/Umbral/logos/`:
 
 | Carpeta | Orden | Tiempo por página (por defecto) |
 | --- | --- | --- |
+| `flat` | abre el loop (de a uno, grande) | 10 s · si está vacía se escribe «FLAT» |
 | `organizadores` | 1º | 8 s |
 | `socio-cultural` (también vale «socio cultural») | 2º | 16 s |
 | `patrocinadores` | 3º | 8 s |

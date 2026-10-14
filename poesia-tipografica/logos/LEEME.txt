@@ -1,6 +1,8 @@
 LOGOS INTEGRADOS AL PROGRAMA (funcionan sin internet)
 Fuente: Drive «FLAT 2026 - Logos-2» (categorías de flatfestival.org). Orden de aparición en el loop:
 
+  flat/              logo de FLAT (centro del evento): abre el loop, solo y grande.
+                     Mientras falte el PNG, se escribe «FLAT» con la tipografía de la marca.
   organizadores/     01–04  El Zorro Azul · CEES · MMAMM · Mendoza Ciudad
   socio-cultural/    05–08  UM FAUD/FI · Huarpe Riglos · Fundación Werthein · Colección Pampa  (más tiempo)
   patrocinadores/    09–15  Azcuy · Corralón Luján · Rodríguez Hnos. · Mi Terruño · U. Champagnat ·

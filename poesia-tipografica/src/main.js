@@ -414,15 +414,21 @@ async function boot() {
     }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key.toLowerCase();
+    if (k === 'arrowright' || k === 'arrowleft') {
+      e.preventDefault();
+      show.step(k === 'arrowright' ? 1 : -1);
+      config.setState(show.label());
+      return;
+    }
     if (k === 'c') config.toggle();
     else if (k === 'd') debug.toggle();
     else if (k === 'f') {
       if (document.fullscreenElement) document.exitFullscreen();
       else document.documentElement.requestFullscreen?.().catch(() => {});
     } else if (/^[0-9]$/.test(k)) show.goArtist(k === '0' ? 10 : +k);
-    else if (k === 's') show.start(show.state === 'perform' ? show.mode : 'poema');
+    else if (k === 's') show.toggleRecord();
     else if (k === 'p') show.stop();
-    else if (k === 't') show.toggleWords();
+    else if (k === 't') show.startWords();
     else if (k === 'l') show.goLoop();
     else if (k === 'escape') {
       config.toggle(false);
@@ -468,6 +474,13 @@ async function boot() {
 
   // ── glitch azaroso: ráfagas de duración e intensidad al azar (la voz fuerte las provoca) ──
   const glitch = { level: 0, burst: 0, amp: 0, wait: 1, frame: 0 };
+  // toda transición (figura, título, palabras) dispara una ráfaga de glitch de pantalla
+  field.onTransition = (amp) => {
+    if ((settings.glitch_transiciones ?? 1) <= 0) return;
+    amp *= settings.glitch_transiciones ?? 1;
+    glitch.amp = Math.max(glitch.burst > 0 ? glitch.amp : 0, amp);
+    glitch.burst = Math.max(glitch.burst, 0.18 + amp * 0.4);
+  };
   function updateGlitch(dt) {
     const active = currentStyle === 'glitch' && field.figure;
     const ambient = settings.glitch_ambiente ?? 0; // glitch ocasional en todos los estilos

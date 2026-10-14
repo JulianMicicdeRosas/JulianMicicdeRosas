@@ -1,6 +1,6 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-#  Importar logos → Documentos/Umbral/logos/{organizadores,socio-cultural,patrocinadores,acompanan,embajadas,media-partner}
+#  Importar logos → Documentos/Umbral/logos/{flat,organizadores,socio-cultural,patrocinadores,acompanan,embajadas,media-partner}
 #  Doble clic. Busca la carpeta «FLAT 2026 - Logos…» en Descargas (o arrastra otra carpeta
 #  a esta ventana). Reconoce las subcarpetas por su nombre, convierte PDF a PNG y copia todo.
 #  Los logos quedan en tu Mac (sin internet) y no se borran al actualizar el programa.
@@ -36,6 +36,7 @@ group_of() {
     *acompa*) echo acompanan ;;
     *embajad*|*consulad*) echo embajadas ;;
     *media*|*prensa*) echo media-partner ;;
+    flat|logoflat|flatlogo) echo flat ;;  # sólo el nombre exacto (la carpeta raíz «FLAT 2026 - Logos» no)
     *) echo "" ;;
   esac
 }
