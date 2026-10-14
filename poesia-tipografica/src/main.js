@@ -25,6 +25,7 @@ import { SHAPES } from './shapeLibrary.js';
 import { Show, DEFAULT_SETTINGS } from './show.js';
 import { ConfigPanel } from './configPanel.js';
 import { PointCloud } from './pointCloud.js';
+import { Overlay } from './overlay.js';
 import { TREATMENTS, treat, pickTreatment, seedOf, composeFigure, figureToTone, rowsToTone, toneToText } from './treatments.js';
 
 const params = new URLSearchParams(location.search);
@@ -65,6 +66,7 @@ async function boot() {
   const atlas = new GlyphAtlas(renderer);
   const field = new TypeField({ atlas, count: CONFIG.pool, aspect: camera.aspect, worldH: CONFIG.worldH, idleText: CONFIG.idleText });
   scene.add(field.mesh);
+  const lines = new Overlay(field); // líneas finas: fragmentos del muro y figura de la tecla 0
 
   // nube de puntos estilo TouchDesigner: acompaña a cada figura
   const cloud = new PointCloud({ count: CONFIG.points, W: field.W, H: field.H });
@@ -285,12 +287,12 @@ async function boot() {
   // force = simulador del panel D (permite probar sin estar grabando)
   function onDelta(itemId, delta, force = false) {
     if (!show.recording && !force) return;
-    if (show.mode === 'palabras') field.wordsDelta(itemId, delta);
+    if (show.mode === 'palabras' || show.mode === 'pocas') field.wordsDelta(itemId, delta);
     else field.typeDelta(itemId, delta);
   }
   function onCompleted(itemId, text, force = false) {
     if (!show.recording && !force) return;
-    if (show.mode === 'palabras') field.completeWords(itemId, text);
+    if (show.mode === 'palabras' || show.mode === 'pocas') field.completeWords(itemId, text);
     else field.completeLine(itemId, text);
   }
 
@@ -488,7 +490,8 @@ async function boot() {
     art_direction: (m) => {
       const d = m.data || m;
       // las direcciones del simulador siempre se aplican; las de la voz, grabando (poema o palabras)
-      if (d.source === 'debug' || show.recording) applyDirection(d);
+      // en «pocas palabras» (tecla 0) no hay ilustraciones: sólo la transcripción
+      if (d.source === 'debug' || (show.recording && show.mode !== 'pocas')) applyDirection(d);
     },
   });
 
@@ -624,6 +627,7 @@ async function boot() {
       if (document.fullscreenElement) document.exitFullscreen();
       else document.documentElement.requestFullscreen?.().catch(() => {});
     } else if (k === '5') show.goFlatFinal(); // cierre: todo se desarma y queda el logo de FLAT
+    else if (k === '0') show.goSparse(); // sólo transcripción: pocas palabras que arman figuras y se rompen
     else if (/^[0-9]$/.test(k)) show.goArtist(k === '0' ? 10 : +k);
     else if (k === 's') show.toggleRecord();
     else if (k === 'p') show.stop();
@@ -769,6 +773,7 @@ async function boot() {
     const styleCloud = !field.figure ? 1 : currentStyle === 'ascii' ? 0.1 : currentStyle === 'marca' ? 0.5 : 1;
     cloud.update(dt, t, field.rms, { visible: pc && !quiet, intensity: (settings.nube ?? 1) * styleCloud });
     fx.render(t);
+    lines.draw(field.time);
     frames++;
     fpsT += dt;
     if (fpsT > 0.5) {

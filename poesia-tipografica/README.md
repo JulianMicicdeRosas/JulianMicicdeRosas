@@ -211,6 +211,20 @@ El servidor la limpia (acepta otros caracteres, la recentra y la escala) y, si i
 corto sólo de la grilla. Si eso también falla, se usa la silueta SVG que el modelo manda de respaldo, y si no hay,
 la figura de la biblioteca. En modo palabras (T) las ilustraciones también se calan en el muro.
 
+## Muro de artistas: fragmentos y tamaños · tecla 0
+
+**Muro de artistas (1–4, 6–9) y performance**: cada 1–3 s se borran con glitch bloques de una grilla modular (módulos
+casi cuadrados de celdas): unos quedan **vacíos**, otros **grises plenos**, **tenues** o **salpicados** con una trama de
+puntos; contornos finos, alguna línea que se prolonga hasta el borde y dos verticales rojas sobre la grilla. Cada
+bloque dura 8–20 s y vuelve. Además, algunas palabras dichas aparecen **2, 3 o 4 veces más grandes**, ocupando
+exactamente k × k celdas por letra (el tamaño del muro es el mínimo; todo en grilla); las palabras clave, en el rosa
+de la marca.
+
+**Tecla 0 — sólo transcripción**: se apaga todo en su lugar (sin polvo que cae) y graba. Cada palabra dicha aparece
+alineada a la grilla, en tamaño mínimo o 2× / 3×, sobre el trazado de una figura (círculo, espiral, diagonal, onda,
+columna o constelación) que se renueva cada 7–10 palabras; líneas finas las unen. Quedan a lo sumo 9 palabras: cada
+una vive 7–12 s y se rompe con glitch. S detiene / retoma; L vuelve al loop.
+
 ## Grabación de la sesión y re-proyección
 
 **Todo se graba desde que arranca el programa** (no hace falta apretar nada), en

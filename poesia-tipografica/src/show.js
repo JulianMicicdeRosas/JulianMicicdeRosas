@@ -191,6 +191,8 @@ export class Show {
     this._setRecording(false);
     clearTimeout(this.loopTimer);
     const f = this.field;
+    f.wallFx = false;
+    f.sparseMode = false;
     f.clearScene();
     f.resetCorpus(this._loopCorpus());
     f.cursorEnabled = false;
@@ -394,6 +396,9 @@ export class Show {
     const token = ++this.loopToken;
     this._hideImage(true);
     const f = this.field;
+    f.wallFx = false;
+    f.sparseMode = false;
+    f.clearSparse();
     f.cursorEnabled = false;
     f.releaseFigure(true);
     f.clearTitle();
@@ -445,6 +450,8 @@ export class Show {
     this.loopToken++;
     this._hideImage();
     const f = this.field;
+    f.wallFx = false;
+    f.sparseMode = false;
     f.clearScene();
     const txt = this._loopSteps().find((s) => s.tipo === 'texto');
     const name = (txt && txt.contenido) || 'UMBRAL';
@@ -479,6 +486,8 @@ export class Show {
     f.setPhysics({ modo: 'lluvia_text_rain', intensidad: 0.3, velocidad: 0.35, turbulencia: 0.15, densidad: 0.4 });
     f.setBackdrop(true);
     f.showTitle(a.name);
+    f.sparseMode = false;
+    f.wallFx = true; // el muro del artista se va fragmentando con glitch
     this.state = 'artist';
     this.artistIdx = n - 1;
     this.notify(`${n} · ${a.name} — S para comenzar`);
@@ -497,7 +506,20 @@ export class Show {
       f.releaseFigure(true);
       f.clearTitle();
     }
-    if (mode === 'palabras') {
+    f.sparseMode = mode === 'pocas';
+    f.wallFx = mode !== 'pocas';
+    if (mode === 'pocas') {
+      // sólo la transcripción: se borra todo y quedan pocas palabras que arman figuras entre ellas
+      f.releaseFigure(true);
+      f.clearTitle();
+      f.setShape(null);
+      f.clearWords();
+      f.wipe(); // el muro y la lluvia se apagan en su lugar (sin polvo que cae)
+      f.wordsToBackdrop = false;
+      f.cursorEnabled = false;
+      f.setPhysics({ modo: 'lluvia_text_rain', intensidad: 0.15, velocidad: 0.3, turbulencia: 0.1, densidad: 0.3 });
+      f.onTransition?.(0.9);
+    } else if (mode === 'palabras') {
       f.releaseFigure(true);
       f.setBackdrop(true); // lo dicho se escribe en el muro; las ilustraciones se calan en él
       f.wordsToBackdrop = true;
@@ -515,7 +537,12 @@ export class Show {
     this.state = 'perform';
     this.mode = mode;
     this._setRecording(true);
-    this.notify(`● GRABANDO · ${mode === 'palabras' ? 'palabras' : 'poema'}`);
+    this.notify(`● GRABANDO · ${mode === 'palabras' ? 'palabras' : mode === 'pocas' ? 'pocas palabras' : 'poema'}`);
+  }
+
+  /** 0: se borra todo y queda sólo la transcripción, con pocas palabras (graba). */
+  goSparse() {
+    this.start('pocas');
   }
 
   /** T: modo palabras grabando (desde el título o en cualquier momento). */

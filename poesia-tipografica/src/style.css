@@ -514,3 +514,14 @@ body.hide-cursor * {
   max-height: 340px;
   overflow-y: auto;
 }
+
+/* líneas finas sobre el muro (fragmentos, figura de la tecla 0): mismo cuadro de salida */
+#overlay-lines {
+  position: fixed;
+  left: var(--fx, 0);
+  top: var(--fy, 0);
+  width: var(--fw, 100%);
+  height: var(--fh, 100%);
+  pointer-events: none;
+  z-index: 1;
+}
