@@ -82,6 +82,8 @@ def _env_int(name: str, default: int) -> int:
 @dataclass
 class Config:
     openai_api_key: str
+    realtime_api: str
+    realtime_ga_url: str
     realtime_url: str
     transcription_model: str
     transcription_language: str
@@ -116,6 +118,8 @@ class Config:
     def from_env(cls) -> "Config":
         return cls(
             openai_api_key=_env("OPENAI_API_KEY"),
+            realtime_api=_env("OPENAI_REALTIME_API", "auto").lower(),
+            realtime_ga_url=_env("OPENAI_REALTIME_GA_URL", "wss://api.openai.com/v1/realtime?intent=transcription"),
             realtime_url=_env("OPENAI_REALTIME_URL",
                               "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview"),
             transcription_model=_env("TRANSCRIPTION_MODEL", "gpt-4o-transcribe"),
@@ -556,6 +560,14 @@ class AudioEngine:
 # ════════════════════════════════════════════════════════════════════════════
 
 class RealtimeTranscriber:
+    """Sesión Realtime de sólo transcripción.
+
+    Protocolos:
+      ga   → API Realtime actual: wss://…/v1/realtime?intent=transcription, session.type = "transcription"
+      beta → API beta histórica: ?model=gpt-4o-realtime-preview + encabezado OpenAI-Beta: realtime=v1
+    Con OPENAI_REALTIME_API=auto (por defecto) se prueba ga y, si OpenAI rechaza la configuración, beta.
+    """
+
     def __init__(self, cfg: Config, hub: FrontendHub, audio_q: asyncio.Queue[bytes],
                  on_completed: Callable[[str, str, str], None]) -> None:
         self.cfg = cfg
@@ -563,52 +575,85 @@ class RealtimeTranscriber:
         self.audio_q = audio_q
         self.on_completed = on_completed
         self.partials: dict[str, str] = {}
+        mode = cfg.realtime_api if cfg.realtime_api in ("ga", "beta") else "auto"
+        self.protocols = ["ga", "beta"] if mode == "auto" else [mode]
+        self.pi = 0
+        self.configured = False
+        self.fatal = False  # clave rechazada: no tiene sentido alternar protocolo
 
-    def _session_update(self) -> dict[str, Any]:
-        transcription: dict[str, Any] = {"model": self.cfg.transcription_model}
+    @property
+    def protocol(self) -> str:
+        return self.protocols[self.pi % len(self.protocols)]
+
+    def _transcription(self) -> dict[str, Any]:
+        tr: dict[str, Any] = {"model": self.cfg.transcription_model}
         if self.cfg.transcription_language:
-            transcription["language"] = self.cfg.transcription_language
+            tr["language"] = self.cfg.transcription_language
         if self.cfg.transcription_prompt:
-            transcription["prompt"] = self.cfg.transcription_prompt
+            tr["prompt"] = self.cfg.transcription_prompt
+        return tr
+
+    def _vad(self) -> dict[str, Any]:
+        return {"type": "server_vad", "threshold": self.cfg.vad_threshold,
+                "prefix_padding_ms": self.cfg.vad_prefix_ms, "silence_duration_ms": self.cfg.vad_silence_ms}
+
+    def _session_update(self, protocol: str | None = None) -> dict[str, Any]:
+        if (protocol or self.protocol) == "ga":
+            return {
+                "type": "session.update",
+                "session": {
+                    "type": "transcription",
+                    "audio": {"input": {
+                        "format": {"type": "audio/pcm", "rate": 24000},
+                        "transcription": self._transcription(),
+                        "turn_detection": self._vad(),
+                    }},
+                },
+            }
+        vad = self._vad()
+        vad.update({"create_response": False, "interrupt_response": False})  # transcripción exclusiva
         return {
             "type": "session.update",
             "session": {
                 "modalities": ["text"],  # nunca audio de respuesta
                 "instructions": "Sólo transcribe. No respondas.",
                 "input_audio_format": "pcm16",
-                "input_audio_transcription": transcription,
-                "turn_detection": {
-                    "type": "server_vad",
-                    "threshold": self.cfg.vad_threshold,
-                    "prefix_padding_ms": self.cfg.vad_prefix_ms,
-                    "silence_duration_ms": self.cfg.vad_silence_ms,
-                    "create_response": False,   # transcripción exclusiva
-                    "interrupt_response": False,
-                },
+                "input_audio_transcription": self._transcription(),
+                "turn_detection": vad,
             },
         }
+
+    def _endpoint(self, protocol: str) -> tuple[str, dict[str, str]]:
+        headers = {"Authorization": f"Bearer {self.cfg.openai_api_key}"}
+        if protocol == "ga":
+            return self.cfg.realtime_ga_url, headers
+        headers["OpenAI-Beta"] = "realtime=v1"
+        return self.cfg.realtime_url, headers
+
+    def _report(self, state: str, detail: str) -> None:
+        self.hub.set_status(openai=state, openai_detail=detail[:240])
 
     async def run(self) -> None:
         if not self.cfg.openai_api_key:
             log.warning("OPENAI_API_KEY vacío: transcripción desactivada (usa el modo D del navegador).")
-            self.hub.set_status(openai="disabled")
+            self._report("disabled", "falta OPENAI_API_KEY en .env")
             return
-        headers = {"Authorization": f"Bearer {self.cfg.openai_api_key}", "OpenAI-Beta": "realtime=v1"}
         backoff = 1.0
         while True:
+            proto = self.protocol
+            url, headers = self._endpoint(proto)
+            self.configured = False
             try:
-                log.info("Conectando a OpenAI Realtime…")
-                async with ws_connect(self.cfg.realtime_url, additional_headers=headers, max_size=None,
+                log.info("Conectando a OpenAI Realtime (API %s)…", proto)
+                self._report("connecting", f"API {proto}")
+                async with ws_connect(url, additional_headers=headers, max_size=None,
                                       open_timeout=15, ping_interval=20, ping_timeout=20,
                                       close_timeout=5) as ws:
-                    backoff = 1.0
-                    await ws.send(json.dumps(self._session_update()))
+                    await ws.send(json.dumps(self._session_update(proto)))
                     # audio acumulado mientras estábamos desconectados: conservar sólo ~0.5 s
                     keep = max(1, 500 // self.cfg.openai_chunk_ms)
                     while self.audio_q.qsize() > keep:
                         self.audio_q.get_nowait()
-                    self.hub.set_status(openai="connected")
-                    log.info("OpenAI Realtime conectado (%s)", self.cfg.transcription_model)
                     sender = asyncio.create_task(self._sender(ws), name="oa-sender")
                     receiver = asyncio.create_task(self._receiver(ws), name="oa-receiver")
                     done, pending = await asyncio.wait({sender, receiver}, return_when=asyncio.FIRST_COMPLETED)
@@ -619,18 +664,39 @@ class RealtimeTranscriber:
                         exc = task.exception()
                         if exc is not None:
                             raise exc
+                    if self.configured:
+                        backoff = 1.0
             except asyncio.CancelledError:
                 raise
             except InvalidStatus as exc:
                 code = exc.response.status_code
-                log.error("OpenAI rechazó la conexión (HTTP %s).", code)
-                if code in (401, 403):
-                    backoff = 60.0  # clave inválida: no martillar la API
+                body = ""
+                try:
+                    body = json.loads(exc.response.body or b"{}").get("error", {}).get("message", "")
+                except Exception:
+                    body = (exc.response.body or b"")[:160].decode("utf-8", "replace")
+                reason = {401: "clave rechazada (401): revisa OPENAI_API_KEY o genera una nueva",
+                          403: "sin acceso (403): la cuenta/proyecto no tiene permiso para Realtime",
+                          429: "límite o sin saldo (429): revisa Billing en platform.openai.com"}.get(code, f"HTTP {code}")
+                log.error("OpenAI rechazó la conexión (API %s): %s %s", proto, reason, body)
+                self._report("error", f"{reason} {body}".strip())
+                if code in (401, 403, 429):
+                    self.fatal = True
+                    backoff = 60.0
             except (OSError, ConnectionClosed, TimeoutError, InvalidURI) as exc:
                 log.warning("Conexión OpenAI perdida: %s", exc)
-            except Exception:
+                if not self.configured:
+                    self._report("error", f"sin conexión con OpenAI: {exc}")
+            except Exception as exc:
                 log.exception("Error inesperado en OpenAI Realtime")
-            self.hub.set_status(openai="reconnecting")
+                self._report("error", f"inesperado: {exc}")
+            # si la configuración nunca fue aceptada, probar el otro protocolo
+            if not self.configured and not self.fatal and len(self.protocols) > 1:
+                self.pi += 1
+                log.info("Pruebo la API %s de OpenAI Realtime", self.protocol)
+            self.fatal = False
+            if self.hub.status.get("openai") == "connected":
+                self._report("reconnecting", f"API {proto}")
             delay = backoff + random.uniform(0, 0.5)
             log.info("Reconectando a OpenAI en %.1fs", delay)
             await asyncio.sleep(delay)
@@ -675,11 +741,22 @@ class RealtimeTranscriber:
                 self.hub.emit("speech", state="stopped", item_id=ev.get("item_id"), t=_now_ms())
             elif et == "response.created":  # por seguridad: nunca generar respuestas
                 await ws.send(json.dumps({"type": "response.cancel"}))
-            elif et in ("session.created", "session.updated"):
+            elif et in ("session.updated", "transcription_session.updated"):
+                if not self.configured:
+                    self.configured = True
+                    log.info("OpenAI Realtime listo (API %s, %s)", self.protocol, self.cfg.transcription_model)
+                    self._report("connected", f"API {self.protocol} · {self.cfg.transcription_model}")
+            elif et in ("session.created", "transcription_session.created"):
                 log.debug("OpenAI: %s", et)
             elif et == "error":
-                err = ev.get("error", {})
-                log.error("OpenAI error: %s", err)
+                err = ev.get("error", {}) or {}
+                msg = f"{err.get('code') or err.get('type') or 'error'}: {err.get('message', '')}"
+                log.error("OpenAI error (API %s): %s", self.protocol, msg)
+                if err.get("code") in ("invalid_api_key",):
+                    self.fatal = True
+                if not self.configured:
+                    self._report("error", msg)
+                    return  # configuración rechazada → reconectar (y en auto, probar el otro protocolo)
                 if err.get("code") in ("session_expired", "session_terminated"):
                     return  # fuerza reconexión limpia
 
@@ -1135,6 +1212,93 @@ async def main_async(args: argparse.Namespace) -> None:
         await asyncio.Future()  # si todas las tareas terminan (p. ej. sin audio ni OpenAI), seguir sirviendo
 
 
+async def run_check() -> None:
+    """Diagnóstico: clave y API de OpenAI, micrófono. No guarda nada."""
+    cfg = Config.from_env()
+    ok = True
+    print("\n== Poesía Tipográfica · diagnóstico ==\n")
+
+    # ── OpenAI ──
+    key = cfg.openai_api_key
+    if not key:
+        print("✗ OpenAI: falta OPENAI_API_KEY en .env")
+        ok = False
+    else:
+        print(f"· Clave: {key[:7]}…{key[-4:]} ({len(key)} caracteres)")
+        if not key.startswith("sk-"):
+            print("  ⚠ no empieza con 'sk-': ¿se copió completa?")
+        hub = FrontendHub(cfg)
+        tr = RealtimeTranscriber(cfg, hub, asyncio.Queue(), lambda *a: None)
+        accepted = None
+        for proto in ("ga", "beta"):
+            url, headers = tr._endpoint(proto)
+            try:
+                async with ws_connect(url, additional_headers=headers, open_timeout=15, max_size=None) as ws:
+                    await ws.send(json.dumps(tr._session_update(proto)))
+                    result = "sin respuesta"
+                    deadline = time.monotonic() + 10
+                    while time.monotonic() < deadline:
+                        ev = json.loads(await asyncio.wait_for(ws.recv(), max(0.1, deadline - time.monotonic())))
+                        if ev.get("type") in ("session.updated", "transcription_session.updated"):
+                            result = "OK"
+                            break
+                        if ev.get("type") == "error":
+                            e = ev.get("error", {})
+                            result = f"rechazada: {e.get('code') or e.get('type')}: {e.get('message')}"
+                            break
+                print(f"{'✓' if result == 'OK' else '✗'} OpenAI API {proto}: {result}")
+                if result == "OK" and accepted is None:
+                    accepted = proto
+            except InvalidStatus as exc:
+                body = (exc.response.body or b"")[:300].decode("utf-8", "replace")
+                print(f"✗ OpenAI API {proto}: HTTP {exc.response.status_code} {body}")
+            except Exception as exc:
+                print(f"✗ OpenAI API {proto}: {type(exc).__name__}: {exc}")
+        if accepted:
+            print(f"  → se usará la API {accepted} (OPENAI_REALTIME_API={cfg.realtime_api})")
+        else:
+            ok = False
+            print("  → ninguna variante aceptó la sesión. Causas típicas:")
+            print("    · 401: clave inválida o revocada → genera otra en platform.openai.com/api-keys")
+            print("    · 429 / insufficient_quota: sin saldo → platform.openai.com/settings/organization/billing")
+            print("    · model_not_found: cambia TRANSCRIPTION_MODEL (p. ej. gpt-4o-mini-transcribe)")
+
+    # ── Micrófono ──
+    print()
+    if sd is None:
+        print(f"✗ Micrófono: sounddevice no disponible ({_SD_IMPORT_ERROR})")
+        ok = False
+    else:
+        try:
+            settings = SettingsStore("settings.local.json")
+            dev = settings.get("device") or cfg.audio_device or None
+            dev = int(dev) if isinstance(dev, str) and dev.isdigit() else dev
+            info = sd.query_devices(dev, "input")
+            print(f"· Micrófono: {info['name']} — grabando 2 s, habla o aplaude…")
+            rec = sd.rec(int(2 * info["default_samplerate"]), samplerate=info["default_samplerate"],
+                         channels=1, dtype="int16", device=dev)
+            sd.wait()
+            peak = int(np.abs(rec).max())
+            if peak == 0:
+                ok = False
+                print("✗ Silencio digital absoluto (todo ceros).")
+                if sys.platform == "darwin":
+                    print("  macOS bloqueó el micrófono: Ajustes del Sistema → Privacidad y seguridad → Micrófono →")
+                    print("  activa «Terminal», cierra Terminal por completo (Cmd+Q) y vuelve a abrir el script.")
+                    print("  Si Terminal no aparece en la lista:  tccutil reset Microphone com.apple.Terminal")
+                else:
+                    print("  Revisa que el micrófono no esté silenciado y el permiso de micrófono de Windows.")
+            else:
+                db = 20 * math.log10(peak / 32768)
+                print(f"✓ Señal: pico {db:.1f} dBFS" + ("  (muy baja: acerca el micrófono o sube la ganancia)" if db < -40 else ""))
+        except Exception as exc:
+            ok = False
+            print(f"✗ Micrófono: {exc}")
+        print("\nDispositivos de entrada:")
+        list_devices()
+    print("\n" + ("Todo en orden." if ok else "Hay problemas: revisa las líneas con ✗.") + "\n")
+
+
 def list_devices() -> None:
     if sd is None:
         print(f"sounddevice no disponible: {_SD_IMPORT_ERROR}")
@@ -1150,6 +1314,7 @@ def list_devices() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Poesía Tipográfica — backend de audio, transcripción y dirección de arte")
     parser.add_argument("--list-devices", action="store_true", help="listar dispositivos de entrada y salir")
+    parser.add_argument("--check", action="store_true", help="diagnóstico: clave/API de OpenAI y micrófono")
     parser.add_argument("--no-audio", action="store_true", help="no abrir el micrófono")
     parser.add_argument("--no-openai", action="store_true", help="no conectar a OpenAI Realtime")
     parser.add_argument("--env", default=".env", help="ruta del archivo .env")
@@ -1162,6 +1327,9 @@ def main() -> None:
                         format="%(asctime)s %(levelname)-7s %(name)s · %(message)s", datefmt="%H:%M:%S")
     if args.list_devices:
         list_devices()
+        return
+    if args.check:
+        asyncio.run(run_check())
         return
     try:
         asyncio.run(main_async(args))

@@ -47,6 +47,7 @@ export class ConfigPanel {
         </div>
         <div class="vu"><i data-vu></i><b data-peak></b></div>
         <div class="vu-info"><span data-db>—</span><span data-signal>—</span></div>
+        <div class="vu-info"><span>Transcripción (OpenAI)</span><span data-openai>—</span></div>
         <p class="hint">Habla al micrófono: la barra debe moverse. Verde = señal, rojo = saturación. El micrófono lo abre el
         backend (server.py); si aparece «backend desconectado», arráncalo.</p>
       </section>
@@ -224,6 +225,12 @@ export class ConfigPanel {
   setMicStatus(status) {
     this.micStatus = status.mic;
     this.micDetail = status.mic_device || '';
+    const oa = this.$('[data-openai]');
+    if (status.openai !== undefined) {
+      const st = status.openai;
+      oa.textContent = st === 'connected' ? `conectada · ${status.openai_detail || ''}` : `${st}${status.openai_detail ? ` — ${status.openai_detail}` : ''}`;
+      oa.className = st === 'connected' ? 'ok' : st === 'error' || st === 'reconnecting' ? 'bad' : '';
+    }
   }
 
   setBackend(on) {

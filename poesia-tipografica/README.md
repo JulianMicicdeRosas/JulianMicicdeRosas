@@ -81,6 +81,19 @@ Notas de macOS:
 - Micrófonos USB o interfaces de audio aparecen en el panel C (host «Core Audio»). Si el dispositivo no acepta
   24 kHz, el backend lo abre a 48 kHz y remuestrea solo.
 
+### Si no transcribe (problemas frecuentes)
+
+Doble clic en **`diagnostico_mac.command`** (en Windows: `.venv\Scripts\python server.py --check`). Prueba la
+clave contra OpenAI, graba 2 s del micrófono y dice qué falla. En los paneles D y C también se ve el motivo.
+
+| Síntoma | Causa | Solución |
+| --- | --- | --- |
+| micrófono: `silencio` | macOS no dio permiso a Terminal (entrega ceros, no error) | Ajustes del Sistema → Privacidad y seguridad → Micrófono → activar Terminal; cerrar Terminal con Cmd+Q y reabrir. Si no aparece: `tccutil reset Microphone com.apple.Terminal` |
+| openai: `error — clave rechazada (401)` | clave inválida o revocada | crear otra en platform.openai.com/api-keys y reemplazarla en `.env` |
+| openai: `error — … (429)` / `insufficient_quota` | sin saldo | cargar crédito en Billing |
+| openai: `error — unknown_parameter …` | variante de API no aceptada | automático: el backend prueba la otra (`OPENAI_REALTIME_API=auto`) |
+| openai: `error — model_not_found` | modelo no habilitado en la cuenta | `TRANSCRIPTION_MODEL=gpt-4o-mini-transcribe` en `.env` |
+
 ## Puesta en marcha (Windows 10/11)
 
 Requisitos: Python 3.10+, Node.js 18+, Google Chrome, y opcionalmente [Ollama](https://ollama.com).

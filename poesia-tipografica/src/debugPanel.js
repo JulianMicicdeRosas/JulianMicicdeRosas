@@ -133,9 +133,9 @@ export class DebugPanel {
 
   _renderStatus() {
     const s = { ...this.status, ...this.stats };
-    const cls = (v) => (['ok', 'connected', 'ollama', 'deepseek'].includes(v) ? 'ok' : ['error', 'reconnecting', 'offline', 'unavailable'].includes(v) ? 'bad' : '');
+    const cls = (v) => (['ok', 'connected', 'ollama', 'deepseek'].includes(v) ? 'ok' : ['error', 'reconnecting', 'offline', 'unavailable', 'silencio'].includes(v) ? 'bad' : '');
     const rows = [
-      ['backend', s.backend], ['micrófono', s.mic], ['openai', s.openai], ['llm', s.llm],
+      ['backend', s.backend], ['micrófono', s.mic], ['', s.mic_device], ['openai', s.openai], ['', s.openai_detail], ['llm', s.llm],
       ['fps', s.fps], ['calidad', s.calidad], ['glifos', s.total ? `${s.visible} visibles / ${s.total}` : ''],
       ['verso vivo', s.line], ['figura', s.figure ? `${s.figureName} (${s.figure})` : s.figureName], ['física', s.mode], ['atlas', s.atlas],
     ];
