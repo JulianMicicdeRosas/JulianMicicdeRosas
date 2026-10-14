@@ -6,3 +6,4 @@ __pycache__/
 .venv/
 .chrome-kiosk/
 settings.local.json*
+logs/

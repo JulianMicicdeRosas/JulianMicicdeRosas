@@ -185,6 +185,38 @@ class SettingsStore:
         os.replace(tmp, self.path)  # escritura atómica: un corte de luz no corrompe el archivo
 
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOGO_EXT = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
+            ".svg": "image/svg+xml", ".gif": "image/gif"}
+_logo_cache: dict[str, tuple[float, int, str]] = {}
+
+
+def read_logo_folder(folder: str) -> list[dict[str, str]]:
+    """Lee todos los logos de una carpeta (relativa al proyecto) como data URLs, en orden alfabético.
+    Así basta con soltar archivos en la carpeta: el loop se adapta a la cantidad."""
+    path = os.path.realpath(os.path.join(BASE_DIR, folder or ""))
+    if not (path == BASE_DIR or path.startswith(BASE_DIR + os.sep)) or not os.path.isdir(path):
+        return []  # sólo carpetas dentro del proyecto
+    out = []
+    for name in sorted(os.listdir(path), key=str.lower):
+        ext = os.path.splitext(name)[1].lower()
+        full = os.path.join(path, name)
+        if ext not in LOGO_EXT or name.startswith(".") or not os.path.isfile(full):
+            continue
+        st = os.stat(full)
+        if st.st_size > 6 * 2 ** 20:
+            log.warning("Logo %s supera 6 MB; lo salto", name)
+            continue
+        hit = _logo_cache.get(full)
+        if not hit or hit[0] != st.st_mtime or hit[1] != st.st_size:
+            with open(full, "rb") as fh:
+                data = base64.b64encode(fh.read()).decode("ascii")
+            hit = (st.st_mtime, st.st_size, f"data:{LOGO_EXT[ext]};base64,{data}")
+            _logo_cache[full] = hit
+        out.append({"name": name, "src": hit[2]})
+    return out
+
+
 # ════════════════════════════════════════════════════════════════════════════
 #  Hub WebSocket local (Three.js)
 # ════════════════════════════════════════════════════════════════════════════
@@ -318,6 +350,7 @@ class AudioEngine:
         self.device_override: str | None = None  # elegido desde el panel C (tiene prioridad sobre .env)
         self._restart = False
         self.device_name = ""
+        self.zero_blocks = 0  # bloques de silencio digital absoluto (macOS sin permiso de micrófono)
 
     def request_device(self, device: str | int | None) -> None:
         """Cambia de micrófono en caliente: el bucle cierra el stream y reabre con el nuevo."""
@@ -430,7 +463,22 @@ class AudioEngine:
             backoff = min(max(backoff, 0.5) * 2, 15.0)
 
     # --- análisis --------------------------------------------------------
+    def _check_digital_silence(self, data: bytes) -> None:
+        """macOS sin permiso de micrófono (o un mute de hardware) entrega ceros exactos, no un error."""
+        if any(data):
+            if self.zero_blocks >= 300:
+                self.hub.set_status(mic="ok", mic_device=self.device_name)
+            self.zero_blocks = 0
+            return
+        self.zero_blocks += 1
+        if self.zero_blocks == 300:  # ~3 s
+            hint = ("macOS: Ajustes del Sistema → Privacidad y seguridad → Micrófono → activar Terminal"
+                    if sys.platform == "darwin" else "revisa que el micrófono no esté silenciado")
+            log.warning("El micrófono entrega silencio digital absoluto. %s", hint)
+            self.hub.set_status(mic="silencio", mic_device=hint)
+
     def _process(self, data: bytes) -> None:
+        self._check_digital_silence(data)
         x = np.frombuffer(data, dtype=np.int16).astype(np.float32) * (1.0 / 32768.0)
         if self.resampler is not None:
             x = self.resampler.process(x)
@@ -1059,6 +1107,10 @@ async def main_async(args: argparse.Namespace) -> None:
         elif kind == "save_settings" and isinstance(msg.get("settings"), dict):
             settings.update(msg["settings"])
             hub.emit("settings", settings=settings.data)
+        elif kind == "list_logos":
+            folder = str(msg.get("carpeta", ""))[:200]
+            logos = await asyncio.to_thread(read_logo_folder, folder)
+            await hub.reply(ws, "logos", id=msg.get("id"), carpeta=folder, logos=logos)
         elif kind == "get_settings":
             await hub.reply(ws, "settings", settings=settings.data, default_prompt=DEFAULT_AESTHETIC)
 

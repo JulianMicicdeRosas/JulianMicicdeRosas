@@ -17,7 +17,8 @@ const SHORTCUTS = [
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 export class ConfigPanel {
-  constructor({ getSettings, onChange, onDevice, requestDevices, defaultPrompt }) {
+  constructor({ getSettings, onChange, onDevice, requestDevices, onScanLogos, defaultPrompt }) {
+    this.onScanLogos = onScanLogos;
     this.getSettings = getSettings;
     this.onChange = onChange;
     this.onDevice = onDevice;
@@ -102,6 +103,7 @@ export class ConfigPanel {
     if (open) {
       this.render();
       this.requestDevices();
+      for (const st of this.getSettings().loop || []) if (st.tipo === 'logos' && st.carpeta) this.onScanLogos?.(st.carpeta);
     } else if (document.activeElement && this.el.contains(document.activeElement)) {
       document.activeElement.blur();
     }
@@ -123,10 +125,11 @@ export class ConfigPanel {
     const loop = s.loop || [];
     this.$('[data-loop]').innerHTML = loop
       .map((st, i) => {
+        if (st.tipo === 'logos') return this._logosStep(st, i);
         const isData = String(st.contenido || '').startsWith('data:');
         return `<div class="item step" data-i="${i}">
           <span class="num">${i + 1}</span>
-          <select data-field="tipo"><option value="texto"${st.tipo === 'texto' ? ' selected' : ''}>texto</option><option value="imagen"${st.tipo === 'imagen' ? ' selected' : ''}>imagen</option></select>
+          ${this._tipoSelect(st)}
           <input data-field="contenido" value="${isData ? '(archivo subido)' : esc(st.contenido)}" ${isData ? 'readonly' : ''} placeholder="${st.tipo === 'imagen' ? 'loop/logo.png' : 'UMBRAL'}">
           ${st.tipo === 'imagen' ? '<button data-act="upload">Subir…</button>' : ''}
           <select data-field="render">
@@ -150,6 +153,42 @@ export class ConfigPanel {
       }
     }
     this._renderDevices();
+  }
+
+  _tipoSelect(st) {
+    const opt = (v, label) => `<option value="${v}"${st.tipo === v ? ' selected' : ''}>${label}</option>`;
+    return `<select data-field="tipo">${opt('texto', 'texto')}${opt('imagen', 'imagen')}${opt('logos', 'logos')}</select>`;
+  }
+
+  /** Paso «logos»: carpeta + subidos; la grilla se adapta a cuántos haya. */
+  _logosStep(st, i) {
+    const imgs = st.imagenes || [];
+    const count = this.logoCounts?.[st.carpeta];
+    const thumbs = imgs
+      .map((src, k) => `<span class="thumb"><img src="${esc(src)}" alt=""><button data-act="del-logo" data-k="${k}" title="quitar">✕</button></span>`)
+      .join('');
+    return `<div class="item step logos" data-i="${i}">
+      <span class="num">${i + 1}</span>
+      ${this._tipoSelect(st)}
+      <input data-field="carpeta" value="${esc(st.carpeta)}" placeholder="public/loop/sponsors" title="carpeta (dentro del proyecto) con los logos">
+      <button data-act="scan">Revisar carpeta</button>
+      <span class="unit">${count === undefined ? '' : `${count} en carpeta`}</span>
+      <button data-act="upload-logos">Subir logos…</button>
+      <select data-field="render">
+        <option value="imagen"${st.render !== 'letras' ? ' selected' : ''}>imagen</option>
+        <option value="letras"${st.render === 'letras' ? ' selected' : ''}>letras</option>
+      </select>
+      <input data-field="duracion" type="number" min="2" max="600" value="${+st.duracion || 8}" title="segundos por página"><span class="unit">s/pág</span>
+      <input data-field="por_pagina" type="number" min="1" max="40" value="${+st.por_pagina || 8}" title="logos por página"><span class="unit">por pág.</span>
+      <label class="unit"><input type="checkbox" data-field="monocromo"${st.monocromo !== false ? ' checked' : ''}> monocromo</label>
+      <button data-act="up">↑</button><button data-act="down">↓</button><button data-act="del">✕</button>
+      <div class="thumbs">${thumbs}</div>
+    </div>`;
+  }
+
+  setLogoCount(carpeta, n) {
+    this.logoCounts = { ...(this.logoCounts || {}), [carpeta]: n };
+    if (this.isOpen && document.activeElement?.dataset?.field !== 'carpeta') this.render();
   }
 
   _renderDevices() {
@@ -181,6 +220,12 @@ export class ConfigPanel {
     this.$('[data-state]').textContent = text;
   }
 
+  /** Estado del micrófono que reporta el backend (permiso de macOS, errores de dispositivo). */
+  setMicStatus(status) {
+    this.micStatus = status.mic;
+    this.micDetail = status.mic_device || '';
+  }
+
   setBackend(on) {
     this.backend = on;
   }
@@ -195,6 +240,7 @@ export class ConfigPanel {
     bar.className = level > 0.95 ? 'hot' : level > 0.08 ? 'ok' : '';
     this.$('[data-peak]').style.left = `${Math.round(Math.min(1, this.peak) * 100)}%`;
     this.$('[data-db]').textContent = Number.isFinite(db) ? `${db.toFixed(1)} dBFS` : '—';
+    if (this.micStatus === 'silencio' || this.micStatus === 'error') return; // lo informa tick()
     const sig = this.$('[data-signal]');
     sig.textContent = level > 0.95 ? 'saturando: baja la ganancia' : this.peak > 0.08 ? 'señal OK' : 'silencio / sin señal';
     sig.className = level > 0.95 ? 'bad' : this.peak > 0.08 ? 'ok' : '';
@@ -207,6 +253,10 @@ export class ConfigPanel {
       this.$('[data-signal]').textContent = 'backend desconectado';
       this.$('[data-signal]').className = 'bad';
       this.$('[data-vu]').style.width = '0%';
+    } else if (this.micStatus === 'silencio' || this.micStatus === 'error') {
+      const sig = this.$('[data-signal]');
+      sig.textContent = this.micStatus === 'silencio' ? `silencio absoluto: ${this.micDetail}` : `error: ${this.micDetail}`;
+      sig.className = 'bad';
     } else if (performance.now() - this.lastAudio > 1200) {
       this.$('[data-signal]').textContent = 'el micrófono no entrega audio';
       this.$('[data-signal]').className = 'bad';
@@ -249,6 +299,23 @@ export class ConfigPanel {
     else if (act === 'down') this._commit((s) => move(s[list], +1));
     else if (act === 'del') this._commit((s) => s[list].splice(i, 1));
     else if (act === 'reset-prompt') this._commit((s) => (s.prompt_estetica = ''));
+    else if (act === 'scan') this.onScanLogos?.(this.getSettings().loop[i].carpeta);
+    else if (act === 'del-logo') this._commit((s) => s.loop[i].imagenes.splice(+ev.target.dataset.k, 1));
+    else if (act === 'upload-logos') {
+      const input = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/*', multiple: true });
+      input.onchange = async () => {
+        const files = [...(input.files || [])];
+        const urls = await Promise.all(
+          files.map((f) => new Promise((res) => {
+            const r = new FileReader();
+            r.onload = () => res(r.result);
+            r.readAsDataURL(f);
+          })),
+        );
+        this._commit((s) => (s.loop[i].imagenes = [...(s.loop[i].imagenes || []), ...urls]));
+      };
+      input.click();
+    }
     else if (act === 'upload') {
       this.fileInput.value = '';
       this.fileInput.onchange = () => {
@@ -304,9 +371,14 @@ export class ConfigPanel {
     this._commit((s) => {
       const st = s.loop[i];
       if (field === 'duracion') st.duracion = Math.max(2, +t.value || 10);
+      else if (field === 'por_pagina') st.por_pagina = Math.max(1, +t.value || 8);
+      else if (field === 'monocromo') st.monocromo = t.checked;
       else if (field === 'contenido' && t.readOnly) return;
       else st[field] = t.value;
-      if (field === 'tipo') st.render = 'letras';
+      if (field === 'tipo') {
+        st.render = st.tipo === 'logos' ? 'imagen' : 'letras';
+        if (st.tipo === 'logos') Object.assign(st, { carpeta: st.carpeta || 'public/loop/sponsors', imagenes: st.imagenes || [], por_pagina: st.por_pagina || 8, monocromo: st.monocromo ?? true });
+      }
     }, rerender);
   }
 }

@@ -376,3 +376,53 @@ body.hide-cursor * {
   color: #a8a398;
   text-align: right;
 }
+
+/* ── Grilla de logos del loop ─────────────────────────────────────── */
+#logos {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.9s ease;
+  z-index: 2;
+}
+#logos.on {
+  opacity: 1;
+}
+#logos canvas {
+  position: absolute;
+}
+#config .step.logos input[data-field='carpeta'] {
+  width: 170px;
+}
+#config .step input[data-field='por_pagina'] {
+  width: 46px;
+}
+#config .thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  padding-left: 24px;
+}
+#config .thumb {
+  position: relative;
+  width: 64px;
+  height: 40px;
+  background: #1a1918;
+  border: 1px solid #2a2927;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#config .thumb img {
+  max-width: 58px;
+  max-height: 34px;
+}
+#config .thumb button {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  padding: 0 4px;
+  font-size: 10px;
+}

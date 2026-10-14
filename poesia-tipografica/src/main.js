@@ -31,7 +31,9 @@ const CONFIG = {
   worldH: 1000,
   bloom: num('bloom', 0.55),
   grain: num('grain', 0.055),
-  dpr: Math.min(window.devicePixelRatio || 1, num('dpr', 1.5)),
+  // En Mac (pantallas Retina, equipos sin ventilador) se limita la resolución interna: en el
+  // proyector (1x) no cambia nada y en la pantalla del portátil ahorra mucho calor.
+  dpr: Math.min(window.devicePixelRatio || 1, num('dpr', /Macintosh|Mac OS X/.test(navigator.userAgent) ? 1.25 : 1.5)),
   idleText: 'escucha la voz que todavía no ha llegado',
 };
 
@@ -155,8 +157,27 @@ async function boot() {
     toastTimer = setTimeout(() => toast.classList.remove('on'), 2200);
   }
 
+  // pedir al backend los logos de una carpeta (responde con data URLs)
+  const logoRequests = new Map();
+  let logoReqId = 0;
+  function fetchLogos(carpeta) {
+    return new Promise((resolve, reject) => {
+      const id = ++logoReqId;
+      if (!socket?.send({ type: 'list_logos', carpeta, id })) return reject(new Error('backend desconectado'));
+      const t = setTimeout(() => {
+        logoRequests.delete(id);
+        reject(new Error('el backend no respondió la lista de logos'));
+      }, 5000);
+      logoRequests.set(id, (logos) => {
+        clearTimeout(t);
+        resolve(logos.map((l) => l.src));
+      });
+    });
+  }
+
   const show = new Show({
     field,
+    fetchLogos,
     notify: (t) => notify(t),
     interiorTarget: Math.min(4200, CONFIG.pool * 0.32),
     onSession: (st) => socket?.send({ type: 'session', ...st }),
@@ -178,6 +199,7 @@ async function boot() {
     },
     hello: (m) => {
       debug.setStatus({ backend: 'connected', ...(m.status || {}) });
+      config.setMicStatus(m.status || {});
       config.setDefaultPrompt(m.default_prompt);
       const remote = m.settings || {};
       if (!backendSettingsLoaded && Object.keys(remote).length) {
@@ -190,9 +212,17 @@ async function boot() {
         socket.send({ type: 'save_settings', settings }); // primera vez: sembrar el archivo
       }
     },
-    status: (m) => debug.setStatus(m.status || {}),
+    status: (m) => {
+      debug.setStatus(m.status || {});
+      config.setMicStatus(m.status || {});
+    },
     devices: (m) => config.setDevices(m.devices, m.current),
     settings: () => {},
+    logos: (m) => {
+      logoRequests.get(m.id)?.(m.logos || []);
+      logoRequests.delete(m.id);
+      config.setLogoCount(m.carpeta, (m.logos || []).length);
+    },
     audio_reactive: (m) => {
       onAudio(+m.rms || 0, +m.freq || 0, true);
       config.setLevel(+m.level || 0, +m.db);
@@ -212,6 +242,7 @@ async function boot() {
     onChange: (next) => setSettings(next),
     onDevice: (dev) => socket.send({ type: 'set_device', device: dev }),
     requestDevices: () => socket.send({ type: 'list_devices' }),
+    onScanLogos: (carpeta) => fetchLogos(carpeta).catch(() => config.setLogoCount(carpeta, 0)),
   });
   setInterval(() => config.tick(), 400);
 
@@ -341,6 +372,49 @@ async function boot() {
     timeOffset += n * step;
   }
   let orbit = 0;
+
+  // ── calidad adaptativa ───────────────────────────────────────────────────
+  // Pensada para portátiles sin ventilador (MacBook Air): tras horas de show el chip
+  // baja su frecuencia por temperatura. Si los FPS caen, se baja la resolución interna
+  // y la cantidad de puntos; si sobran, se recupera. Desactivar con ?adaptativo=0.
+  const QUALITY = [
+    { name: 'alta', dpr: 1, points: 1 },
+    { name: 'media', dpr: 0.85, points: 0.72 },
+    { name: 'baja', dpr: 0.7, points: 0.5 },
+    { name: 'mínima', dpr: 0.6, points: 0.3 },
+  ];
+  let quality = 0, slowFor = 0, fastFor = 0;
+  const adaptive = num('adaptativo', 1) !== 0;
+  function applyQuality() {
+    const q = QUALITY[quality];
+    renderer.setPixelRatio(CONFIG.dpr * q.dpr);
+    fx.setSize(window.innerWidth, window.innerHeight);
+    cloud.points.geometry.setDrawRange(0, Math.round(CONFIG.points * q.points));
+    cloud.resize(field.W, field.H, renderer.domElement.height, fov, camDist);
+  }
+  function adaptQuality(fps) {
+    if (!adaptive || document.hidden) return;
+    if (fps < 48) {
+      slowFor += 0.5;
+      fastFor = 0;
+    } else if (fps > 58) {
+      fastFor += 0.5;
+      slowFor = 0;
+    } else {
+      slowFor = fastFor = 0;
+    }
+    if (slowFor >= 4 && quality < QUALITY.length - 1) {
+      quality++;
+      slowFor = 0;
+      applyQuality();
+      console.info('[calidad] baja a', QUALITY[quality].name);
+    } else if (fastFor >= 45 && quality > 0) {
+      quality--;
+      fastFor = 0;
+      applyQuality();
+      console.info('[calidad] sube a', QUALITY[quality].name);
+    }
+  }
   cloud.resize(field.W, field.H, renderer.domElement.height, fov, camDist);
   function frame() {
     const dt = clock.getDelta();
@@ -357,13 +431,16 @@ async function boot() {
     camera.lookAt(0, field.figure ? field.figure.cy * orbit : 0, 0);
     field.update(dt, t);
     cloud.setPalette(field.uniforms.uBase.value, field.uniforms.uSecond.value);
-    const quiet = show.state === 'artist' || (show.state === 'perform' && show.mode === 'palabras');
+    // sin nube en nombres, modo palabras y logos mostrados como imagen (que se lean limpios)
+    const quiet = show.state === 'artist' || (show.state === 'perform' && show.mode === 'palabras') || show.logoBox.classList.contains('on');
     cloud.update(dt, t, field.rms, { visible: pc && !quiet, intensity: settings.nube ?? 1 });
     fx.render(t);
     frames++;
     fpsT += dt;
     if (fpsT > 0.5) {
-      debug.setStats({ fps: Math.round(frames / fpsT), ...field.stats() });
+      const fps = frames / fpsT;
+      adaptQuality(fps);
+      debug.setStats({ fps: Math.round(fps), calidad: QUALITY[quality].name, ...field.stats() });
       frames = 0;
       fpsT = 0;
     }

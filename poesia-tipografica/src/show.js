@@ -8,12 +8,14 @@
 //  Sólo se transcribe (y se paga OpenAI) mientras recording = true.
 // ─────────────────────────────────────────────────────────────────────────────
 import { sampleText, sampleImage } from './svgSampler.js';
+import { processLogo, layoutLogos, paginate, composeLogos } from './logos.js';
 
 export const DEFAULT_SETTINGS = {
   artists: [{ name: 'Nombre del artista 1' }, { name: 'Nombre del artista 2' }, { name: 'Nombre del artista 3' }],
   loop: [
     { tipo: 'imagen', contenido: 'loop/flat.png', render: 'letras', duracion: 10, letras: 'FLAT', alt: 'FLAT' },
-    { tipo: 'imagen', contenido: 'loop/sponsors.png', render: 'imagen', duracion: 8, letras: '', alt: 'SPONSORS' },
+    // «logos»: todos los archivos de la carpeta (+ los subidos), en una grilla que se adapta a la cantidad
+    { tipo: 'logos', carpeta: 'public/loop/sponsors', imagenes: [], render: 'imagen', duracion: 8, por_pagina: 8, monocromo: true, letras: '', alt: 'SPONSORS' },
     { tipo: 'texto', contenido: 'UMBRAL', render: 'letras', duracion: 12, letras: 'UMBRAL' },
   ],
   prompt_estetica: '',
@@ -45,8 +47,11 @@ function loadImage(src) {
 }
 
 export class Show {
-  constructor({ field, onSession, notify, interiorTarget = 4000 }) {
+  constructor({ field, onSession, notify, fetchLogos, interiorTarget = 4000 }) {
     this.field = field;
+    this.fetchLogos = fetchLogos; // carpeta → Promise<string[]> (el backend lee la carpeta)
+    this.pageTimers = [];
+    this.logoCache = new Map();
     this.onSession = onSession;
     this.notify = notify;
     this.interiorTarget = interiorTarget;
@@ -64,6 +69,9 @@ export class Show {
     this.overlayImg = document.createElement('img');
     this.overlay.appendChild(this.overlayImg);
     document.body.appendChild(this.overlay);
+    this.logoBox = document.createElement('div');
+    this.logoBox.id = 'logos';
+    document.body.appendChild(this.logoBox);
   }
 
   setSettings(settings) {
@@ -105,18 +113,19 @@ export class Show {
   async _nextLoop() {
     clearTimeout(this.loopTimer);
     if (this.state !== 'loop') return;
-    const steps = (this.settings.loop || []).filter((s) => s && s.contenido);
+    const steps = (this.settings.loop || []).filter((s) => s && (s.contenido || s.tipo === 'logos'));
     if (!steps.length) return;
     this.loopIndex = (this.loopIndex + 1) % steps.length;
     const step = steps[this.loopIndex];
     const token = ++this.loopToken;
+    let secs = Math.min(600, Math.max(2, +step.duracion || 10));
     try {
-      await this._playStep(step, token);
+      const custom = await this._playStep(step, token);
+      if (Number.isFinite(custom) && custom > 0) secs = custom; // p. ej. varias páginas de logos
     } catch (e) {
       console.warn('[loop]', e);
     }
     if (token !== this.loopToken || this.state !== 'loop') return;
-    const secs = Math.min(600, Math.max(2, +step.duracion || 10));
     this.loopTimer = setTimeout(() => this._nextLoop(), secs * 1000);
   }
 
@@ -124,6 +133,11 @@ export class Show {
     const f = this.field;
     this._hideImage();
     f.clearTitle();
+    if (step.tipo === 'logos') {
+      const total = await this._playLogos(step, token);
+      if (total !== null) return total;
+      step = { ...step, tipo: 'texto', contenido: step.alt || 'SPONSORS', render: 'letras' }; // sin logos: su nombre
+    }
     let kind = step.tipo === 'imagen' ? 'imagen' : 'texto';
     let content = String(step.contenido || '');
     let img = null;
@@ -156,6 +170,64 @@ export class Show {
     else f.showTitle(content);
   }
 
+  // ── logos ────────────────────────────────────────────────────────────────
+  async _playLogos(step, token) {
+    const srcs = [];
+    if (step.carpeta && this.fetchLogos) {
+      try {
+        srcs.push(...(await this.fetchLogos(step.carpeta)));
+      } catch (e) {
+        console.warn('[logos]', e.message);
+      }
+    }
+    srcs.push(...(step.imagenes || []).filter(Boolean));
+    const loaded = await Promise.allSettled(srcs.map((src) => loadImage(src)));
+    if (token !== this.loopToken) return 0;
+    const mono = step.monocromo !== false;
+    const logos = [];
+    loaded.forEach((r, i) => {
+      if (r.status !== 'fulfilled') return;
+      const key = `${mono ? 'm' : 'c'}|${srcs[i].length}|${srcs[i].slice(0, 80)}|${srcs[i].slice(-80)}`;
+      if (!this.logoCache.has(key)) this.logoCache.set(key, processLogo(r.value, { monocromo: mono }));
+      logos.push(this.logoCache.get(key));
+    });
+    if (!logos.length) return null;
+    const pages = paginate(logos, +step.por_pagina || 8);
+    const per = Math.min(600, Math.max(2, +step.duracion || 8));
+    pages.forEach((page, p) => {
+      const t = setTimeout(() => token === this.loopToken && this._showLogoPage(page, step, p > 0), p * per * 1000);
+      this.pageTimers.push(t);
+    });
+    return per * pages.length;
+  }
+
+  _showLogoPage(page, step, crossfade) {
+    const f = this.field;
+    if (step.render === 'letras') {
+      this.logoBox.classList.remove('on');
+      const fig = sampleImage(composeLogos(page), { interiorTarget: this.interiorTarget });
+      if (fig) {
+        f.formFigure(fig, { modo_visual: 'concreto', relleno: 'volumen', tipografia: 'mono', verso: step.letras || step.alt || 'SPONSORS', permanente: true, figura: 'logos' });
+        return;
+      }
+    }
+    f.releaseFigure(true);
+    const place = () => {
+      const W = window.innerWidth * 0.8, H = window.innerHeight * 0.62;
+      const x0 = (window.innerWidth - W) / 2, y0 = (window.innerHeight - H) / 2;
+      const rects = layoutLogos(page.map((c) => c.width / c.height), W, H);
+      this.logoBox.replaceChildren(...page);
+      page.forEach((c, i) => {
+        Object.assign(c.style, { left: `${x0 + rects[i].x}px`, top: `${y0 + rects[i].y}px`, width: `${rects[i].w}px`, height: `${rects[i].h}px` });
+      });
+      this.logoBox.classList.add('on');
+    };
+    if (crossfade && this.logoBox.classList.contains('on')) {
+      this.logoBox.classList.remove('on');
+      this.pageTimers.push(setTimeout(place, 900));
+    } else place();
+  }
+
   _showImage(src) {
     this.overlayImg.src = src;
     this.overlay.classList.add('on');
@@ -163,6 +235,9 @@ export class Show {
 
   _hideImage() {
     this.overlay.classList.remove('on');
+    this.logoBox.classList.remove('on');
+    this.pageTimers.forEach(clearTimeout);
+    this.pageTimers = [];
   }
 
   // ── artista ──────────────────────────────────────────────────────────────

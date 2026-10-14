@@ -24,13 +24,15 @@ poesia-tipografica/
 ├── package.json          Vite + Three.js + fuentes empaquetadas (funciona sin internet)
 ├── vite.config.js
 ├── index.html
+├── start_mac.command     Arranque completo en macOS (doble clic)
 ├── start_instalacion.bat Arranque completo en Windows (backend + frontend + Chrome kiosk)
-├── public/loop/          Imágenes del loop (flat.png, sponsors.png…)
+├── public/loop/          Imágenes del loop (flat.png) y public/loop/sponsors/ (todos los logos)
 └── src/
     ├── main.js           Escena, cámara orbital, bucle, conexión al backend, simulador, teclado
     ├── show.js           Estados de la noche: loop → artista → poema / palabras
     ├── configPanel.js    Panel C: atajos, micrófono + vúmetro, artistas, loop, prompt, estética
     ├── pointCloud.js     Nube de puntos estilo TouchDesigner (morph en GPU)
+    ├── logos.js          Grilla de logos adaptativa (limpieza de fondo, monocromo, paginación)
     ├── shaders.js        GLSL de glifos instanciados (reactividad acústica) + pase de grano/aberración
     ├── glyphAtlas.js     Atlas tipográfico dinámico en Canvas 2D (Cormorant Garamond + IBM Plex Mono)
     ├── typeField.js      Motor de partículas: 12 000 letras, 1 draw call, 4 físicas, caligramas, subtítulo vivo
@@ -42,6 +44,42 @@ poesia-tipografica/
     ├── socket.js         WebSocket con reconexión
     └── style.css
 ```
+
+## Puesta en marcha en Mac (MacBook Air, Apple Silicon)
+
+Una sola vez, en Terminal:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"   # si no tienes Homebrew
+brew install python@3.12 node
+brew install ollama            # opcional: director de arte local (Metal, muy rápido en chips M)
+brew install --cask google-chrome   # si no tienes Chrome
+git clone https://github.com/JulianMicicdeRosas/JulianMicicdeRosas.git
+```
+
+Después, cada noche: **doble clic en `poesia-tipografica/start_mac.command`** (la primera vez: clic derecho →
+Abrir, porque macOS bloquea scripts descargados). El script:
+
+1. crea `.venv`, instala dependencias y compila el frontend si hace falta;
+2. la primera vez **pide la clave de OpenAI** (sin mostrarla) y crea `.env` sólo en esa Mac;
+3. arranca Ollama y descarga el modelo si falta (`OLLAMA_MODEL`, por defecto `qwen2.5:7b`; con 8 GB de RAM
+   usar `qwen2.5:3b`);
+4. arranca backend y frontend, **impide que la Mac se duerma** (`caffeinate`) y abre Chrome en kiosk;
+5. al cerrar la ventana de Terminal se apaga todo. Logs en `logs/`.
+
+Notas de macOS:
+
+- **Permiso de micrófono**: la primera vez macOS pregunta si Terminal puede usar el micrófono → Permitir. Si se
+  negó, macOS no da error: entrega silencio. El panel C lo detecta («silencio absoluto») y dice dónde activarlo:
+  Ajustes del Sistema → Privacidad y seguridad → Micrófono → Terminal.
+- **Proyector**: Chrome kiosk se abre en la pantalla principal. En Ajustes del Sistema → Pantallas, marca el
+  proyector como pantalla principal (o usa duplicar). Conviene cerrar la tapa sólo con cargador conectado.
+- **Rendimiento**: la MacBook Air no tiene ventilador; tras horas de show baja la frecuencia por temperatura. La
+  app tiene **calidad adaptativa**: si los FPS bajan de 48 reduce resolución interna y cantidad de puntos, y los
+  recupera cuando sobra margen (se ve en el panel D, «calidad»). En Mac la resolución interna se limita a 1.25×
+  (Retina) para no calentar de más. Recomendado: enchufada, modo de bajo consumo apagado.
+- Micrófonos USB o interfaces de audio aparecen en el panel C (host «Core Audio»). Si el dispositivo no acepta
+  24 kHz, el backend lo abre a 48 kHz y remuestrea solo.
 
 ## Puesta en marcha (Windows 10/11)
 
@@ -92,6 +130,13 @@ Sólo se envía audio a OpenAI mientras se graba (`S` o `T`): el loop y los nomb
 - **Micrófono**: lista los dispositivos de entrada que ve `server.py` y cambia en caliente. El vúmetro muestra nivel,
   pico, dBFS y avisa «sin señal», «saturando» o «backend desconectado».
 - **Artistas**: nombres en orden; la posición es la tecla. Se reordenan con ↑ ↓.
+- **Loop · logos**: el paso «logos» muestra **todos** los archivos de una carpeta (por defecto
+  `public/loop/sponsors/`) más los que subas desde el panel. La grilla se adapta sola a la cantidad (1 logo grande,
+  2 lado a lado, 3 en dos filas centradas, …): se prueban todas las combinaciones filas × columnas y cada logo se
+  dimensiona por área visual para que uno apaisado y uno cuadrado pesen parecido. Más de «por pág.» logos se
+  reparten en páginas equilibradas (10 con máx. 8 → 5 + 5), cada una «s/pág» segundos. Fondos opacos se vuelven
+  transparentes y «monocromo» los pasa a silueta hueso. Agregar o quitar logos = copiar o borrar archivos en la
+  carpeta (no hace falta recompilar ni reiniciar).
 - **Loop**: pasos de texto o imagen. Las imágenes van en `public/loop/` (ej. `loop/flat.png`) o se suben con «Subir…».
   Render «letras» = la figura se forma con letras y nube de puntos; «imagen» = el logo tal cual (para sponsors
   legibles); «título» = texto compuesto en tipografía.

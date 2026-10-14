@@ -136,7 +136,7 @@ export class DebugPanel {
     const cls = (v) => (['ok', 'connected', 'ollama', 'deepseek'].includes(v) ? 'ok' : ['error', 'reconnecting', 'offline', 'unavailable'].includes(v) ? 'bad' : '');
     const rows = [
       ['backend', s.backend], ['micrófono', s.mic], ['openai', s.openai], ['llm', s.llm],
-      ['fps', s.fps], ['glifos', s.total ? `${s.visible} visibles / ${s.total}` : ''],
+      ['fps', s.fps], ['calidad', s.calidad], ['glifos', s.total ? `${s.visible} visibles / ${s.total}` : ''],
       ['verso vivo', s.line], ['figura', s.figure ? `${s.figureName} (${s.figure})` : s.figureName], ['física', s.mode], ['atlas', s.atlas],
     ];
     this.statusEl.innerHTML = rows.map(([k, v]) => `<b>${k}</b><span class="${cls(v)}">${v ?? '—'}</span>`).join('');
