@@ -164,6 +164,7 @@ export class Show {
     if (this.state === 'loop') return 'loop';
     if (this.state === 'title') return 'título (T para comenzar)';
     if (this.state === 'artist') return `artista ${this.artistIdx + 1}`;
+    if (this.state === 'flat') return 'cierre: logo de FLAT (glitch cada 4 s)';
     return `${this.mode} · ${this.recording ? 'grabando' : 'detenido'}`;
   }
 
@@ -374,10 +375,53 @@ export class Show {
   }
 
   _hideImage(keepStage = false) {
+    clearInterval(this.flatTimer);
+    this.flatTimer = 0;
     this.overlay.classList.remove('on');
     if (!keepStage) this.stage.hide();
     this.pageTimers.forEach(clearTimeout);
     this.pageTimers = [];
+  }
+
+  // ── cierre: tecla 5 ──────────────────────────────────────────────────────
+  /** Todo se desarma (las letras caen) y queda el logo de FLAT; cada 4 s se rompe con glitch y se vuelve a armar. */
+  async goFlatFinal() {
+    this._setRecording(false);
+    clearTimeout(this.loopTimer);
+    const token = ++this.loopToken;
+    this._hideImage(true);
+    const f = this.field;
+    f.cursorEnabled = false;
+    f.releaseFigure(true);
+    f.clearTitle();
+    f.setShape(null);
+    f.setBackdropHoles([]);
+    f.setBackdrop(false); // el muro se suelta: las letras caen y se apilan
+    f.setSceneDensity(0.03);
+    f.onTransition?.(0.9);
+    this.state = 'flat';
+    this.notify('FLAT');
+    const step = this._loopSteps().find((st) => st.tipo === 'logos' && /flat/i.test(st.carpeta || '')) || { carpeta: 'logos/flat', monocromo: true };
+    let logo = null;
+    try {
+      const srcs = this.fetchLogos ? await this.fetchLogos(step.carpeta) : [];
+      if (srcs.length) logo = processLogo(await loadImage(srcs[0]), { monocromo: step.monocromo !== false });
+    } catch (e) {
+      console.warn('[flat]', e.message);
+    }
+    if (token !== this.loopToken || this.state !== 'flat') return;
+    if (!logo) {
+      f.showTitle(step.alt || 'FLAT', { maxSize: 0.2 }); // sin PNG: la palabra
+      return;
+    }
+    const area = { w: 0.5, h: 0.46 };
+    setTimeout(() => token === this.loopToken && this.stage.show([logo], { area, duration: 1.1, intensity: 1.3 }), 900);
+    this.flatTimer = setInterval(() => {
+      if (token !== this.loopToken || this.state !== 'flat') return clearInterval(this.flatTimer);
+      this.stage.hide({ duration: 0.45 }); // se rompe
+      f.onTransition?.(0.8);
+      setTimeout(() => token === this.loopToken && this.state === 'flat' && this.stage.show([logo], { area, duration: 0.9, intensity: 1.4 }), 550); // y se vuelve a armar
+    }, 4000);
   }
 
   // ── título ───────────────────────────────────────────────────────────────

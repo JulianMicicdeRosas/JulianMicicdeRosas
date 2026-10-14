@@ -611,7 +611,8 @@ async function boot() {
     else if (k === 'f') {
       if (document.fullscreenElement) document.exitFullscreen();
       else document.documentElement.requestFullscreen?.().catch(() => {});
-    } else if (/^[0-9]$/.test(k)) show.goArtist(k === '0' ? 10 : +k);
+    } else if (k === '5') show.goFlatFinal(); // cierre: todo se desarma y queda el logo de FLAT
+    else if (/^[0-9]$/.test(k)) show.goArtist(k === '0' ? 10 : +k);
     else if (k === 's') show.toggleRecord();
     else if (k === 'p') show.stop();
     else if (k === 't') show.startWords();
