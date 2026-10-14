@@ -228,9 +228,9 @@ class SettingsStore:
 
     KEYS = ("device", "artists", "loop", "prompt_estetica", "avisos", "pointcloud", "profundidad", "nube", "orbita",
             "curaduria", "imagenes", "prompt_grilla", "polaridad", "director", "cadencia", "estilos", "glitch_ambiente", "ascii_filas",
-            "marca", "muro", "formato", "canal", "forma_grilla", "grilla_preset",
+            "marca", "muro", "formato", "canal", "forma_grilla", "grilla_preset", "tratamiento",
             # marcas de migración: que una corrección automática se aplique una sola vez (y no pise lo elegido)
-            "imagenes_v4", "imagenes_v5", "loop_grupos_v2", "loop_flat_v3", "loop_flat_v4", "loop_umbral_v6")
+            "imagenes_v4", "imagenes_v5", "loop_grupos_v2", "loop_flat_v3", "loop_flat_v4", "loop_umbral_v6", "imagenes_v7")
 
     def __init__(self, path: str) -> None:
         self.path = path
@@ -1287,8 +1287,30 @@ es el fondo: queda negro. No uses ningún otro signo (ni #, ni puntos, ni númer
 # posición en 2D al escribir carácter por carácter; los formatos de coordenadas o de figuras geométricas suelen
 # funcionar mejor (el programa rasteriza). Se eligen en el panel C para comparar.
 GRID_PRESETS: dict[str, dict[str, Any]] = {
+    "composicion": {
+        "nombre": "Composición abstracta en capas (recomendado)",
+        "desc": "El modelo compone la imagen con 12–40 elementos con tono (manchas, anillos, arcos, trazos, vacíos): "
+                "levemente abstracta, con capas y gesto. El programa la dibuja en grises y le aplica el tratamiento.",
+        "claves": '  "formas": [ {"tipo": ..., "tono": 0..1, ...}, ... ],',
+        "bloque": """Sobre "formas": compón la imagen en un lienzo de 100 × 100 (x de izquierda a derecha, y de arriba abajo)
+como un dibujo de mancha y línea, LEVEMENTE ABSTRACTO: la figura se intuye por su estructura (su eje, su gesto, su
+ritmo, su peso), no es un ícono, ni un emoji, ni un pictograma. Entre 12 y 40 elementos, en capas, cada uno con su
+"tono" de 0.15 (gris tenue) a 1 (pleno):
+  {"tipo": "elipse", "cx": .., "cy": .., "rx": .., "ry": .., "giro": grados, "tono": ..}
+  {"tipo": "anillo", "cx": .., "cy": .., "r": .., "grosor": 1..6, "tono": ..}          (órbitas, ecos, ondas)
+  {"tipo": "arco", "cx": .., "cy": .., "r": .., "desde": grados, "hasta": grados, "grosor": 1..6, "tono": ..}
+  {"tipo": "trazo", "puntos": [[x, y], ...], "grosor": 1..10, "tono": ..}             (gestos, líneas de fuerza)
+  {"tipo": "poligono", "puntos": [[x, y], ...], "tono": ..}
+  {"tipo": "rect", "x": .., "y": .., "w": .., "h": .., "giro": grados, "tono": ..}
+  cualquiera con "restar": true abre un vacío (corta lo anterior).
+Cómo componer: una masa principal con el gesto de la figura (no su contorno de catálogo) y, alrededor o a través,
+elementos que le hagan eco, la fragmenten o la continúen: repeticiones con variación, trazos que la atraviesan, órbitas,
+una lluvia de puntos chicos, un vacío que la abre. Contraste de escalas (algo grande, mucho chico), asimetría,
+tensión con el borde, aire. Línea viva, como un dibujo de Paul Klee, Gego, Mira Schendel o León Ferrari; nunca clip-art.""",
+        "tokens": 2600,
+    },
     "formas": {
-        "nombre": "Figuras geométricas (recomendado)",
+        "nombre": "Figuras geométricas (silueta)",
         "desc": "El modelo compone la silueta con elipses, rectángulos, polígonos y trazos en un lienzo 100×100; el "
                 "programa los rasteriza. Es lo que mejor sale: trabaja con coordenadas, no con caracteres.",
         "claves": '  "formas": [ {"tipo": "elipse"|"rect"|"poligono"|"trazo", ...}, ... ],',
@@ -1356,17 +1378,24 @@ fondo, silueta inconfundible, centrada.""",
         "tokens": 1800,
     },
 }
-DEFAULT_GRID_PRESET = "formas"
+DEFAULT_GRID_PRESET = "composicion"
+TREATMENT_NAMES = ("topografia", "trama", "erosion", "eco", "silueta")
+GRID_TREATMENT = """Sobre "tratamiento": cómo se dibuja la imagen con las letras del muro, según lo que pida la estrofa:
+"topografia" (curvas de nivel: memoria, territorio, lo que se expande), "trama" (luz y grano: cuerpo, materia,
+volumen), "erosion" (la forma se deshace y se dispersa: olvido, pérdida, ceniza), "eco" (repeticiones que se desvanecen:
+tiempo, movimiento, insistencia) o "silueta" (la forma plena: afirmación, presencia)."""
 
 GRID_POLARITY = """Sobre "polaridad": "positivo" (la figura queda hecha de palabras sobre negro) o "negativo" (la figura es
 un hueco negro en el muro). Elige según la estrofa y alterna."""
 
 # Parte estética: editable desde el panel C (sección Grilla de texto). Vale para las tres formas.
-DEFAULT_GRID_AESTHETIC = """- Un concepto concreto que nazca de lo dicho: un objeto, un animal, una parte del cuerpo, un elemento de la
-  naturaleza. Si la estrofa es abstracta, una metáfora visual simple de ella.
-- Que se reconozca sólo por su sombra, de lejos: perfil o frente característico, como un sello o una sombra chinesca
-  (un pájaro en vuelo, una mano abierta, una llave, un árbol). Nada que sin detalles sea una mancha redonda o cuadrada.
-- Varía de una estrofa a otra: no repitas la figura anterior."""
+DEFAULT_GRID_AESTHETIC = """- Parte de una imagen concreta que nazca de lo dicho (un cuerpo, un animal, un objeto, un elemento de la
+  naturaleza) y llévala un paso hacia la abstracción: que se intuya por su gesto, su eje y su ritmo más de lo que se
+  ve entera. Nada de íconos, emojis ni pictogramas.
+- Si la estrofa es abstracta (tiempo, olvido, deseo…), una metáfora visual: una estructura, una tensión, un movimiento.
+- Complejidad con orden: capas, repeticiones con variación, contraste de escalas, vacíos que abren la forma.
+- Que se sostenga como dibujo en el muro: una masa que organice y detalles que la vuelvan viva.
+- Varía de una estrofa a otra: no repitas la figura ni la composición anterior."""
 
 
 def grid_form_parts(forma: str, preset: str) -> tuple[str, str, int]:
@@ -1380,14 +1409,18 @@ def grid_form_parts(forma: str, preset: str) -> tuple[str, str, int]:
 
 
 def build_grid_prompt(forma: str, preset: str, aesthetic: str | None, curaduria: str | None,
-                      polaridad: str) -> str:
+                      polaridad: str, tratamiento: str = "azar") -> str:
     claves, bloque, _ = grid_form_parts(forma, preset)
     pol = polaridad == "llm" and forma != "letras"
-    text = GRID_BASE.format(forma_claves=claves, forma_bloque=bloque,
-                            polaridad_clave=',\n  "polaridad": "positivo" | "negativo"' if pol else "",
+    trat = tratamiento == "llm" and forma != "letras"
+    extra = (',\n  "polaridad": "positivo" | "negativo"' if pol else "") + (
+        ',\n  "tratamiento": "topografia" | "trama" | "erosion" | "eco" | "silueta"' if trat else "")
+    text = GRID_BASE.format(forma_claves=claves, forma_bloque=bloque, polaridad_clave=extra,
                             estetica=(aesthetic or "").strip() or DEFAULT_GRID_AESTHETIC)
     if pol:
         text += "\n\n" + GRID_POLARITY
+    if trat:
+        text += "\n\n" + GRID_TREATMENT
     cur = (curaduria or "").strip()
     if cur:
         text += ("\n\nTEXTO CURATORIAL de la muestra (guía principal: cada figura debe poder leerse desde aquí):\n«"
@@ -1642,7 +1675,7 @@ def grid_from_preset(raw: Any, preset: str) -> tuple[list[str] | None, str]:
     """Convierte la respuesta del LLM según el formato elegido en una grilla '#'/'.' de GRID_H × GRID_W."""
     if not isinstance(raw, dict):
         return None, "respuesta no es un objeto JSON"
-    if preset == "formas":
+    if preset in ("formas", "composicion"):
         return _grid_from_shapes(raw.get("formas"))
     if preset == "tramos":
         spans = raw.get("tramos")
@@ -1686,7 +1719,19 @@ def _grid_from_shapes(shapes: Any) -> tuple[list[str] | None, str]:
         t = str(sh.get("tipo", "")).lower()
         if t.startswith("elip") or t.startswith("circ"):
             rx = max(0.5, f(sh.get("rx", sh.get("r", 0)))); ry = max(0.5, f(sh.get("ry", sh.get("r", rx))))
-            return ((x - f(sh.get("cx"))) / rx) ** 2 + ((y - f(sh.get("cy"))) / ry) ** 2 <= 1
+            a = math.radians(f(sh.get("giro")))
+            dx, dy = x - f(sh.get("cx")), y - f(sh.get("cy"))
+            u, v = dx * math.cos(a) + dy * math.sin(a), -dx * math.sin(a) + dy * math.cos(a)
+            return (u / rx) ** 2 + (v / ry) ** 2 <= 1
+        if t.startswith("anil") or t.startswith("arc"):
+            dx, dy = x - f(sh.get("cx"), 50), y - f(sh.get("cy"), 50)
+            if abs(math.hypot(dx, dy) - f(sh.get("r"), 10)) > max(0.5, f(sh.get("grosor"), 2)) / 2:
+                return False
+            if t.startswith("anil"):
+                return True
+            ang = math.degrees(math.atan2(dy, dx)) % 360
+            a0, a1 = f(sh.get("desde")) % 360, f(sh.get("hasta"), 180) % 360
+            return a0 <= ang <= a1 if a0 <= a1 else (ang >= a0 or ang <= a1)
         if t.startswith("rect"):
             x0, y0 = f(sh.get("x")), f(sh.get("y"))
             return x0 <= x <= x0 + f(sh.get("w")) and y0 <= y <= y0 + f(sh.get("h"))
@@ -1726,6 +1771,42 @@ def _grid_from_shapes(shapes: Any) -> tuple[list[str] | None, str]:
             line.append("#" if on else ".")
         rows.append("".join(line))
     return check_grid(rows)
+
+
+def clean_shapes(shapes: Any) -> list[dict[str, Any]]:
+    """Formas del LLM para el frontend: sólo claves conocidas, números finitos, a lo sumo 60."""
+    keys = {"tipo", "cx", "cy", "rx", "ry", "r", "x", "y", "w", "h", "giro", "grosor", "desde", "hasta", "tono",
+            "restar", "puntos"}
+    out = []
+    for sh in (shapes if isinstance(shapes, list) else [])[:60]:
+        if not isinstance(sh, dict):
+            continue
+        c: dict[str, Any] = {}
+        for k, v in sh.items():
+            if k not in keys:
+                continue
+            if k == "tipo":
+                c[k] = str(v)[:12]
+            elif k == "restar":
+                c[k] = bool(v)
+            elif k == "puntos" and isinstance(v, list):
+                pts = []
+                for p in v[:80]:
+                    try:
+                        pts.append([round(float(p[0]), 2), round(float(p[1]), 2)])
+                    except (TypeError, ValueError, IndexError):
+                        continue
+                c[k] = pts
+            else:
+                try:
+                    fv = float(v)
+                    if math.isfinite(fv):
+                        c[k] = round(fv, 2)
+                except (TypeError, ValueError):
+                    continue
+        if c.get("tipo"):
+            out.append(c)
+    return out
 
 
 def letters_of(text: str) -> str:
@@ -2035,7 +2116,7 @@ class ArtDirector:
                 user += (f"\n\nTexto transcripto (la imagen se dibuja sólo con estas letras): «{corpus}»"
                          f"\nLetras disponibles: {' '.join(letters_of(corpus))}")
             prompt = build_grid_prompt(forma, self._grid_preset(), st.get("prompt_grilla"), st.get("curaduria"),
-                                       st.get("polaridad") or "alternar")
+                                       st.get("polaridad") or "alternar", st.get("tratamiento") or "azar")
             return [{"role": "system", "content": prompt}, {"role": "user", "content": user}]
         recent = ", ".join(self.modes) if self.modes else "ninguno"
         user = (f"Versos anteriores: {context}\nModos visuales recientes: {recent}\n"
@@ -2058,7 +2139,7 @@ class ArtDirector:
         """Grilla: «emoji» (se calca la silueta) · «llm» (el LLM la dibuja, ver GRID_PRESETS) · «letras» (ASCII con
         las letras transcriptas)."""
         f = (self.settings or {}).get("forma_grilla")
-        return f if f in ("emoji", "llm", "letras") else "emoji"
+        return f if f in ("emoji", "llm", "letras") else "llm"
 
     def _grid_preset(self) -> str:
         p = (self.settings or {}).get("grilla_preset")
@@ -2164,6 +2245,7 @@ class ArtDirector:
             return grid_from_preset(r, preset)
 
         grid, why = parse(raw)
+        raw2: Any = None
         if not grid:
             # segundo intento: sólo la forma, con el mismo formato y la misma estética
             concept = direction.get("figura_libre") or direction.get("figura") or "luna"
@@ -2185,8 +2267,14 @@ class ArtDirector:
                 why = f"{why}; reintento: {why2}"
         if grid:
             direction["grilla_letras" if forma == "letras" else "grilla"] = grid
+            if forma == "llm" and preset in ("formas", "composicion"):
+                src = raw2 if direction.get("grilla_origen") == "reintento" else raw
+                direction["formas"] = clean_shapes(src.get("formas") if isinstance(src, dict) else None)
         else:
             direction["grilla_problema"] = why
+        trat = str((raw or {}).get("tratamiento", "") if isinstance(raw, dict) else "").lower().strip()
+        if trat in TREATMENT_NAMES:
+            direction["tratamiento"] = trat
 
     @staticmethod
     def _always_image(direction: dict[str, Any]) -> dict[str, Any]:

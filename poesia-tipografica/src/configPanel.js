@@ -221,8 +221,8 @@ export class ConfigPanel {
         <div class="row">
           <span>Forma:</span>
           <select data-sopt="forma_grilla">
-            <option value="emoji">Silueta de emoji elegido por el LLM (se reconoce al instante)</option>
-            <option value="llm">Dibujada por el LLM (elegir el formato abajo)</option>
+            <option value="llm">Dibujada por el LLM (elegir el formato abajo; recomendado: composición)</option>
+            <option value="emoji">Silueta de emoji elegido por el LLM (más literal)</option>
             <option value="letras">Arte ASCII sólo con las letras transcriptas (la imagen es el texto)</option>
           </select>
         </div>
@@ -231,6 +231,18 @@ export class ConfigPanel {
           <select data-sopt="grilla_preset"></select>
         </div>
         <p class="hint" data-preset-desc></p>
+        <div class="row">
+          <span>Tratamiento:</span>
+          <select data-sopt="tratamiento">
+            <option value="azar">Variado (cambia en cada imagen)</option>
+            <option value="topografia">Topografía: curvas de nivel de la forma</option>
+            <option value="trama">Trama: semitono granulado</option>
+            <option value="erosion">Erosión: la forma se deshace y se dispersa</option>
+            <option value="eco">Eco: repeticiones que se desvanecen</option>
+            <option value="silueta">Silueta: la forma plena con sus grises</option>
+            <option value="llm">Que lo elija el LLM según la estrofa</option>
+          </select>
+        </div>
         <div class="row">
           <span>Polaridad:</span>
           <select data-sopt="polaridad">
@@ -330,7 +342,8 @@ export class ConfigPanel {
     if (document.activeElement !== cur) cur.value = s.curaduria || '';
     for (const r of this.el.querySelectorAll('input[data-sopt="imagenes"]')) r.checked = r.value === (s.imagenes || 'grilla');
     this.$('select[data-sopt="polaridad"]').value = s.polaridad || 'alternar';
-    const forma = ['emoji', 'llm', 'letras'].includes(s.forma_grilla) ? s.forma_grilla : 'emoji';
+    const forma = ['emoji', 'llm', 'letras'].includes(s.forma_grilla) ? s.forma_grilla : 'llm';
+    this.$('select[data-sopt="tratamiento"]').value = s.tratamiento || 'azar';
     this.$('select[data-sopt="forma_grilla"]').value = forma;
     this._renderPresets(s, forma);
     const fmt = s.formato || '1822x737';
@@ -478,11 +491,11 @@ export class ConfigPanel {
     if (!sel) return;
     const list = this.gridPresets || [];
     if (sel.options.length !== list.length) sel.innerHTML = list.map((p) => `<option value="${esc(p.id)}">${esc(p.nombre)}</option>`).join('');
-    const cur = list.some((p) => p.id === s.grilla_preset) ? s.grilla_preset : list[0]?.id || '';
+    const cur = list.some((p) => p.id === s.grilla_preset) ? s.grilla_preset : 'composicion';
     sel.value = cur;
     this.$('[data-preset-row]').style.display = forma === 'llm' ? '' : 'none';
     const p = list.find((x) => x.id === cur);
-    this.$('[data-preset-desc]').textContent = forma === 'llm' && p ? p.desc : forma === 'letras' ? 'El modelo dibuja la figura en arte ASCII usando sólo las letras de lo que se dijo; se muestra tal cual, en positivo, sobre negro.' : forma === 'emoji' ? 'El modelo elige un emoji para el concepto y el programa calca su silueta.' : '';
+    this.$('[data-preset-desc]').textContent = forma === 'llm' && p ? p.desc : forma === 'letras' ? 'El modelo dibuja la figura en arte ASCII usando sólo las letras de lo que se dijo; se muestra tal cual, en positivo, sobre negro.' : forma === 'emoji' ? 'El modelo elige un emoji para el concepto y el programa calca su silueta (después pasa por el tratamiento).' : '';
   }
 
   /** «Ver el prompt exacto»: system + user tal como salen hacia el LLM. */

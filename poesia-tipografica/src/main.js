@@ -25,11 +25,12 @@ import { SHAPES } from './shapeLibrary.js';
 import { Show, DEFAULT_SETTINGS } from './show.js';
 import { ConfigPanel } from './configPanel.js';
 import { PointCloud } from './pointCloud.js';
+import { TREATMENTS, treat, pickTreatment, seedOf, composeFigure, figureToTone, rowsToTone, toneToText } from './treatments.js';
 
 const params = new URLSearchParams(location.search);
 const num = (k, d) => (params.has(k) && Number.isFinite(+params.get(k)) ? +params.get(k) : d);
 const CONFIG = {
-  pool: Math.round(Math.min(30000, Math.max(2000, num('pool', 12000)))),
+  pool: Math.round(Math.min(30000, Math.max(2000, num('pool', 18000)))), // muro de 40 filas ≈ 11 000 letras + caída + títulos
   points: Math.round(Math.min(300000, Math.max(0, num('points', 80000)))),
   ws: params.get('ws') || 'ws://localhost:8765',
   worldH: 1000,
@@ -122,35 +123,44 @@ async function boot() {
     if (dir.modo_visual === 'simbolico' && raw.source !== 'forzar-simbolico') dir = { ...dir, modo_visual: 'hibrido' };
     if ((settings.imagenes || 'grilla') === 'grilla' || raw.forzar_grilla) {
       // ilustración en grilla de texto: compuesta con las palabras del muro (positivo o negativo)
-      // forma: «emoji» (silueta del emoji que eligió el LLM) o «llm» (la grilla dibujada); el resto, respaldo
-      const llmGrid = dir.grilla ? { grid: dir.grilla, origen: raw.grilla_origen === 'reintento' ? 'grilla del LLM (2.º intento)' : 'grilla del LLM' } : null;
-      const fromEmoji = (e, o) => {
-        const g = maskToGrid(emojiFigure(e));
-        return g ? { grid: g, origen: o } : null;
-      };
+      // fuente de la imagen → tonos con la resolución del muro → tratamiento gráfico → muro de palabras
+      const gh = field.bdRows, gw = gh * 3;
+      const re = raw.grilla_origen === 'reintento' ? ' (2.º intento)' : '';
+      const src = (tone, origen) => (tone ? { tone, origen } : null);
+      const comp = () => (Array.isArray(raw.formas) && raw.formas.length ? src(figureToTone(composeFigure(raw.formas), gw, gh), `composición del LLM (${raw.formas.length} formas)${re}`) : null);
+      const llmGrid = () => (dir.grilla ? src(rowsToTone(dir.grilla, gw, gh), `grilla del LLM${re}`) : null);
       const fromSvg = () => {
         const f = dir.svg_paths?.length && sampleFigure(dir.svg_paths.map((d) => ({ d, op: 'fill' })), {});
-        const g = f && maskToGrid(f);
-        return g ? { grid: g, origen: 'silueta SVG del LLM → grilla' } : null;
+        return f ? src(figureToTone(f, gw, gh), 'silueta SVG del LLM') : null;
       };
+      const fromEmoji = (e, o) => (e ? src(figureToTone(emojiFigure(e), gw, gh), o) : null);
+      const emo = () => fromEmoji(raw.emoji, `emoji ${raw.emoji || ''}`);
       const lib = SHAPES[dir.figura] ? dir.figura : 'luna';
-      const fromLib = () =>
-        fromEmoji(LIB_EMOJI[lib], `biblioteca (${lib} ${LIB_EMOJI[lib]}) → grilla`) || { grid: maskToGrid(sampleFigure(SHAPES[lib], {})), origen: `biblioteca (${lib}) → grilla` };
-      const emo = () => (raw.emoji ? fromEmoji(raw.emoji, `emoji ${raw.emoji} → grilla`) : null);
-      // «letras»: arte ASCII hecho con las letras transcriptas; se muestra tal cual (sólo positivo)
-      const letras = Array.isArray(raw.grilla_letras) && raw.grilla_letras.length ? { grid: raw.grilla_letras, origen: `letras transcriptas (ASCII)${raw.grilla_origen === 'reintento' ? ' · 2.º intento' : ''}`, chars: true } : null;
-      const order = settings.forma_grilla === 'llm' ? [() => llmGrid, fromSvg, emo] : [emo, () => llmGrid, fromSvg];
+      const fromLib = () => fromEmoji(LIB_EMOJI[lib], `biblioteca (${lib})`) || src(figureToTone(sampleFigure(SHAPES[lib], {}), gw, gh), `biblioteca (${lib})`);
+      // «letras»: arte ASCII hecho con las letras transcriptas; se muestra tal cual (sólo positivo, sin tratamiento)
+      const letras = Array.isArray(raw.grilla_letras) && raw.grilla_letras.length ? { grid: raw.grilla_letras, origen: `letras transcriptas (ASCII)${re}`, chars: true } : null;
+      const order = settings.forma_grilla === 'emoji' ? [emo, comp, llmGrid, fromSvg] : [comp, llmGrid, fromSvg, emo];
       const pick = [() => letras, ...order].reduce((a, f) => a || f(), null) || fromLib();
-      const grid = pick.grid, origen = pick.origen;
+      // semilla estable: la misma estrofa da la misma imagen (re-proyección idéntica)
+      const seed = seedOf(JSON.stringify([dir.figura, raw.emoji, raw.formas, raw.grilla, raw.verso || dir.verso, dir.palabras_clave]));
+      const pref = settings.tratamiento || 'azar';
+      const kind = pick.chars ? 'letras' : TREATMENTS.includes(pref) ? pref : pref === 'llm' && TREATMENTS.includes(raw.tratamiento) ? raw.tratamiento : pickTreatment(seed);
+      let shapeArg = pick.grid, preview = pick.grid;
+      if (!pick.chars) {
+        const t = treat(pick.tone, gw, gh, kind, seed);
+        shapeArg = { tone: t.tone, accent: t.accent, gw, gh };
+        preview = toneToText(t.tone, t.accent, gw, gh);
+      }
+      const origen = `${pick.origen} · ${kind}`;
       const pol = pick.chars ? 'positivo' : choosePolarity(dir);
-      lastGrid = grid ? { grid, origen, pol } : null;
+      lastGrid = { grid: preview, origen, pol };
       // el contorno de la forma va en el color de acento de la marca
       field.edgeAccent = settings.contorno_acento !== false;
       field.setPalette({ ...(dir.paleta || {}), acento: (settings.marca && settings.marca.acento) || '#ff9898' });
       field.releaseFigure(true);
       field.setBackdrop(true); // la ilustración se cala en el muro: tiene que estar visible
       field.refillSecs = (settings.cadencia && settings.cadencia.min_s) || 14;
-      field.setShape(grid, { polaridad: pol, duracion: Math.max(8, +dir.duracion_s || 16), chars: !!pick.chars });
+      field.setShape(shapeArg, { polaridad: pol, duracion: Math.max(8, +dir.duracion_s || 16), chars: !!pick.chars });
       config.setLastDirection({ ...dir, origen: `${origen} · ${pol}`, pidio: 'grilla', estiloVisto: 'grilla' });
       debug.setDirection(dir);
       return;
@@ -186,13 +196,13 @@ async function boot() {
 
   /** Máscara de una figura (SVG o biblioteca) → grilla 48×26 de '#'/'.' (celdas el doble de altas que anchas). */
   // resolución de la ilustración = filas del muro (cada celda de la grilla es una letra del muro)
-  const GRID_ROWS = 34, GRID_COLS = 102;
+  // resolución de la imagen = filas del muro (field.bdRows); el ancho cubre hasta 3 veces el alto
 
   /**
    * Máscara (SVG, emoji o biblioteca) → grilla de '#'/'.' con celdas el doble de altas que anchas.
    * Cobertura promediada (bordes sin dientes) y un pase de suavizado: sin celdas sueltas ni agujeritos.
    */
-  function maskToGrid(fig, gw = GRID_COLS, gh = GRID_ROWS, alto = 0.8) {
+  function maskToGrid(fig, gw = field.bdRows * 3, gh = field.bdRows, alto = 0.8) {
     if (!fig || !fig.mask) return null;
     const R = 512, bb = fig.bbox || { x: 0, y: 0, w: R, h: R };
     // la figura ocupa ~80 % del alto; el ancho respeta la proporción real (cada celda cubre cell/2 × cell)
@@ -324,6 +334,8 @@ async function boot() {
     if (old) s = { ...s, loop: structuredClone(DEFAULT_SETTINGS.loop) };
     // v4: las ilustraciones pasan a ser grilla de texto (una sola vez; después se respeta lo elegido en el panel)
     if (!s.imagenes_v5) s = { ...s, imagenes: 'grilla', imagenes_v4: true, imagenes_v5: true }; // la ilustración es la grilla de texto
+    // ilustraciones: composición abstracta del LLM (no emoji) con tratamiento gráfico
+    if (!s.imagenes_v7) s = { ...s, forma_grilla: 'llm', grilla_preset: 'composicion', tratamiento: s.tratamiento || 'azar', imagenes_v7: true };
     return s;
   }
 
@@ -773,7 +785,8 @@ async function boot() {
 
   // acceso desde consola para calibración
   window.poesia = {
-    field, show, config, applyDirection, simulateVerse, simulatePoem, advance, CONFIG, emojiFigure, maskToGrid,
+    field, show, config, applyDirection, simulateVerse, simulatePoem, advance, CONFIG, emojiFigure, maskToGrid, treat, composeFigure, figureToTone,
+    setTestSettings: (o) => (settings = { ...settings, ...o }),
     // pruebas / calibración: forzar un estilo
     setStyleForTest: (e) => (settings = { ...settings, estilos: { activos: [e], modo: 'azar' } }),
     glitchNow: (secs = 0.6, amp = 0.9) => Object.assign(glitch, { burst: secs, amp }),

@@ -31,6 +31,9 @@ export const DEFAULT_SETTINGS = {
   imagenes: 'grilla', // 'grilla' = el LLM devuelve la figura como texto · 'llm' = trazado SVG · 'biblioteca' = curadas
   polaridad: 'alternar', // grilla: positivo | negativo | alternar | llm
   formato: '1822x737', // salida: 'ANCHOxALTO' (cuadro centrado) o 'pantalla'
+  forma_grilla: 'llm', // ilustración: 'llm' (composición) · 'emoji' · 'letras'
+  grilla_preset: 'composicion',
+  tratamiento: 'azar', // topografia | trama | erosion | eco | silueta | azar | llm
   prompt_grilla: '', // parte estética del pedido de la grilla ('' = la de fábrica)
   director: 'openai', // openai | ollama | deepseek
   cadencia: { preset: 'estrofa' },

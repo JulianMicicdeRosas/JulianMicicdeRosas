@@ -134,8 +134,8 @@ export class TypeField {
     this.backdropHoles = [];
     this.shape = null;       // grilla de texto del LLM: { grid, gw, gh, pol: 'positivo'|'negativo', until }
     this.bdFill = null;      // llenado progresivo del telón hasta la próxima imagen: { t0, dur }
-    this.bdRows = 34;
-    this.edgeAccent = true; // contorno de las ilustraciones en el color de acento // filas del muro = resolución de las ilustraciones en grilla
+    this.bdRows = 40; // filas del muro = resolución de las ilustraciones (≈ 11 000 celdas: entra en el pool)
+    this.edgeAccent = true; // contorno de las ilustraciones en el color de acento
     this.glitchMoves = true; // toda letra que cambia de lugar lo hace a saltos con cortes, no volando
     this.ambientRain = true; // sin letras flotando: el ambiente es sólo lluvia que cae del telón
     this.gph = new Int32Array(N).fill(-1);
@@ -1235,14 +1235,17 @@ export class TypeField {
    * Las letras que sobran caen con glitch; las que faltan aparecen con un salto.
    */
   setShape(grid, { polaridad = 'negativo', duracion = 20, chars = false } = {}) {
-    if (!grid || !grid.length) {
+    if (!grid || (!grid.tone && !grid.length)) {
       if (this.shape) this.onTransition?.(0.45);
       this.shape = null;
       return;
     }
     // chars: arte ASCII con letras propias (una letra de la grilla = una celda del muro, sólo positivo)
+    // grid.tone: imagen en tonos (treatments.js) → cada letra se enciende según su tono; grid.accent: color de marca
     const pol = chars || polaridad === 'positivo' ? 'positivo' : 'negativo';
-    this.shape = { grid, gw: Math.max(...grid.map((r) => r.length)), gh: grid.length, pol, chars, until: this.time + duracion };
+    this.shapeId = (this.shapeId || 0) + 1;
+    if (grid.tone) this.shape = { tone: grid.tone, accent: grid.accent, gw: grid.gw, gh: grid.gh, pol, id: this.shapeId, until: this.time + duracion };
+    else this.shape = { grid, gw: Math.max(...grid.map((r) => r.length)), gh: grid.length, pol, chars, id: this.shapeId, until: this.time + duracion };
     this.bdFill = null; // la imagen se muestra completa
     this.onTransition?.(0.75);
   }
@@ -1260,9 +1263,21 @@ export class TypeField {
 
   /** ¿La celda (x, y) del telón queda vacía por la ilustración en grilla? */
   _shapeHides(x, y) {
+    if (this.shape.tone) {
+      const i = this._toneIndex(x, y), v = i < 0 ? 0 : this.shape.tone[i];
+      return this.shape.pol === 'positivo' ? v < 0.1 : v > 0.5;
+    }
     const ch = this._shapeChar(x, y);
     const inside = this.shape.chars ? !!ch && ch !== ' ' : ch === '#';
     return this.shape.pol === 'positivo' ? !inside : inside;
+  }
+
+  /** Índice de la celda de tonos en (x, y) (celdas 1 × 2 que cubren el alto del muro), o -1. */
+  _toneIndex(x, y) {
+    const S = this.shape, B = this.backdrop;
+    const cellH = (B.top - B.bottom) / S.gh, cellW = cellH / 2;
+    const gx = Math.floor((x - ((B.x0 + B.x1) / 2 - (cellW * S.gw) / 2)) / cellW), gy = Math.floor((B.top - y) / cellH);
+    return gx >= 0 && gx < S.gw && gy >= 0 && gy < S.gh ? gy * S.gw + gx : -1;
   }
 
   /** Carácter de la grilla que cae en (x, y). Silueta: celdas 1 × 2 que cubren el alto del muro.
@@ -1357,17 +1372,35 @@ export class TypeField {
         c.i = -1; // otra escena tomó la partícula
         c.at = t + 1;
       }
-      if ((holes.length && this._inHoles(c.x, c.y, B.cw * 0.5, holes)) || (this.shape && this._shapeHides(c.x, c.y))) {
+      // lo que la ilustración le pide a esta celda (se calcula una vez por imagen)
+      const S = this.shape;
+      if (S && c.sid !== S.id) {
+        c.sid = S.id;
+        c.hide = this._shapeHides(c.x, c.y);
+        if (S.tone) {
+          const ti = this._toneIndex(c.x, c.y), v = ti < 0 ? 0 : S.tone[ti];
+          c.alpha = S.pol === 'positivo' ? 0.22 + 0.78 * v : 0.82 * (1 - 0.75 * Math.min(1, v / 0.5));
+          c.acc = this.edgeAccent && ti >= 0 && S.accent && S.accent[ti] ? 1 : 0;
+        } else {
+          c.acc = this.edgeAccent && !c.hide && this._shapeEdge(c.x, c.y) ? 1 : 0;
+          c.alpha = c.acc ? 1 : 0.82;
+        }
+      } else if (!S && c.sid) {
+        c.sid = 0;
+        c.hide = false;
+        c.acc = 0;
+        c.alpha = 0.82;
+      }
+      if ((holes.length && this._inHoles(c.x, c.y, B.cw * 0.5, holes)) || (S && c.hide)) {
         if (c.i >= 0) this._bdDrop(c, t, Math.random() < 0.05); // casi todas se apagan; pocas caen (forma limpia)
         continue;
       }
-      // contorno de la ilustración: letras plenas y en el color de acento (dibuja el borde de la forma)
+      // tono y acento de la ilustración: cada letra se enciende según la imagen; el acento dibuja líneas de marca
       if (c.i >= 0) {
-        const edge = this.shape && this.edgeAccent ? this._shapeEdge(c.x, c.y) : false;
-        const a = edge ? 1 : 0;
-        if (this.accent[c.i] !== a) {
+        const a = S ? c.acc : 0, al = S ? (a ? 1 : c.alpha) : 0.82;
+        if (this.accent[c.i] !== a || Math.abs(this.talpha[c.i] - al) > 0.01) {
           this.accent[c.i] = a;
-          this.talpha[c.i] = edge ? 1 : 0.82;
+          this.talpha[c.i] = al;
           this.metaDirty = true;
         }
       }

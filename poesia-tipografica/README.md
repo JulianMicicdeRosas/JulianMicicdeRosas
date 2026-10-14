@@ -158,18 +158,36 @@ queda negro. El muro de palabras, el título, los nombres y la transcripción qu
 
 ## Forma de las ilustraciones
 
-Panel C → Grilla de texto → **Forma** (y «Ver el prompt exacto que se envía» muestra el pedido completo al LLM):
+Panel C → Grilla de texto. La imagen se arma en tres pasos: **fuente → tonos → tratamiento**, y se compone con las
+letras del muro: cada letra se enciende según el tono de la imagen en su lugar (no sólo prendida / apagada).
+
+**Forma (fuente)** — «Ver el prompt exacto que se envía» muestra el pedido completo al LLM:
 
 | Forma | Qué pide al LLM | Cómo se ve |
 | --- | --- | --- |
-| **Silueta de emoji** (por defecto) | el concepto y un emoji (🌳 🐦 ✋ 🦋…) | el programa calca la silueta del emoji del sistema y la compone con las palabras, en positivo o negativo |
-| **Dibujada por el LLM** | la silueta en el **formato** elegido (abajo) | grilla de figura/fondo, en positivo o negativo |
-| **Letras transcriptas** | una imagen en arte ASCII de 30 × 64 hecha **sólo con las letras de lo que se dijo** | se muestra tal cual, letra por letra, sobre negro (el texto es la imagen) |
+| **Dibujada por el LLM** (por defecto, formato «Composición») | una composición levemente abstracta de 12–40 elementos con tono: manchas, anillos, arcos, trazos, polígonos y vacíos | el programa la dibuja en grises y le aplica el tratamiento |
+| **Silueta de emoji** | el concepto y un emoji | se calca la silueta del emoji y pasa por el tratamiento (más literal) |
+| **Letras transcriptas** | arte ASCII de 30 × 64 sólo con las letras de lo dicho | se muestra tal cual, letra por letra (sin tratamiento) |
+
+**Tratamiento** (cómo se dibuja con las letras): *Variado* (cambia en cada imagen) o fijo, o que lo elija el LLM:
+
+- **Topografía**: curvas de nivel de la forma — el borde en el rosa de la marca, anillos interiores que siguen las
+  capas y dos o tres ondas hacia afuera. La figura emerge de líneas concéntricas.
+- **Luz y grano**: todas las letras de la forma, con brillo según la profundidad (núcleo pleno, borde que se apaga),
+  grano y un halo tenue.
+- **Erosión**: la forma se deshace por el borde, se agrieta y suelta restos hacia un lado (como ceniza al viento).
+- **Eco**: la forma repetida en ecos que se desvanecen, con bandas desplazadas (tiempo, movimiento).
+- **Silueta**: la forma plena con sus grises y el borde de las masas en acento.
+
+Todo es determinista: la misma estrofa produce la misma imagen (la re-proyección es idéntica). El muro tiene 40 filas
+(resolución de la imagen) y el programa usa 18 000 letras (`?pool=` para cambiarlo).
 
 **Formatos de dibujo** (Forma = «Dibujada por el LLM»), para comparar con «Probar»:
 
-1. **Figuras geométricas** (recomendado): elipses, rectángulos, polígonos y trazos en un lienzo 100 × 100, sumando y
-   restando como un recorte de papel; el programa los rasteriza.
+1. **Composición abstracta en capas** (recomendado): 12–40 elementos con tono (elipses, anillos, arcos, trazos,
+   polígonos, vacíos) en un lienzo 100 × 100; levemente abstracta, con referencias de dibujo (Klee, Gego, Mira
+   Schendel, León Ferrari). El programa la dibuja en grises.
+   **Figuras geométricas (silueta)**: lo mismo pero sólo para una silueta plena.
 2. **Coordenadas por fila (tramos)**: `[fila, desde, hasta]` por cada tramo de figura.
 3. **Filas de # y .** (clásico): la grilla escrita tal cual.
 4. **Filas numeradas con regla**: cada fila con su número y una regla de columnas para no perder la cuenta.
