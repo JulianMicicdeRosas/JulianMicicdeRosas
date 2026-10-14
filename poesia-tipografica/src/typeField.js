@@ -1,0 +1,1020 @@
+// ─────────────────────────────────────────────────────────────────────────────
+//  typeField.js — Campo tipográfico: 8 000-15 000 glifos instanciados, un único
+//  draw call. Cada partícula es una letra real del poema.
+//
+//  Estados de una partícula:
+//    FREE    → obedece a la física simbólica activa (lluvia / enjambre / vórtice / ceniza)
+//    LINE    → forma parte del verso que se está pronunciando (subtítulo vivo)
+//    FIGURE  → reclutada por un caligrama: viaja a su punto objetivo (contorno o halftone)
+//    CURSOR  → partícula 0: cabezal de escritura que respira con la voz
+//
+//  La física corre en CPU sobre typed arrays (O(N), sin vecinos cuadráticos:
+//  el enjambre usa una rejilla espacial agregada). La reactividad acústica de
+//  latencia cero vive en el vertex shader (uniforms uRms / uFreq).
+// ─────────────────────────────────────────────────────────────────────────────
+import * as THREE from 'three';
+import { glyphVertex, glyphFragment } from './shaders.js';
+import { pointAt, RES } from './svgSampler.js';
+
+const FREE = 0;
+const LINE = 1;
+const FIGURE = 2;
+const CURSOR = 9;
+
+export const PHYSICS_MODES = ['lluvia_text_rain', 'enjambre_lozano', 'vortice_sandison', 'dispersion_ceniza'];
+const RAIN = 0, SWARM = 1, VORTEX = 2, ASH = 3;
+
+const RAIN_COLS = 240;
+const GRID_CELL = 90;
+const TAU = Math.PI * 2;
+
+const fract = (x) => x - Math.floor(x);
+const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
+const angDiff = (a, b) => {
+  let d = (a - b) % TAU;
+  if (d > Math.PI) d -= TAU;
+  else if (d < -Math.PI) d += TAU;
+  return d;
+};
+const normalizeWord = (w) => w.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zñ0-9]/g, '');
+
+// Campo de ruido "curl" analítico (divergencia nula, ~6 trig por llamada).
+const _c = { x: 0, y: 0 };
+function curl(x, y, t, freq) {
+  const X = x * freq, Y = y * freq;
+  const a1 = X + t * 0.31, b1 = Y * 1.3 - t * 0.23;
+  const sa = Math.sin(a1), ca = Math.cos(a1), sb = Math.sin(b1), cb = Math.cos(b1);
+  const c2 = Math.cos(X * 2.1 + Y * 1.7 + t * 0.47);
+  const s3 = Math.sin(X * 4.3 - Y * 3.9 - t * 0.61);
+  const dpx = ca * cb + 1.05 * c2 - 1.075 * s3;
+  const dpy = -1.3 * sa * sb + 0.85 * c2 + 0.975 * s3;
+  _c.x = dpy * 0.5;
+  _c.y = -dpx * 0.5;
+  return _c;
+}
+
+export class TypeField {
+  constructor({ atlas, count = 12000, aspect = 16 / 9, worldH = 1000, idleText = '' }) {
+    this.atlas = atlas;
+    this.N = count;
+    this.H = worldH;
+    this.W = worldH * aspect;
+    this.time = 0;
+    const N = count;
+
+    const F = () => new Float32Array(N);
+    this.px = F(); this.py = F(); this.pz = F();
+    this.vx = F(); this.vy = F(); this.vz = F();
+    this.rot = F(); this.size = F(); this.sizeT = F();
+    this.alpha = F(); this.alphaT = F();
+    this.slot = F(); this.tint = F(); this.accent = F();
+    this.birth = F(); this.seed = F(); this.seed2 = F(); this.level = F();
+    this.tx = F(); this.ty = F(); this.tz = F(); this.trot = F(); this.tsize = F(); this.talpha = F();
+    this.delay = F(); this.life = F();
+    // glifo pendiente: se aplica cuando la letra parte hacia su lugar en el caligrama
+    this.pslot = F().fill(-1); this.ptint = F(); this.paccent = F();
+    this.rest = F(); this.restY = F(); this.restH = F();
+    this.restCol = new Int16Array(N);
+    this.state = new Uint8Array(N);
+
+    // ── corpus: el poema acumulado alimenta el reciclaje de glifos ─────────
+    this.corpus = (idleText || 'la voz escribe en la oscuridad').trim();
+    this.corpusChars = 0; // caracteres de poema real (no el texto de reposo)
+    this.cursorC = 0;
+    this.keywords = new Set();
+    this.accentUse = 0;
+
+    // ── física ─────────────────────────────────────────────────────────────
+    this.phys = { modo: 'lluvia_text_rain', intensidad: 0.5, velocidad: 0.45, turbulencia: 0.35, densidad: 0.6 };
+    this.modeW = new Float32Array([1, 0, 0, 0]);
+    this.modeTarget = RAIN;
+    this.transitionBoost = 0;
+    this.floorBase = new Float32Array(RAIN_COLS);
+    this.accum = new Float32Array(RAIN_COLS);
+    this.restingActive = false;
+    this.shelf = null;
+    this.figure = null;
+    this.figureDensity = 1;
+    this.figureAlpha = 1;
+
+    // ── voz / línea ────────────────────────────────────────────────────────
+    this.rms = 0;
+    this.freq = 0;
+    this.speaking = false;
+    this.speakingUntil = 0;
+    this.line = null;
+    this.allocCursor = 1;
+
+    this._buildMesh();
+    this._seedParticles();
+    this.resize(aspect, worldH);
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  //  GPU
+  // ════════════════════════════════════════════════════════════════════════
+  _buildMesh() {
+    const N = this.N;
+    const quad = new THREE.PlaneGeometry(1, 1);
+    const geo = new THREE.InstancedBufferGeometry();
+    geo.index = quad.index;
+    geo.setAttribute('position', quad.getAttribute('position'));
+    geo.setAttribute('uv', quad.getAttribute('uv'));
+    this.posRot = new Float32Array(N * 4);
+    this.data = new Float32Array(N * 4);
+    this.meta = new Float32Array(N * 4);
+    this.aPosRot = new THREE.InstancedBufferAttribute(this.posRot, 4).setUsage(THREE.DynamicDrawUsage);
+    this.aData = new THREE.InstancedBufferAttribute(this.data, 4).setUsage(THREE.DynamicDrawUsage);
+    this.aMeta = new THREE.InstancedBufferAttribute(this.meta, 4).setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute('iPosRot', this.aPosRot);
+    geo.setAttribute('iData', this.aData);
+    geo.setAttribute('iMeta', this.aMeta);
+    geo.instanceCount = N;
+
+    this.uniforms = {
+      uAtlas: { value: this.atlas.texture },
+      uCols: { value: this.atlas.cols },
+      uRows: { value: this.atlas.rows },
+      uTime: { value: 0 },
+      uRms: { value: 0 },
+      uFreq: { value: 0 },
+      uFreshness: { value: 0.85 },
+      uGlobalAlpha: { value: 1 },
+      uBase: { value: new THREE.Color('#F4F1EA') },
+      uSecond: { value: new THREE.Color('#8C8984') },
+      uAccent: { value: new THREE.Color('#C9C4BA') },
+    };
+    this.paletteTarget = {
+      base: this.uniforms.uBase.value.clone(),
+      second: this.uniforms.uSecond.value.clone(),
+      accent: this.uniforms.uAccent.value.clone(),
+    };
+    const mat = new THREE.ShaderMaterial({
+      uniforms: this.uniforms,
+      vertexShader: glyphVertex,
+      fragmentShader: glyphFragment,
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.AddEquation,
+      blendSrc: THREE.OneFactor,
+      blendDst: THREE.OneFactor,
+    });
+    this.mesh = new THREE.Mesh(geo, mat);
+    this.mesh.frustumCulled = false;
+    this.metaDirty = true;
+  }
+
+  _seedParticles() {
+    for (let i = 0; i < this.N; i++) {
+      const s = Math.random();
+      this.seed[i] = s;
+      this.seed2[i] = Math.random();
+      this.px[i] = (Math.random() - 0.5) * this.W;
+      this.py[i] = (Math.random() - 0.5) * this.H;
+      this.pz[i] = (s - 0.5) * 260;
+      this.size[i] = this.sizeT[i] = this._ambientSize(i);
+      this.birth[i] = -100;
+      this.state[i] = FREE;
+      this.life[i] = Math.random() * 8;
+      this._recycleGlyph(i);
+    }
+    // partícula 0 = cursor de escritura
+    this.state[0] = CURSOR;
+    this.slot[0] = this.atlas.slot('|', 'serif');
+    this.tint[0] = 0;
+    this.accent[0] = 0;
+  }
+
+  _ambientSize(i) {
+    const s = this.seed[i];
+    return this.H * (0.013 + 0.017 * s * s + (this.seed2[i] > 0.985 ? 0.02 : 0));
+  }
+
+  resize(aspect, worldH = this.H) {
+    this.H = worldH;
+    this.W = worldH * aspect;
+    this.lineSize = clamp(this.H * 0.05, 34, 70);
+    this.lineY = -this.H * 0.385;
+    this.lineMaxW = this.W * 0.78;
+    this.colW = this.W / RAIN_COLS;
+    this.gridCols = Math.ceil(this.W / GRID_CELL) + 2;
+    this.gridRows = Math.ceil(this.H / GRID_CELL) + 2;
+    const cells = this.gridCols * this.gridRows;
+    this.gCount = new Float32Array(cells);
+    this.gSx = new Float32Array(cells);
+    this.gSy = new Float32Array(cells);
+    this.gVx = new Float32Array(cells);
+    this.gVy = new Float32Array(cells);
+    this._recomputeFloor();
+    if (this.line) this._layoutLine();
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  //  Entradas
+  // ════════════════════════════════════════════════════════════════════════
+  setAudio(rms, freq) {
+    this.rms = rms;
+    this.freq = freq;
+    this.uniforms.uRms.value = rms;
+    this.uniforms.uFreq.value = freq;
+  }
+
+  setSpeaking(on) {
+    this.speaking = on;
+    if (on) this.speakingUntil = this.time + 30;
+    else this.speakingUntil = this.time + 1.2;
+  }
+
+  setPalette(p = {}) {
+    const safe = (hex, fallback) => (/^#[0-9a-fA-F]{6}$/.test(hex || '') ? hex : fallback);
+    this.paletteTarget.base.set(safe(p.base, '#F4F1EA'));
+    this.paletteTarget.second.set(safe(p.secundario, '#8C8984'));
+    this.paletteTarget.accent.set(safe(p.acento, '#C9C4BA'));
+    this.accentUse = clamp(+p.uso_acento || 0, 0, 0.25);
+  }
+
+  setPhysics(f = {}) {
+    const idx = PHYSICS_MODES.indexOf(f.modo);
+    if (idx >= 0) this.modeTarget = idx;
+    const n = (v, d) => (Number.isFinite(+v) ? clamp(+v, 0, 1) : d);
+    this.phys = {
+      modo: PHYSICS_MODES[this.modeTarget],
+      intensidad: n(f.intensidad, this.phys.intensidad),
+      velocidad: n(f.velocidad, this.phys.velocidad),
+      turbulencia: n(f.turbulencia, this.phys.turbulencia),
+      densidad: n(f.densidad, this.phys.densidad),
+    };
+  }
+
+  setKeywords(list = []) {
+    this.keywords = new Set(list.map(normalizeWord).filter(Boolean));
+  }
+
+  addCorpus(text) {
+    const t = (text || '').replace(/\s+/g, ' ').trim();
+    if (!t) return;
+    if (this.corpusChars === 0) this.corpus = '';
+    this.corpus = (this.corpus + '  ' + t).slice(-6000);
+    this.corpusChars += t.length;
+    this.cursorC = Math.max(0, this.corpus.length - t.length - 2); // reciclar primero lo recién dicho
+  }
+
+  _nextCorpusChar() {
+    const c = this.corpus;
+    const start = Math.max(0, c.length - 2400);
+    const span = c.length - start;
+    for (let k = 0; k < 12; k++) {
+      const ch = c[start + (this.cursorC++ % span)];
+      if (ch && ch.trim()) return ch;
+    }
+    return '·';
+  }
+
+  _recycleGlyph(i) {
+    const ch = this._nextCorpusChar();
+    this.slot[i] = this.atlas.slot(ch, this.seed[i] < 0.64 ? 'serif' : 'mono');
+    this.tint[i] = fract(this.seed[i] * 7.31) * 0.85;
+    this.accent[i] = Math.random() < this.accentUse * 0.22 ? 1 : 0;
+    this.metaDirty = true;
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  //  Verso en vivo (subtítulo): las letras nacen donde se pronuncian
+  // ════════════════════════════════════════════════════════════════════════
+  _allocParticle() {
+    const N = this.N;
+    let pick = -1, fallback = -1;
+    for (let k = 0; k < 900; k++) {
+      const i = 1 + ((this.allocCursor + k) % (N - 1));
+      const st = this.state[i];
+      if (st === FREE) {
+        if (this.alpha[i] < 0.12) {
+          pick = i;
+          break;
+        }
+        if (fallback < 0) fallback = i;
+      } else if (st === FIGURE && fallback < 0 && this.time < this.delay[i]) {
+        fallback = i;
+      }
+    }
+    if (pick < 0) pick = fallback;
+    if (pick < 0) {
+      for (let k = 0; k < N - 1; k++) {
+        const i = 1 + ((this.allocCursor + k) % (N - 1));
+        if (this.state[i] !== LINE && this.state[i] !== CURSOR) {
+          pick = i;
+          break;
+        }
+      }
+    }
+    if (pick < 0) return -1;
+    this.allocCursor = pick + 1;
+    this._unrest(pick);
+    this.state[pick] = LINE;
+    return pick;
+  }
+
+  _newLine(itemId) {
+    return { itemId, rows: [[]], text: '', releaseAt: Infinity, completed: false };
+  }
+
+  /** word_delta: añade texto al verso vivo. */
+  typeDelta(itemId, delta, { stagger = 0, level = null } = {}) {
+    if (!delta) return;
+    if (!this.line || this.line.itemId !== itemId || this.line.completed) {
+      if (this.line) this.releaseLine();
+      this.line = this._newLine(itemId);
+    }
+    const line = this.line;
+    const t = this.time;
+    const S = this.lineSize;
+    const born = clamp(level ?? Math.max(0.18, this.rms), 0, 1);
+    const spaceAdv = S * 0.26;
+    let n = 0;
+    for (const ch of delta) {
+      let row = line.rows[line.rows.length - 1];
+      if (ch === '\n') {
+        if (row.length) line.rows.push([]);
+        continue;
+      }
+      if (!ch.trim()) {
+        if (row.length && row[row.length - 1].i !== -1) row.push({ i: -1, adv: spaceAdv });
+        continue;
+      }
+      const i = this._allocParticle();
+      if (i < 0) break;
+      const slot = this.atlas.slot(ch, 'serif');
+      this.slot[i] = slot;
+      this.pslot[i] = -1;
+      this.tint[i] = 0;
+      this.accent[i] = 0;
+      this.birth[i] = t + n * stagger;
+      this.delay[i] = t + n * stagger;
+      this.level[i] = born;
+      this.tsize[i] = S;
+      this.rot[i] = 0;
+      this.vx[i] = this.vy[i] = this.vz[i] = 0;
+      this.metaDirty = true;
+      row.push({ i, adv: this.atlas.adv(slot) * S * 1.02, fresh: true });
+      n++;
+      // ajuste de línea por palabras
+      const width = row.reduce((a, e) => a + e.adv, 0);
+      if (width > this.lineMaxW) {
+        let k = row.length - 1;
+        while (k > 0 && row[k].i !== -1) k--;
+        const moved = k > 0 ? row.splice(k + 1) : row.splice(row.length - 1);
+        if (k > 0) row.pop();
+        line.rows.push(moved);
+      }
+    }
+    line.text += delta;
+    // máximo 3 renglones vivos: el más antiguo se libera al campo
+    while (line.rows.length > 3) this._releaseEntries(line.rows.shift());
+    this._layoutLine();
+  }
+
+  _layoutLine() {
+    const line = this.line;
+    if (!line) return;
+    const S = this.lineSize;
+    const rows = line.rows;
+    for (let r = 0; r < rows.length; r++) {
+      const row = rows[r];
+      let width = 0;
+      for (const e of row) width += e.adv;
+      let x = -width / 2;
+      const y = this.lineY + (rows.length - 1 - r) * S * 0.98;
+      for (const e of row) {
+        const cx = x + e.adv / 2;
+        x += e.adv;
+        if (e.i < 0) continue;
+        this.tx[e.i] = cx;
+        this.ty[e.i] = y;
+        this.tz[e.i] = 0;
+        if (e.fresh) {
+          // nacimiento exacto en su lugar del verso: sin vuelo, sin retardo
+          this.px[e.i] = cx;
+          this.py[e.i] = y;
+          this.pz[e.i] = 0;
+          this.alpha[e.i] = this.delay[e.i] <= this.time ? 1 : 0;
+          this.size[e.i] = S;
+          e.fresh = false;
+        }
+      }
+    }
+  }
+
+  /** verse_completed: reconcilia con la transcripción final y programa la liberación. */
+  completeLine(itemId, text) {
+    const final = (text || '').replace(/\s+/g, ' ').trim();
+    if (!final) return;
+    const norm = (s) => s.replace(/\s+/g, '').toLowerCase();
+    if (!this.line || this.line.itemId !== itemId) {
+      this.typeDelta(itemId, final, { stagger: 0.022 });
+    } else if (norm(this.line.text) !== norm(final)) {
+      const old = this.line;
+      this.line = null;
+      for (const row of old.rows) this._releaseEntries(row, true);
+      this.typeDelta(itemId, final, { stagger: 0.008, level: 0.15 });
+    }
+    if (this.line) {
+      this.line.completed = true;
+      this.line.releaseAt = this.time + clamp(1.8 + final.length * 0.035, 2.2, 5.5);
+    }
+    this.addCorpus(final);
+  }
+
+  _releaseEntries(row, quiet = false) {
+    for (const e of row) {
+      if (e.i < 0) continue;
+      const i = e.i;
+      this.state[i] = FREE;
+      this.vx[i] = (Math.random() - 0.5) * 24;
+      this.vy[i] = quiet ? 0 : 12 + Math.random() * 30;
+      this.vz[i] = (Math.random() - 0.5) * 40;
+      this.life[i] = 0;
+      if (quiet) this.alphaT[i] = 0;
+    }
+  }
+
+  releaseLine() {
+    const line = this.line;
+    if (!line) return;
+    let x0 = Infinity, x1 = -Infinity, y = -Infinity;
+    for (const row of line.rows) {
+      for (const e of row) {
+        if (e.i < 0) continue;
+        x0 = Math.min(x0, this.px[e.i] - e.adv / 2);
+        x1 = Math.max(x1, this.px[e.i] + e.adv / 2);
+        y = Math.max(y, this.py[e.i] + this.lineSize * 0.3);
+      }
+      this._releaseEntries(row);
+    }
+    this.line = null;
+    // el verso recién dicho queda como repisa invisible para la lluvia (Text Rain)
+    if (isFinite(x0)) {
+      this.shelf = { x0, x1, y, until: this.time + 14 };
+      this._recomputeFloor();
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  //  Caligramas
+  // ════════════════════════════════════════════════════════════════════════
+  _stream(text, skipSpaces) {
+    const src = (text && text.trim() ? text.trim() : this.corpus.slice(-400)).replace(/\s+/g, ' ') + ' · ';
+    const flags = new Uint8Array(src.length);
+    if (this.keywords.size) {
+      const re = /[\p{L}\p{N}]+/gu;
+      let m;
+      while ((m = re.exec(src))) {
+        if (this.keywords.has(normalizeWord(m[0]))) flags.fill(1, m.index, m.index + m[0].length);
+      }
+    }
+    let idx = 0;
+    return () => {
+      for (let guard = 0; guard < src.length + 1; guard++) {
+        const k = idx++ % src.length;
+        const ch = src[k];
+        if (skipSpaces && (ch === ' ' || ch === '·')) continue;
+        return [ch, flags[k]];
+      }
+      return ['·', 0];
+    };
+  }
+
+  /**
+   * Forma una figura con las letras del poema.
+   * @param fig  salida de sampleFigure()
+   * @param dir  dirección de arte normalizada
+   */
+  formFigure(fig, dir) {
+    const t = this.time;
+    this.releaseFigure(true);
+    const atlas = this.atlas;
+    const worldSize = Math.min(this.H * 0.74, this.W * 0.8);
+    const k = worldSize / RES;
+    const cx = 0;
+    const cy = this.H * 0.055;
+    const typo = dir.tipografia || 'mixta';
+    const kindC = typo === 'mono' ? 'mono' : 'serif';
+    const kindI = typo === 'serif' ? 'serif' : 'mono';
+    const fill = dir.relleno || 'ambos';
+    const useKeys = this.accentUse > 0;
+
+    let lineCount = 0;
+    if (this.line) for (const row of this.line.rows) for (const e of row) if (e.i >= 0) lineCount++;
+    const capacity = Math.max(0, this.N - 1 - lineCount - Math.round(this.N * 0.06));
+
+    // targets planos: x, y, z, rot, size, alpha, tint, slot, accent, delay, key
+    const T = [];
+    let contourCount = 0;
+
+    if (fill !== 'volumen' || fig.interior.length === 0) {
+      const next = this._stream(dir.verso, false);
+      const S = clamp(this.H * 0.027, 16, 36);
+      const spaceAdvPx = (S * 0.28) / k;
+      for (const pl of fig.polylines) {
+        let s = 0, hint = 0;
+        while (s < pl.length && T.length / 11 < capacity) {
+          const [ch, key] = next();
+          if (ch === ' ') {
+            s += spaceAdvPx;
+            continue;
+          }
+          const slot = atlas.slot(ch, kindC);
+          const advPx = (atlas.adv(slot) * S) / k;
+          const mid = s + advPx / 2;
+          if (mid > pl.length) break;
+          const p = pointAt(pl, mid, hint);
+          hint = p.index;
+          T.push((p.x - RES / 2) * k + cx, (RES / 2 - p.y) * k + cy, 8, Math.atan2(-p.ty, p.tx), S, 1, 0, slot, useKeys && key ? 1 : 0, 0, contourCount++);
+          s += advPx * 1.04;
+        }
+      }
+    }
+    const contourTargets = T.length / 11;
+
+    if (fill !== 'contorno') {
+      const pts = fig.interior;
+      const count = pts.length / 3;
+      const budget = capacity - contourTargets;
+      const keep = count > budget ? budget / count : 1;
+      const next = this._stream((dir.palabras_clave || []).join(' ') + ' ' + (dir.verso || ''), true);
+      const cell = fig.spacing * k;
+      for (let j = 0; j < count; j++) {
+        if (keep < 1 && Math.random() > keep) continue;
+        const lum = pts[j * 3 + 2];
+        const [ch, key] = next();
+        const slot = atlas.slot(ch, kindI);
+        T.push(
+          (pts[j * 3] - RES / 2) * k + cx,
+          (RES / 2 - pts[j * 3 + 1]) * k + cy,
+          (lum - 0.5) * 80,
+          (Math.random() - 0.5) * 0.12,
+          cell * (0.95 + 1.45 * lum),
+          0.16 + 0.66 * lum,
+          (1 - lum) * 0.9,
+          slot,
+          useKeys && key && Math.random() < 0.5 ? 1 : 0,
+          1,
+          j,
+        );
+      }
+    }
+    let nT = T.length / 11;
+    if (nT === 0) return;
+
+    // candidatos: todas las partículas libres; primero las visibles (vuelan desde donde están)
+    const cand = [];
+    for (let i = 1; i < this.N; i++) if (this.state[i] === FREE || this.state[i] === FIGURE) cand.push(i);
+    cand.sort((a, b) => this.alpha[b] - this.alpha[a]);
+    nT = Math.min(nT, cand.length);
+    const chosen = cand.slice(0, nT);
+
+    // correspondencia espacial barata: ordenar ambos conjuntos por ángulo alrededor del centro
+    const angP = new Float32Array(this.N);
+    for (const i of chosen) angP[i] = Math.atan2(this.py[i] - cy, this.px[i] - cx);
+    chosen.sort((a, b) => angP[a] - angP[b]);
+    const order = Array.from({ length: T.length / 11 }, (_, j) => j).slice(0, nT);
+    const angT = new Float32Array(T.length / 11);
+    let maxR = 1;
+    for (const j of order) {
+      angT[j] = Math.atan2(T[j * 11 + 1] - cy, T[j * 11] - cx);
+      maxR = Math.max(maxR, Math.hypot(T[j * 11] - cx, T[j * 11 + 1] - cy));
+    }
+    order.sort((a, b) => angT[a] - angT[b]);
+
+    for (let q = 0; q < nT; q++) {
+      const i = chosen[q];
+      const j = order[q] * 11;
+      this._unrest(i);
+      this.state[i] = FIGURE;
+      this.tx[i] = T[j];
+      this.ty[i] = T[j + 1];
+      this.tz[i] = T[j + 2];
+      this.trot[i] = T[j + 3];
+      this.tsize[i] = T[j + 4];
+      this.talpha[i] = T[j + 5];
+      this.ptint[i] = T[j + 6];
+      this.pslot[i] = T[j + 7];
+      this.paccent[i] = T[j + 8];
+      const r = Math.hypot(T[j] - cx, T[j + 1] - cy) / maxR;
+      // el contorno se "dibuja" en el orden del trazo; el volumen florece desde el centro
+      this.delay[i] = T[j + 9] === 0
+        ? t + 0.9 + 2.6 * (T[j + 10] / Math.max(1, contourCount))
+        : t + 1.4 + 2.2 * r + Math.random() * 0.4;
+    }
+    this.metaDirty = true;
+
+    const concrete = dir.modo_visual === 'concreto';
+    this.figureDensity = concrete ? 0.18 : 0.62;
+    this.figureAlpha = concrete ? 1 : 0.78;
+    this.figure = {
+      k, cx, cy, top: fig.top,
+      until: t + clamp(+dir.duracion_s || 14, 6, 40) + 3.5,
+      name: dir.figura || '',
+      count: nT,
+    };
+    this._recomputeFloor();
+  }
+
+  releaseFigure(impulse = true) {
+    if (!this.figure) return;
+    const { cx, cy } = this.figure;
+    for (let i = 1; i < this.N; i++) {
+      if (this.state[i] !== FIGURE) continue;
+      this.state[i] = FREE;
+      this.pslot[i] = -1;
+      this.life[i] = Math.random() * 2;
+      if (impulse) {
+        const dx = this.px[i] - cx, dy = this.py[i] - cy;
+        const d = Math.hypot(dx, dy) + 1;
+        const f = 30 + Math.random() * 90;
+        this.vx[i] += (dx / d) * f;
+        this.vy[i] += (dy / d) * f + 15;
+        this.vz[i] += (Math.random() - 0.5) * 140;
+      }
+    }
+    this.figure = null;
+    this.figureDensity = 1;
+    this.figureAlpha = 1;
+    this.transitionBoost = 1;
+    this._recomputeFloor();
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  //  Lluvia: suelo por columnas (terreno + figura + repisa del verso previo)
+  // ════════════════════════════════════════════════════════════════════════
+  _recomputeFloor() {
+    const fig = this.figure;
+    const shelf = this.shelf && this.shelf.until > this.time ? this.shelf : null;
+    for (let c = 0; c < RAIN_COLS; c++) {
+      const x = -this.W / 2 + (c + 0.5) * this.colW;
+      let f = -this.H / 2 + 4 + 5 * Math.sin(c * 0.11) + 3 * Math.sin(c * 0.37);
+      if (fig) {
+        const fx = Math.round((x - fig.cx) / fig.k + RES / 2);
+        if (fx >= 0 && fx < RES && fig.top[fx] >= 0) f = Math.max(f, fig.cy + (RES / 2 - fig.top[fx]) * fig.k);
+      }
+      if (shelf && x >= shelf.x0 && x <= shelf.x1) f = Math.max(f, shelf.y);
+      this.floorBase[c] = f;
+    }
+    this._releaseAllResting();
+  }
+
+  _releaseAllResting() {
+    for (let i = 0; i < this.N; i++) if (this.rest[i] > 0) this.rest[i] = 0;
+    this.accum.fill(0);
+    this.restingActive = false;
+  }
+
+  _unrest(i) {
+    if (this.rest[i] > 0) {
+      const c = this.restCol[i];
+      this.accum[c] = Math.max(0, this.accum[c] - this.restH[i]);
+      this.rest[i] = 0;
+    }
+  }
+
+  _respawn(i, mode) {
+    const W = this.W, H = this.H;
+    this._unrest(i);
+    if (mode === RAIN) {
+      this.px[i] = (Math.random() - 0.5) * W * 1.02;
+      this.py[i] = H / 2 + 20 + Math.random() * H * 0.3;
+      this.vx[i] = 0;
+      this.vy[i] = -40;
+    } else if (mode === VORTEX) {
+      const a = Math.random() * TAU, r = 15 + Math.random() * 110;
+      this.px[i] = Math.cos(a) * r;
+      this.py[i] = -H * 0.08 + Math.sin(a) * r;
+      this.vx[i] = this.vy[i] = 0;
+    } else {
+      this.px[i] = (Math.random() - 0.5) * W;
+      this.py[i] = (Math.random() - 0.5) * H;
+      this.vx[i] = this.vy[i] = 0;
+    }
+    this.pz[i] = (this.seed[i] - 0.5) * 260;
+    this.vz[i] = 0;
+    this.alpha[i] = 0;
+    this.life[i] = 0;
+    this._recycleGlyph(i);
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  //  Simulación
+  // ════════════════════════════════════════════════════════════════════════
+  update(dt, t) {
+    dt = Math.min(dt, 1 / 20);
+    this.time = t;
+    const U = this.uniforms;
+    U.uTime.value = t;
+    const kp = 1 - Math.exp(-dt * 0.9);
+    U.uBase.value.lerp(this.paletteTarget.base, kp);
+    U.uSecond.value.lerp(this.paletteTarget.second, kp);
+    U.uAccent.value.lerp(this.paletteTarget.accent, kp);
+
+    // pesos de modo (fundido suave entre físicas)
+    const km = 1 - Math.exp(-dt * 0.8);
+    let dom = 0;
+    for (let m = 0; m < 4; m++) {
+      this.modeW[m] += ((m === this.modeTarget ? 1 : 0) - this.modeW[m]) * km;
+      if (this.modeW[m] > this.modeW[dom]) dom = m;
+    }
+    const wR = this.modeW[RAIN], wS = this.modeW[SWARM], wV = this.modeW[VORTEX], wA = this.modeW[ASH];
+    if (wR < 0.45 && this.restingActive) this._releaseAllResting();
+    this.transitionBoost *= Math.exp(-dt * 0.7);
+
+    if (this.figure && t > this.figure.until) this.releaseFigure(true);
+    if (this.shelf && t > this.shelf.until) {
+      this.shelf = null;
+      this._recomputeFloor();
+    }
+    if (this.line && t > this.line.releaseAt) this.releaseLine();
+
+    const { intensidad: inten, velocidad: vel, turbulencia: turb, densidad: dens } = this.phys;
+    const corpusFactor = clamp(0.1 + this.corpusChars / 2600, 0.1, 1);
+    const density = corpusFactor * (0.3 + 0.7 * dens) * this.figureDensity * (wR > 0.5 ? 0.75 : 1);
+    const ambient = 0.42 + 0.4 * inten;
+    const W = this.W, H = this.H, halfW = W / 2, halfH = H / 2;
+
+    // ── rejilla agregada para el enjambre ─────────────────────────────────
+    const gc = this.gridCols, gr = this.gridRows;
+    if (wS > 0.02) {
+      this.gCount.fill(0); this.gSx.fill(0); this.gSy.fill(0); this.gVx.fill(0); this.gVy.fill(0);
+      for (let i = 1; i < this.N; i++) {
+        if (this.state[i] !== FREE || this.alpha[i] < 0.01) continue;
+        const c = clamp(Math.floor((this.px[i] + halfW) / GRID_CELL + 1), 0, gc - 1) + clamp(Math.floor((this.py[i] + halfH) / GRID_CELL + 1), 0, gr - 1) * gc;
+        this.gCount[c]++; this.gSx[c] += this.px[i]; this.gSy[c] += this.py[i]; this.gVx[c] += this.vx[i]; this.gVy[c] += this.vy[i];
+      }
+    }
+    const att = [];
+    for (let a = 0; a < 3; a++) {
+      att.push(W * 0.3 * Math.sin(t * 0.07 * (a + 1) + a * 2.1), H * 0.26 * Math.cos(t * 0.09 * (a + 1.3) + a * 1.7), a % 2 ? 1 : -1);
+    }
+    const vcx = 0, vcy = -H * 0.08;
+    const maxR = 0.62 * Math.max(W, H);
+
+    const { px, py, pz, vx, vy, vz, rot, size, alpha, alphaT, state, seed, seed2 } = this;
+    const posRot = this.posRot, data = this.data;
+    const kAlpha = 1 - Math.exp(-dt * 2.2);
+    const kSize = 1 - Math.exp(-dt * 3);
+    const kRot = 1 - Math.exp(-dt * 3.5);
+    const kLine = 1 - Math.exp(-dt * 11);
+    let visible = 0;
+
+    for (let i = 0; i < this.N; i++) {
+      const st = state[i];
+      const s = seed[i];
+      const o = i * 4;
+
+      if (st === CURSOR) {
+        this._updateCursor(dt, t);
+      } else if (st === LINE) {
+        px[i] += (this.tx[i] - px[i]) * kLine;
+        py[i] += (this.ty[i] - py[i]) * kLine;
+        pz[i] += (this.tz[i] - pz[i]) * kLine;
+        rot[i] += angDiff(0, rot[i]) * kLine;
+        size[i] += (this.tsize[i] - size[i]) * kLine;
+        if (t >= this.delay[i]) {
+          if (alpha[i] < 0.5 && this.delay[i] > t - dt * 1.5) alpha[i] = 1; // aparición seca en su instante
+          alphaT[i] = 1;
+        } else alphaT[i] = 0;
+        alpha[i] += (alphaT[i] - alpha[i]) * kLine;
+      } else if (st === FIGURE && t >= this.delay[i]) {
+        if (this.pslot[i] >= 0) {
+          this.slot[i] = this.pslot[i];
+          this.tint[i] = this.ptint[i];
+          this.accent[i] = this.paccent[i];
+          this.pslot[i] = -1;
+          this.metaDirty = true;
+        }
+        // resorte críticamente amortiguado hacia el punto del caligrama + respiración mínima
+        const w = 3.6 + s * 2.6, w2 = w * w, c2 = 2 * w;
+        const bx = Math.sin(t * 0.8 + s * 40) * 1.6, by = Math.cos(t * 0.7 + s * 23) * 1.6;
+        vx[i] += (w2 * (this.tx[i] + bx - px[i]) - c2 * vx[i]) * dt;
+        vy[i] += (w2 * (this.ty[i] + by - py[i]) - c2 * vy[i]) * dt;
+        vz[i] += (w2 * (this.tz[i] - pz[i]) - c2 * vz[i]) * dt;
+        px[i] += vx[i] * dt; py[i] += vy[i] * dt; pz[i] += vz[i] * dt;
+        rot[i] += angDiff(this.trot[i], rot[i]) * kRot;
+        size[i] += (this.tsize[i] - size[i]) * kSize;
+        alphaT[i] = this.talpha[i] * this.figureAlpha;
+        alpha[i] += (alphaT[i] - alpha[i]) * kAlpha;
+      } else {
+        // ── FREE (o FIGURE esperando su turno) ─────────────────────────────
+        const awaiting = st === FIGURE;
+        const vis = awaiting || seed2[i] < density;
+        if (!vis && alpha[i] < 0.004) {
+          if (this.rest[i] > 0) this._unrest(i);
+          alpha[i] = 0;
+          data[o + 1] = 0;
+          continue; // dormida: coste cero
+        }
+        let ax = 0, ay = 0, az = 0;
+        let rotT = rot[i];
+        const resting = this.rest[i] > 0;
+        let lifeFade = 1;
+
+        // turbulencia de transición entre figuras
+        if (!resting && (this.transitionBoost > 0.02 || turb > 0.01)) {
+          const c = curl(px[i], py[i], t * 0.6, 0.0042);
+          const g = 22 * turb + 150 * this.transitionBoost;
+          ax += c.x * g; ay += c.y * g;
+        }
+
+        if (wR > 0.01) {
+          if (this.rest[i] > 0) {
+            this.rest[i] -= dt;
+            py[i] = this.restY[i];
+            vx[i] *= 0.5; vy[i] = 0;
+            if (this.rest[i] <= 0) {
+              this.rest[i] = 1e-6; // para que _respawn descuente su altura de la pila
+              this._respawn(i, RAIN);
+            }
+          } else {
+            const tvy = -(26 + 70 * s) * (0.45 + vel * 1.4);
+            ay += (tvy - vy[i]) * 1.6 * wR;
+            ax += (Math.sin(t * 0.6 + s * 40) * 7 - vx[i]) * 0.7 * wR;
+          }
+          if (dom === RAIN) rotT = Math.sin(t * 0.7 + s * 30) * 0.05;
+        }
+        if (wS > 0.01) {
+          // Campo de densidad/velocidad interpolado bilinealmente entre centros de celda:
+          // separación = −∇densidad, alineación = velocidad media local (sin artefactos de rejilla).
+          const fx = (px[i] + halfW) / GRID_CELL + 0.5, fy = (py[i] + halfH) / GRID_CELL + 0.5;
+          const ix0 = clamp(Math.floor(fx), 0, gc - 2), iy0 = clamp(Math.floor(fy), 0, gr - 2);
+          const ux = clamp(fx - ix0, 0, 1), uy = clamp(fy - iy0, 0, 1);
+          const c00 = ix0 + iy0 * gc, c10 = c00 + 1, c01 = c00 + gc, c11 = c01 + 1;
+          const G = this.gCount, GX = this.gVx, GY = this.gVy;
+          const w00 = (1 - ux) * (1 - uy), w10 = ux * (1 - uy), w01 = (1 - ux) * uy, w11 = ux * uy;
+          const n = G[c00] * w00 + G[c10] * w10 + G[c01] * w01 + G[c11] * w11;
+          let sx = 0, sy = 0;
+          if (n > 0.5) {
+            const avx = (GX[c00] * w00 + GX[c10] * w10 + GX[c01] * w01 + GX[c11] * w11) / n;
+            const avy = (GY[c00] * w00 + GY[c10] * w10 + GY[c01] * w01 + GY[c11] * w11) / n;
+            sx += (avx - vx[i]) * 0.5;
+            sy += (avy - vy[i]) * 0.5;
+            const gxn = ((G[c10] - G[c00]) * (1 - uy) + (G[c11] - G[c01]) * uy) / GRID_CELL;
+            const gyn = ((G[c01] - G[c00]) * (1 - ux) + (G[c11] - G[c10]) * ux) / GRID_CELL;
+            const k = 420 * (0.5 + inten);
+            sx -= clamp(gxn * k, -140, 140);
+            sy -= clamp(gyn * k, -140, 140);
+          }
+          const nz = curl(px[i] * 1.7 + s * 500, py[i] * 1.7, t * 0.8, 0.006);
+          sx += nz.x * 45;
+          sy += nz.y * 45;
+          const a = (i % 3) * 3;
+          const dx = att[a] - px[i], dy = att[a + 1] - py[i];
+          const d = Math.hypot(dx, dy) + 30;
+          const orb = (60 + 110 * vel) * att[a + 2];
+          sx += (dx / d) * (40 + 50 * inten) - (dy / d) * orb * 0.9;
+          sy += (dy / d) * (40 + 50 * inten) + (dx / d) * orb * 0.9;
+          if (px[i] > halfW * 0.94) sx -= (px[i] - halfW * 0.94) * 3;
+          if (px[i] < -halfW * 0.94) sx -= (px[i] + halfW * 0.94) * 3;
+          if (py[i] > halfH * 0.92) sy -= (py[i] - halfH * 0.92) * 3;
+          if (py[i] < -halfH * 0.92) sy -= (py[i] + halfH * 0.92) * 3;
+          ax += sx * wS; ay += sy * wS;
+          if (dom === SWARM) {
+            const sp = Math.abs(vx[i]) + Math.abs(vy[i]);
+            if (sp > 8) rotT = clamp(Math.atan2(vy[i], Math.abs(vx[i])), -0.6, 0.6);
+          }
+        }
+        if (wV > 0.01) {
+          const dx = px[i] - vcx, dy = py[i] - vcy;
+          const r = Math.hypot(dx, dy) + 1;
+          const vt = (50 + 150 * vel) * (0.55 + 0.45 * s) * (1 + 120 / (r + 60));
+          const tvx = (-dy / r) * vt + (dx / r) * vt * 0.17;
+          const tvy = (dx / r) * vt + (dy / r) * vt * 0.17 + 16;
+          ax += (tvx - vx[i]) * 2.2 * wV;
+          ay += (tvy - vy[i]) * 2.2 * wV;
+          az += ((Math.sin(Math.atan2(dy, dx) * 2 + t * 0.35 + s * 6) * r * 0.28 - pz[i]) * 0.7 - vz[i] * 0.6) * wV;
+          if (dom === VORTEX) rotT = Math.atan2(vy[i], vx[i]);
+        }
+        if (wA > 0.01) {
+          const c = curl(px[i] + 913, py[i] - 377, t * 0.9, 0.0105);
+          const g = 50 + 140 * turb;
+          ax += (c.x * g + (24 + 22 * Math.sin(t * 0.05) - vx[i]) * 0.45) * wA;
+          ay += (c.y * g + (7 - vy[i]) * 0.4) * wA;
+          this.life[i] += dt * wA;
+          const dur = 5 + s * 9;
+          const lf = this.life[i] / dur;
+          lifeFade = 1 - wA + wA * Math.min(1, this.life[i] * 1.2) * (1 - clamp((lf - 0.55) / 0.45, 0, 1));
+          if (dom === ASH) rotT = rot[i] + (s - 0.5) * 1.4 * dt * 20;
+          if (dom === ASH && lf > 1 && !awaiting) this._respawn(i, ASH);
+        }
+        if (dom !== VORTEX) az += ((s - 0.5) * 260 - pz[i]) * 0.3 - vz[i] * 0.6;
+
+        // integración semi-implícita + arrastre
+        vx[i] += ax * dt; vy[i] += ay * dt; vz[i] += az * dt;
+        const drag = Math.exp(-dt * (0.35 + 0.5 * wS));
+        vx[i] *= drag; vy[i] *= drag; vz[i] *= drag;
+        const vmax = 260 + 200 * this.transitionBoost;
+        const sp2 = vx[i] * vx[i] + vy[i] * vy[i];
+        if (sp2 > vmax * vmax) {
+          const f = vmax / Math.sqrt(sp2);
+          vx[i] *= f; vy[i] *= f;
+        }
+        if (this.rest[i] > 0) {
+          vx[i] = vy[i] = 0; // apoyada sobre la pila: inmóvil hasta derretirse
+          py[i] = this.restY[i];
+        } else {
+          px[i] += vx[i] * dt; py[i] += vy[i] * dt;
+        }
+        pz[i] += vz[i] * dt;
+
+        // colisiones / reciclaje según el modo dominante
+        if (!awaiting) {
+          if (dom === RAIN) {
+            if (this.rest[i] <= 0 && vy[i] < 0) {
+              const col = clamp(((px[i] + halfW) / this.colW) | 0, 0, RAIN_COLS - 1);
+              const floor = this.floorBase[col] + this.accum[col];
+              const hh = size[i] * 0.32;
+              if (py[i] - hh < floor && py[i] - hh > floor - 40 && this.accum[col] < H * 0.32) {
+                py[i] = floor + hh;
+                this.rest[i] = 2.5 + s * 9 * (0.5 + inten);
+                this.restY[i] = py[i];
+                this.restCol[i] = col;
+                this.restH[i] = size[i] * 0.55;
+                this.accum[col] += this.restH[i];
+                vy[i] = 0;
+                this.restingActive = true;
+              }
+            }
+            if (py[i] < -halfH - 60) this._respawn(i, RAIN);
+          } else if (dom === VORTEX) {
+            if (Math.hypot(px[i] - vcx, py[i] - vcy) > maxR || py[i] > halfH + 120) this._respawn(i, VORTEX);
+          } else if (Math.abs(px[i]) > halfW + 160 || Math.abs(py[i]) > halfH + 160) {
+            this._respawn(i, dom === ASH ? ASH : SWARM);
+          }
+        }
+
+        rot[i] += angDiff(rotT, rot[i]) * kRot;
+        const sizeTarget = awaiting ? size[i] : this._ambientSize(i);
+        size[i] += (sizeTarget - size[i]) * kSize;
+        alphaT[i] = vis ? ambient * (0.3 + 0.7 * fract(s * 13.7)) * lifeFade : 0;
+        alpha[i] += (alphaT[i] - alpha[i]) * kAlpha;
+      }
+
+      posRot[o] = px[i];
+      posRot[o + 1] = py[i];
+      posRot[o + 2] = pz[i];
+      posRot[o + 3] = rot[i];
+      data[o] = size[i];
+      data[o + 1] = alpha[i];
+      data[o + 2] = this.slot[i];
+      data[o + 3] = this.tint[i];
+      if (alpha[i] > 0.01) visible++;
+    }
+
+    if (this.metaDirty) {
+      const m = this.meta;
+      for (let i = 0; i < this.N; i++) {
+        const o = i * 4;
+        m[o] = this.birth[i];
+        m[o + 1] = this.seed[i];
+        m[o + 2] = this.accent[i];
+        m[o + 3] = this.level[i];
+      }
+      this.aMeta.needsUpdate = true;
+      this.metaDirty = false;
+    }
+    this.aPosRot.needsUpdate = true;
+    this.aData.needsUpdate = true;
+    this.atlas.flush();
+    this.visible = visible;
+  }
+
+  _updateCursor(dt, t) {
+    const i = 0;
+    const line = this.line;
+    let x = 0;
+    let y = this.lineY;
+    if (line) {
+      const row = line.rows[line.rows.length - 1];
+      let width = 0;
+      for (const e of row) width += e.adv;
+      x = width / 2 + this.lineSize * 0.18;
+    }
+    const k = 1 - Math.exp(-dt * 14);
+    this.px[i] += (x - this.px[i]) * k;
+    this.py[i] += (y - this.py[i]) * k;
+    this.pz[i] = 0;
+    this.rot[i] = 0;
+    const active = this.speaking || t < this.speakingUntil || (line && !line.completed);
+    const blink = 0.5 + 0.5 * Math.sin(t * 5.5);
+    this.alphaT[i] = active ? clamp(0.18 + blink * 0.15 + this.rms * 1.3, 0, 0.95) : 0;
+    this.alpha[i] += (this.alphaT[i] - this.alpha[i]) * (1 - Math.exp(-dt * 10));
+    this.size[i] = this.lineSize * (0.92 + this.rms * 0.5);
+  }
+
+  stats() {
+    let line = 0, fig = 0;
+    for (let i = 0; i < this.N; i++) {
+      if (this.state[i] === LINE) line++;
+      else if (this.state[i] === FIGURE) fig++;
+    }
+    return { total: this.N, visible: this.visible || 0, line, figure: fig, mode: this.phys.modo, figureName: this.figure?.name || '—', atlas: `${this.atlas.next}/${this.atlas.capacity}` };
+  }
+}
