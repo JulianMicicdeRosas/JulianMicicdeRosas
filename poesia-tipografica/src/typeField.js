@@ -145,6 +145,10 @@ export class TypeField {
     this.artistWall = false;
     this.artistCross = false; // «cruce»: palabras horizontales y verticales, como un crucigrama
     this.sparseMax = 9;
+    this.sparseKeep = 0;
+    this.flowMode = null; // 6 «sedimento» · 7 «partitura»
+    this.flow = []; // tecla 0: párrafos que se acumulan antes de borrar (0 = cada palabra vence sola)
+    this.sparsePara = 0;
     this.backdropOnlyShape = false; // el telón sólo se ve donde está el dibujo
     this.fxVer = 0;
     this.fxNext = 0;
@@ -894,6 +898,7 @@ export class TypeField {
 
     this._bdUpdate(dt, t);
     this._breakingUpdate(t);
+    if (this.flow.length) this._flowUpdate(dt, t);
     if (this.sparse.length) this._sparseUpdate(t);
     const { intensidad: inten, velocidad: vel, turbulencia: turb, densidad: dens } = this.phys;
     const corpusFactor = clamp(0.1 + this.corpusChars / 2600, 0.1, 1);
@@ -1567,6 +1572,7 @@ export class TypeField {
   /** Disuelve todo lo compuesto (verso, figura, título, palabras) de vuelta al campo. */
   clearScene() {
     this.backdropHoles = [];
+    this.clearFlow();
     this.setShape(null); // el dibujo de la escena anterior no pasa a la siguiente
     this.titleFade = null;
     this.clearSparse();
@@ -1934,6 +1940,171 @@ export class TypeField {
     }
   }
 
+  // ════════════════════════════════════════════════════════════════════════
+  //  6 «sedimento» y 7 «partitura»
+  // ════════════════════════════════════════════════════════════════════════
+  /** Tamaño en módulos: el del muro es el mínimo; las grandes sólo para palabras con peso. */
+  _wordK(raw, weights = [0.45, 0.68, 0.82, 0.92, 0.98]) {
+    const u = Math.random(), nw = normalizeWord(raw);
+    const sizes = [1, 2, 3, 5, 8, 12];
+    let k = sizes[weights.findIndex((w) => u < w)] ?? 12;
+    if (this.keywords.has(nw) || this.rms > 0.7) k = Math.max(k, 5);
+    if (STOP.has(nw) || nw.length <= 2) k = Math.min(k, 2);
+    else if (nw.length <= 3) k = Math.min(k, 3);
+    return k;
+  }
+
+  /** Letras de una palabra como partículas WORD (pos. inicial px/py, destino tx/ty, tamaño S). */
+  _spawnLetters(text, S, place, { accent = 0, alpha = 1 } = {}) {
+    const t = this.time, idx = [];
+    [...text].forEach((ch, n) => {
+      const i = this._allocParticle();
+      if (i < 0) return;
+      const p = place(n);
+      this.state[i] = WORD;
+      this.grp[i] = 0;
+      this.pslot[i] = this.atlas.slot(ch, this._k('mono'));
+      this.ptint[i] = 0;
+      this.paccent[i] = accent;
+      this.tx[i] = p.tx;
+      this.ty[i] = p.ty;
+      this.px[i] = p.px ?? p.tx;
+      this.py[i] = p.py ?? p.ty;
+      this.tz[i] = this.pz[i] = 0;
+      this.trot[i] = this.rot[i] = 0;
+      this.tsize[i] = this.size[i] = S;
+      this.talpha[i] = alpha;
+      this.alpha[i] = 0;
+      this.vx[i] = this.vy[i] = this.vz[i] = 0;
+      this.delay[i] = t + n * 0.03;
+      this.birth[i] = this.delay[i];
+      this.level[i] = 0.2;
+      idx.push(i);
+    });
+    this.metaDirty = true;
+    return idx;
+  }
+
+  _placeFlowWord(raw) {
+    if (!this.wall) this._wallInit();
+    const W = this.wall, text = this.wallUpper ? raw.toUpperCase() : raw, len = [...text].length;
+    if (this.flowMode === 'sedimento') return this._placeSediment(raw, text, len, W);
+    return this._placeScore(raw, text, len, W);
+  }
+
+  /** 6 · sedimento: la palabra cae desde arriba (a saltos) y se apoya sobre las capas, rellenando los valles. */
+  _placeSediment(raw, text, len, W) {
+    let k = Math.min(5, this._wordK(raw, [0.42, 0.7, 0.88, 1, 1])); // capas finas: nada más grande que 5×
+    while (k > 1 && len * k > W.colsN * 0.9) k--;
+    const wC = Math.min(W.colsN, len * k + (k > 1 ? 1 : 0));
+    W.sky = W.sky || new Int32Array(W.colsN);
+    let best = 0, bestBase = Infinity;
+    for (let n = 0; n < 48; n++) {
+      const c0 = Math.floor(Math.random() * (W.colsN - wC + 1));
+      let base = 0;
+      for (let c = c0; c < c0 + wC; c++) base = Math.max(base, W.sky[c]);
+      const score = base + Math.random() * 1.5; // los valles primero, con algo de azar
+      if (score < bestBase) {
+        bestBase = score;
+        best = c0;
+      }
+    }
+    const word = { text, k, c0: best, wC, idx: [], accent: k >= 5 && Math.random() < 0.4 ? 1 : 0 };
+    const S = W.rh * k * 1.62;
+    word.idx = this._spawnLetters(text, S, () => ({ tx: 0, ty: 0 }), { accent: word.accent, alpha: k >= 5 ? 1 : 0.8 });
+    this.flow.push(word);
+    this._restack(true, word);
+    // la pila llegó a la mitad: las capas más viejas se rompen y el resto se asienta
+    let top = 0;
+    for (let c = 0; c < W.colsN; c++) top = Math.max(top, W.sky[c]);
+    if (top > W.rowsN * 0.5) {
+      // erosión: el estrato de abajo (lo más viejo) se desarma y todo lo demás baja un escalón
+      const n = Math.max(1, Math.ceil(this.flow.length * 0.25));
+      for (const w of this.flow.splice(0, n)) this._breakLetters(w.idx, this.time, W.cw * 4);
+      this._restack(false);
+      this.onTransition?.(0.12);
+    }
+  }
+
+  /** Recalcula la pila en orden de llegada (después de romper capas, todo baja). */
+  _restack(onlyLast, last = null) {
+    const W = this.wall;
+    if (!onlyLast) W.sky.fill(0);
+    const words = onlyLast ? [last] : this.flow;
+    for (const w of words) {
+      let base = 0;
+      for (let c = w.c0; c < w.c0 + w.wC; c++) base = Math.max(base, W.sky[c]);
+      for (let c = w.c0; c < w.c0 + w.wC; c++) W.sky[c] = base + w.k;
+      const y = -W.y0 + (base + w.k / 2) * W.rh; // desde el piso del muro
+      w.idx.forEach((i, n) => {
+        this.tx[i] = W.x0 + (w.c0 + n * w.k + w.k / 2) * W.cw;
+        this.ty[i] = y;
+        if (onlyLast) {
+          this.px[i] = this.tx[i];
+          this.py[i] = Math.min(this.H / 2, y + (5 + w.k) * W.rh); // aparece unas filas arriba y cae a saltos sobre la pila
+        }
+      });
+    }
+  }
+
+  /** 7 · partitura: cinco carriles que se deslizan a distinta velocidad; las grandes, lentas. */
+  _placeScore(raw, text, len, W) {
+    if (!this.lanes) {
+      const ks = [1, 3, 2, 5, 1];
+      // los carriles, centrados en el alto
+      let y = (ks.reduce((a, k) => a + k * W.rh, 0) + W.rh * 2.6 * (ks.length - 1)) / 2;
+      this.lanes = ks.map((k, n) => {
+        const lane = { k, y: y - (k * W.rh) / 2, v: this.W * (0.16 / (0.6 + k * 0.3)) * (n % 2 ? 1 : 1.15), cur: 0, tail: -Infinity };
+        y -= k * W.rh + W.rh * 2.6;
+        return lane;
+      });
+    }
+    const want = this._wordK(raw, [0.4, 0.62, 0.8, 0.95, 1]);
+    // carril con el tamaño más parecido; entre iguales, el más libre
+    const lane = this.lanes.slice().sort((a, b) => Math.abs(a.k - want) - Math.abs(b.k - want) || a.tail - b.tail)[0];
+    const k = lane.k, S = W.rh * k * 1.62, adv = W.cw * k, width = adv * len;
+    // aparece en el tercio derecho (o detrás de la anterior) y se desliza hacia la izquierda
+    const x0 = Math.max(this.W * (0.12 + Math.random() * 0.12), lane.tail + adv * 1.2);
+    lane.tail = x0 + width;
+    const word = { lane, x: x0, width, adv, idx: [] };
+    word.idx = this._spawnLetters(text, S, (n) => ({ tx: x0 + adv * (n + 0.5), ty: lane.y }), { accent: k >= 5 && Math.random() < 0.5 ? 1 : 0, alpha: k >= 3 ? 1 : 0.8 });
+    this.flow.push(word);
+  }
+
+  _flowUpdate(dt) {
+    if (this.flowMode !== 'partitura') return;
+    for (const lane of this.lanes || []) {
+      // si se acumula cola fuera de cuadro, el carril acelera hasta descargarla
+      const over = Math.max(0, lane.tail - this.W / 2) / (this.W * 0.25);
+      lane.cur = lane.v * (1 + over);
+      lane.tail -= lane.cur * dt;
+    }
+    for (let k = this.flow.length - 1; k >= 0; k--) {
+      const w = this.flow[k];
+      w.x -= w.lane.cur * dt;
+      w.idx.forEach((i, n) => {
+        if (this.state[i] !== WORD) return;
+        this.tx[i] = w.x + w.adv * (n + 0.5);
+        this.px[i] = this.tx[i]; // deslizamiento continuo (sin saltos)
+      });
+      if (w.x + w.width < -this.W / 2 - w.adv) {
+        for (const i of w.idx) if (this.state[i] === WORD) {
+          this.state[i] = FREE;
+          this.alpha[i] = 0;
+          this.pslot[i] = -1;
+        }
+        this.flow.splice(k, 1);
+      }
+    }
+  }
+
+  clearFlow() {
+    for (const w of this.flow) this._breakLetters(w.idx, this.time, (this.wall?.cw || 10) * 8);
+    this.flow = [];
+    this.lanes = null;
+    if (this.wall) this.wall.sky = null;
+  }
+
   /** La palabra se rompe con glitch y libera su lugar. */
   _wallBreak(id) {
     const W = this.wall, w = W && W.words.get(id);
@@ -2003,6 +2174,10 @@ export class TypeField {
     }
     if (this.artistWall) {
       this._placeArtistWord(word);
+      return;
+    }
+    if (this.flowMode) {
+      this._placeFlowWord(word);
       return;
     }
     if (this.wordsToBackdrop && this.backdropOn) {
@@ -2229,11 +2404,31 @@ export class TypeField {
   _sparseFigure() {
     const kinds = ['circulo', 'espiral', 'diagonal', 'onda', 'columna', 'constelacion'];
     const kind = kinds[Math.floor(Math.random() * kinds.length)];
-    return { kind, n: 0, total: 7 + Math.floor(Math.random() * 4), cx: (Math.random() - 0.5) * this.W * 0.3, cy: (Math.random() - 0.5) * this.H * 0.2, rot: Math.random() * Math.PI * 2, last: null };
+    const F = { kind, n: 0, total: 7 + Math.floor(Math.random() * 4), cx: (Math.random() - 0.5) * this.W * 0.3, cy: (Math.random() - 0.5) * this.H * 0.2, rot: Math.random() * Math.PI * 2, last: null, sc: 1 };
+    if (this.sparseKeep) {
+      // tecla 0 acumulando: cada párrafo en la zona más libre del cuadro, con una figura más compacta
+      F.sc = 0.5;
+      const centers = [];
+      for (const p of new Set(this.sparse.map((w) => w.para))) {
+        const ws = this.sparse.filter((w) => w.para === p);
+        centers.push([ws.reduce((a, w) => a + w.x, 0) / ws.length, ws.reduce((a, w) => a + w.y, 0) / ws.length]);
+      }
+      let best = -1;
+      for (let n = 0; n < 40; n++) {
+        const x = (Math.random() - 0.5) * this.W * 0.7, y = (Math.random() - 0.5) * this.H * 0.6;
+        const d = centers.length ? Math.min(...centers.map(([a, b]) => Math.hypot((a - x) / this.W, (b - y) / this.H))) : Math.random();
+        if (d > best) {
+          best = d;
+          F.cx = x;
+          F.cy = y;
+        }
+      }
+    }
+    return F;
   }
 
   _sparsePoint(F) {
-    const n = F.n, T = F.total, u = n / Math.max(1, T - 1), W = this.W, H = this.H;
+    const n = F.n, T = F.total, u = n / Math.max(1, T - 1), W = this.W * F.sc, H = this.H * F.sc;
     switch (F.kind) {
       case 'circulo': {
         const a = F.rot + (n / T) * Math.PI * 2;
@@ -2248,14 +2443,14 @@ export class TypeField {
       case 'onda':
         return [F.cx + (u - 0.5) * W * 0.66, F.cy + Math.sin(u * Math.PI * 2 + F.rot) * H * 0.22];
       case 'columna':
-        return [F.cx + (n % 2 ? 1 : -1) * W * 0.04, (0.42 - u * 0.84) * H];
+        return [F.cx + (n % 2 ? 1 : -1) * W * 0.04, F.cy * (1 - F.sc) + (0.42 - u * 0.84) * H];
       default: {
         // constelación: cada palabra cerca de la anterior; si se acerca al borde, gira hacia el centro
         const p = F.last || [F.cx, F.cy];
         F.rot += (Math.random() - 0.5) * 1.4;
         let x = p[0] + Math.cos(F.rot) * W * 0.11, y = p[1] + Math.sin(F.rot) * H * 0.17;
-        if (Math.abs(x) > W * 0.34 || Math.abs(y) > H * 0.32) {
-          F.rot = Math.atan2(-p[1], -p[0]) + (Math.random() - 0.5) * 0.8;
+        if (Math.abs(x - F.cx) > W * 0.34 || Math.abs(y - F.cy) > H * 0.32 || Math.abs(x) > this.W * 0.42 || Math.abs(y) > this.H * 0.4) {
+          F.rot = Math.atan2(F.cy - p[1], F.cx - p[0]) + (Math.random() - 0.5) * 0.8;
           x = p[0] + Math.cos(F.rot) * W * 0.11;
           y = p[1] + Math.sin(F.rot) * H * 0.17;
         }
@@ -2266,7 +2461,10 @@ export class TypeField {
 
   _placeSparse(word) {
     const t = this.time;
-    if (!this.sparseFig || this.sparseFig.n >= this.sparseFig.total) this.sparseFig = this._sparseFigure();
+    if (!this.sparseFig || this.sparseFig.n >= this.sparseFig.total) {
+      this.sparseFig = this._sparseFigure();
+      if (this.sparseKeep) this.sparseFig.total = 14 + Math.floor(Math.random() * 8); // un párrafo, una figura
+    }
     const F = this.sparseFig;
     let [x, y] = this._sparsePoint(F);
     F.n++;
@@ -2274,7 +2472,9 @@ export class TypeField {
     // tamaños en grilla: el del muro es el mínimo; algunas palabras 2 o 3 veces más grandes
     const base = clamp(this.H * 0.034, 18, 48) * 1.3; // tecla 0: todo un 30 % más grande
     const u = Math.random();
-    const k = this.keywords.has(normalizeWord(word)) || u > 0.86 ? 3 : u > 0.6 ? 2 : 1;
+    const nw = normalizeWord(word);
+    let k = this.keywords.has(nw) || u > (this.sparseKeep ? 0.93 : 0.86) ? 3 : u > (this.sparseKeep ? 0.72 : 0.6) ? 2 : 1;
+    if (STOP.has(nw) || nw.length <= 2) k = 1; // las palabras de enlace, chicas
     const S = base * k;
     const slots = [...this._u(word)].map((ch) => this.atlas.slot(ch, this._k('mono')));
     const adv = this.atlas.adv(this.atlas.slot('M', this._k('mono'))) * S; // monoespaciada: avance fijo
@@ -2286,12 +2486,13 @@ export class TypeField {
     y = Math.round(y / rh) * rh;
     // sin taparse: si choca con otra palabra viva, se corre de a una fila
     const hits = (yy) => this.sparse.some((w) => Math.abs(w.y - yy) < (w.k * base + S) * 0.62 && Math.abs(w.x - x) < (w.w + width) / 2 + cw);
-    for (let k2 = 1; k2 <= 8 && hits(y); k2++) {
+    for (let k2 = 1; k2 <= 16 && hits(y); k2++) {
       const yy = y + (k2 % 2 ? 1 : -1) * Math.ceil(k2 / 2) * rh * Math.max(1, k);
       if (Math.abs(yy) < this.H / 2 - S && !hits(yy)) {
         y = yy;
         break;
       }
+      if (k2 === 8) x = clamp(x + (Math.random() < 0.5 ? -1 : 1) * (width + cw * 4), -this.W / 2 + width / 2 + cw, this.W / 2 - width / 2 - cw); // y si no, de costado
     }
     const idx = [];
     slots.forEach((sl, j) => {
@@ -2317,10 +2518,24 @@ export class TypeField {
       this.level[i] = 0.1;
       idx.push(i);
     });
-    this.sparse.push({ idx, x, y, k, w: width, until: t + 7 + Math.random() * 5 });
+    const keep = this.sparseKeep > 0;
+    this.sparse.push({ idx, x, y, k, w: width, para: this.sparsePara, until: keep ? Infinity : t + 7 + Math.random() * 5 });
     this.metaDirty = true;
     this.onTransition?.(0.18);
-    while (this.sparse.length > this.sparseMax) this._breakSparse(this.sparse.shift(), t);
+    const cap = keep ? 160 : this.sparseMax;
+    while (this.sparse.length > cap) this._breakSparse(this.sparse.shift(), t);
+  }
+
+  /** Tecla 0: empieza un párrafo nuevo (pausa larga): su propia figura; si hay más de `sparseKeep`, se rompe el más viejo. */
+  newParagraph() {
+    this.sparsePara++;
+    this.sparseFig = null;
+    if (!this.sparseKeep) return;
+    const paras = [...new Set(this.sparse.map((w) => w.para))];
+    while (paras.length >= this.sparseKeep) { // con el nuevo, nunca más de sparseKeep
+      const old = paras.shift();
+      for (let k = this.sparse.length - 1; k >= 0; k--) if (this.sparse[k].para === old) this._breakSparse(this.sparse.splice(k, 1)[0], this.time);
+    }
   }
 
   _breakSparse(w, t) {

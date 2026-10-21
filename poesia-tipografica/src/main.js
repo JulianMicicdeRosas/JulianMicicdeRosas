@@ -427,6 +427,7 @@ async function boot() {
   let replayMode = false;
   let bootLogged = false;
   const logUi = (ev) => !replayMode && socket?.send({ type: 'ui', ...ev });
+  let lastSpeechStop = 0; // tecla 0: pausas largas → párrafo nuevo
   const socket = new BackendSocket(CONFIG.ws, {
     open: () => {
       debug.setStatus({ backend: 'connected' });
@@ -509,7 +510,15 @@ async function boot() {
       onAudio(+m.rms || 0, +m.freq || 0, true);
       config.setLevel(+m.level || 0, +m.db);
     },
-    speech: (m) => show.recording && show.mode === 'poema' && field.setSpeaking(m.state === 'started'),
+    speech: (m) => {
+      if (show.recording && show.mode === 'poema') field.setSpeaking(m.state === 'started');
+      // tecla 0: una pausa de más de 1 s empieza un párrafo nuevo
+      if (show.mode === 'pocas') {
+        const now = performance.now();
+        if (m.state === 'started' && now - lastSpeechStop > 1000) field.newParagraph();
+        if (m.state === 'stopped') lastSpeechStop = now;
+      }
+    },
     word_delta: (m) => onDelta(m.item_id || 'voz', m.delta || ''),
     verse_completed: (m) => onCompleted(m.item_id || 'voz', m.text || ''),
     verse_discard: (m) => field.discardLine(m.item_id || 'voz'),

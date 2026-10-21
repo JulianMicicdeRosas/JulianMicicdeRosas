@@ -10,7 +10,9 @@
 import { sampleText, sampleImage } from './svgSampler.js';
 import { processLogo, paginate, composeLogos, LogoStage } from './logos.js';
 
-export const ANIMS = ['clasica', 'muro', 'cruce', 'constelacion'];
+export const ANIMS = ['clasica', 'muro', 'cruce', 'constelacion', 'sedimento', 'partitura'];
+// animación por número de tecla (5 es el cierre, 0 «pocas palabras»)
+const ANIM_BY_KEY = { 1: 'clasica', 2: 'muro', 3: 'cruce', 4: 'constelacion', 6: 'sedimento', 7: 'partitura', 8: 'muro', 9: 'constelacion' };
 
 export const DEFAULT_SETTINGS = {
   artists: [{ name: 'Nombre del artista 1' }, { name: 'Nombre del artista 2' }, { name: 'Nombre del artista 3' }, { name: 'Nombre del artista 4' }],
@@ -189,7 +191,7 @@ export class Show {
    */
   artistAnim(n) {
     const a = this.artists[n - 1] || {};
-    return ANIMS.includes(a.animacion) ? a.animacion : ANIMS[(n - 1) % ANIMS.length];
+    return ANIMS.includes(a.animacion) ? a.animacion : ANIM_BY_KEY[n] || 'muro';
   }
 
   /** Qué arranca S (o la voz): en la placa del artista, su animación; si no, lo que había. */
@@ -218,6 +220,7 @@ export class Show {
     f.wallFx = false;
     f.sparseMode = false;
     f.artistWall = false;
+    f.flowMode = null;
     f.backdropOnlyShape = false;
     f.clearScene();
     f.resetCorpus(this._loopCorpus());
@@ -425,6 +428,7 @@ export class Show {
     f.wallFx = false;
     f.sparseMode = false;
     f.artistWall = false;
+    f.flowMode = null;
     f.backdropOnlyShape = false;
     f.clearSparse();
     f.cursorEnabled = false;
@@ -481,6 +485,7 @@ export class Show {
     f.wallFx = false;
     f.sparseMode = false;
     f.artistWall = false;
+    f.flowMode = null;
     f.backdropOnlyShape = false;
     f.clearScene();
     const txt = this._loopSteps().find((s) => s.tipo === 'texto');
@@ -518,6 +523,7 @@ export class Show {
     f.showTitle(a.name);
     f.sparseMode = false;
     f.artistWall = false;
+    f.flowMode = null;
     f.backdropOnlyShape = false;
     f.wallFx = true; // en el muro del artista aparecen palabras grandes en grilla
     this.state = 'artist';
@@ -547,7 +553,9 @@ export class Show {
     }
     f.sparseMode = mode === 'pocas' || v === 'constelacion';
     f.sparseMax = v === 'constelacion' ? 14 : 9;
+    f.sparseKeep = mode === 'pocas' ? 10 : 0; // tecla 0: se acumulan 10 párrafos antes de borrar
     f.artistWall = v === 'muro' || v === 'cruce';
+    f.flowMode = v === 'sedimento' || v === 'partitura' ? v : null;
     f.artistCross = v === 'cruce';
     f.backdropOnlyShape = mode === 'muro';
     f.wallFx = mode === 'poema' || mode === 'palabras';
@@ -569,6 +577,7 @@ export class Show {
       f.setShape(null);
       f.clearWords();
       f.clearSparse();
+      f.clearFlow();
       f.setBackdrop(true); // el telón queda para los dibujos (sólo se ve donde está la figura)
       f.wordsToBackdrop = false;
       f.cursorEnabled = false;

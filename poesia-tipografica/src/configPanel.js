@@ -321,7 +321,7 @@ export class ConfigPanel {
         (a, i) => `<div class="item" data-i="${i}">
           <span class="num">${i < 9 ? i + 1 : i === 9 ? 0 : '–'}</span>
           <input data-field="artist" value="${esc(a.name)}" placeholder="Nombre del artista">
-          <select data-field="animacion" title="animación al hablar">${[['', 'animación: según el número'], ['clasica', 'clásica (muro + transcripción)'], ['muro', 'muro de tamaños + dibujo'], ['cruce', 'cruce (horizontal/vertical) + dibujo'], ['constelacion', 'constelación + dibujo']].map(([v, l]) => `<option value="${v}"${(a.animacion || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
+          <select data-field="animacion" title="animación al hablar">${[['', 'animación: según el número'], ['clasica', 'clásica (muro + transcripción)'], ['muro', 'muro de tamaños + dibujo'], ['cruce', 'cruce (horizontal/vertical) + dibujo'], ['constelacion', 'constelación + dibujo'], ['sedimento', 'sedimento (caen y se apilan) + dibujo'], ['partitura', 'partitura (carriles que se deslizan) + dibujo']].map(([v, l]) => `<option value="${v}"${(a.animacion || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
           <button data-act="up" title="subir">↑</button><button data-act="down" title="bajar">↓</button>
           <button data-act="del" title="quitar">✕</button></div>`,
       )

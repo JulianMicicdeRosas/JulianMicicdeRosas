@@ -149,6 +149,7 @@ class Config:
     vad_threshold: float
     vad_silence_ms: int
     vad_prefix_ms: int
+    commit_s: float
 
     audio_device: str
     audio_file: str
@@ -193,6 +194,8 @@ class Config:
             vad_threshold=_env_float("VAD_THRESHOLD", 0.5),
             vad_silence_ms=_env_int("VAD_SILENCE_MS", 350),
             vad_prefix_ms=_env_int("VAD_PREFIX_PADDING_MS", 300),
+            # no esperar a que la persona termine: tras 1,8 s de habla continua se transcribe en la primera micro-pausa
+            commit_s=_env_float("OPENAI_COMMIT_S", 1.8),
             audio_device=_env("AUDIO_DEVICE"),
             audio_file=_env("AUDIO_FILE"),  # prueba sin micrófono: un .wav entra como si fuera la voz
             openai_base_url=_env("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/"),
@@ -1063,6 +1066,8 @@ class RealtimeTranscriber:
         self.fatal = False  # clave rechazada: no tiene sentido alternar protocolo
         self.key_event: asyncio.Event | None = None
         self.ws = None
+        self.speaking = False  # VAD de OpenAI: hay voz en curso
+        self.seg_t0 = 0.0  # inicio del tramo de audio actual (para cortar en micro-pausas)
 
     def set_key(self, key: str) -> None:
         """Clave nueva desde el panel C: reconectar ya, sin reiniciar nada."""
@@ -1207,13 +1212,31 @@ class RealtimeTranscriber:
             backoff = min(backoff * 2, 30.0)
 
     async def _sender(self, ws) -> None:  # noqa: ANN001
+        avg = 0.02
         while True:
             chunk = await self.audio_q.get()
             if not chunk:  # centinela: fin de grabación → descartar el audio pendiente en OpenAI
                 await ws.send(json.dumps({"type": "input_audio_buffer.clear"}))
+                self.speaking = False
                 continue
             await ws.send(json.dumps({"type": "input_audio_buffer.append",
                                       "audio": base64.b64encode(chunk).decode("ascii")}))
+            # palabras mientras se habla: OpenAI transcribe recién al cerrar un tramo de audio (la pausa del VAD).
+            # Si la persona habla de corrido, se cierra el tramo en la primera micro-pausa entre palabras
+            # pasados commit_s (y a los 4 s, igual): las palabras aparecen sin esperar a que termine.
+            if self.cfg.commit_s <= 0 or not self.speaking:
+                continue
+            x = np.frombuffer(chunk, dtype=np.int16).astype(np.float32) / 32768.0
+            rms = float(np.sqrt(np.mean(x * x) + 1e-12))
+            if rms > avg * 0.6:
+                avg += (rms - avg) * 0.08  # nivel típico de la voz
+            # micro-pausa: la ventana de 10 ms más silenciosa del trozo (entre palabras)
+            win = x[: len(x) // 240 * 240].reshape(-1, 240) if len(x) >= 240 else x.reshape(1, -1)
+            dip = float(np.sqrt(np.mean(win * win, axis=1)).min())
+            held = time.monotonic() - self.seg_t0
+            if (held > self.cfg.commit_s and dip < avg * 0.25) or held > max(4.0, self.cfg.commit_s * 2):
+                await ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
+                self.seg_t0 = time.monotonic()
 
     async def _receiver(self, ws) -> None:  # noqa: ANN001
         async for raw in ws:
@@ -1246,8 +1269,11 @@ class RealtimeTranscriber:
                 log.warning("Transcripción fallida: %s", ev.get("error"))
                 self.partials.pop(ev.get("item_id", ""), None)
             elif et == "input_audio_buffer.speech_started":
+                self.speaking = True
+                self.seg_t0 = time.monotonic()
                 self.hub.emit("speech", state="started", item_id=ev.get("item_id"), t=_now_ms())
             elif et == "input_audio_buffer.speech_stopped":
+                self.speaking = False
                 self.hub.emit("speech", state="stopped", item_id=ev.get("item_id"), t=_now_ms())
             elif et == "response.created":  # por seguridad: nunca generar respuestas
                 await ws.send(json.dumps({"type": "response.cancel"}))

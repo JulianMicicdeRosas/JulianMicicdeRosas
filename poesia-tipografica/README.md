@@ -226,8 +226,9 @@ la figura de la biblioteca. En modo palabras (T) las ilustraciones también se c
 
 **Placa del artista (1–4, 6–9)**: primero se ve el nombre sobre el muro. **Los primeros 3 s no se transcribe nada**
 (presentación, aplausos: ni la voz dispara ni ese audio llega a OpenAI). Después, cuando la persona **empieza a
-hablar** (o se aprieta S), arranca su animación. Las animaciones se alternan por número (6–9 repiten el ciclo) y en
-el panel C cada artista puede fijar la suya:
+hablar** (o se aprieta S), arranca su animación. Cada número tiene la suya (8 repite Muro y 9 Constelación) y en
+el panel C cada artista puede fijar otra. Para usar 6 y 7 tiene que haber artistas cargados en esas posiciones
+(panel C → Artistas):
 
 | N.º | Animación | Qué se ve |
 | --- | --- | --- |
@@ -235,6 +236,8 @@ el panel C cada artista puede fijar la suya:
 | 2 | **Muro** | toda la placa se borra; cada palabra dicha en la grilla en tamaños de 1× a 12× (las grandes sólo para palabras con peso); al saturar se rompen las más viejas; **un dibujo por oración** hecho con lo dicho |
 | 3 | **Cruce** | como Muro, pero la mitad de las palabras van en vertical, como un crucigrama |
 | 4 | **Constelación** | toda la placa se borra; hasta 14 palabras unidas por líneas finas que arman figuras y se rompen con glitch; un dibujo por oración |
+| 6 | **Sedimento** | cada palabra cae a saltos y se apoya sobre las anteriores, rellenando los valles, como estratos geológicos (1× a 5×). Cuando la pila llega a la mitad de la pantalla, el estrato más viejo (el de abajo) se desarma con glitch y todo baja un escalón; un dibujo por oración arriba de la pila |
+| 7 | **Partitura** | cinco carriles horizontales (tamaños 1×, 3×, 2×, 5×, 1×) que se deslizan de derecha a izquierda a distinta velocidad —las grandes, lentas—; cada palabra entra en el carril de su tamaño, como una partitura o un subtitulado que corre; si un carril se atrasa, acelera hasta ponerse al día; un dibujo por oración de fondo |
 
 En las animaciones con dibujo, las palabras que lo tapan se rompen para que se lea.
 
@@ -243,8 +246,13 @@ Se ajusta en panel C → Micrófono («Placa del artista…» y «Umbral de voz�
 
 **Tecla 0 — sólo transcripción**: se apaga todo en su lugar (sin polvo que cae) y graba. Cada palabra dicha aparece
 alineada a la grilla, en tamaño mínimo o 2× / 3× (todo un 30 % más grande que el muro), sobre el trazado de una figura (círculo, espiral, diagonal, onda,
-columna o constelación) que se renueva cada 7–10 palabras; líneas finas las unen. Quedan a lo sumo 9 palabras: cada
-una vive 7–12 s y se rompe con glitch. S detiene / retoma; L vuelve al loop.
+columna o constelación) que se renueva con cada párrafo; líneas finas las unen. **Las palabras se quedan y se
+acumulan**: cada pausa larga (más de 1 s) empieza un párrafo nuevo en otra zona de la pantalla, y recién cuando hay
+10 párrafos el más viejo se rompe con glitch. S detiene / retoma; L vuelve al loop.
+
+**Las palabras aparecen mientras se habla** (no al terminar la frase): el backend corta el audio en la primera
+micro-pausa después de 1,8 s de habla continua (o a los 4 s como máximo) y OpenAI devuelve ese tramo enseguida. Se
+regula con `OPENAI_COMMIT_S` en `.env` (más chico = más rápido pero con más cortes; `0` = esperar al silencio).
 
 ## Grabación de la sesión y re-proyección
 
