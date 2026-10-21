@@ -4,6 +4,8 @@
 //  Se guarda solo (en el backend → settings.local.json, y en este navegador).
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { formatFromUrl, formatLabel } from './frame.js';
+
 const SHORTCUTS = [
   ['C', 'abrir / cerrar este panel'],
   ['→ / ←', 'loop: alterna FLAT ↔ UMBRAL (desde otro paso vuelve a FLAT). Los logos pasan solos en el loop automático'],
@@ -210,10 +212,14 @@ export class ConfigPanel {
       <section>
         <h2>Formato de salida</h2>
         <p class="hint">Tamaño del cuadro proyectado. Con un formato fijo la imagen se compone para esa proporción y se
-        centra en la ventana (lo que sobra queda negro). Escribe otro como «ancho x alto».</p>
+        centra en la ventana (lo que sobra queda negro). Escribe otro como «ancho x alto»; con «@N» los primeros N px
+        del ancho no se usan (un proyector apagado a la izquierda), p. ej. «9600x1080@1920».</p>
+        <p class="hint" data-formato-url style="display:none"></p>
+        <p class="hint" data-ventana></p>
         <div class="row">
           <select data-formato>
             <option value="1822x737">1822 × 737 (FLAT)</option>
+            <option value="9600x1080@1920">9600 × 1080 sin los primeros 1920 (se ven 7680 × 1080)</option>
             <option value="1920x1080">1920 × 1080</option>
             <option value="pantalla">Pantalla completa</option>
             <option value="otro">Otro…</option>
@@ -364,6 +370,11 @@ export class ConfigPanel {
     const fo = this.$('[data-formato-otro]');
     if (document.activeElement !== fo) fo.value = fsel.value === 'otro' ? fmt : '';
     fo.style.display = fsel.value === 'otro' ? '' : 'none';
+    const dpr = window.devicePixelRatio || 1;
+    this.$('[data-ventana]').textContent = `Esta ventana mide ${Math.round(innerWidth * dpr)} × ${Math.round(innerHeight * dpr)} px · se usa ${formatLabel()}.`;
+    const fu = this.$('[data-formato-url]');
+    fu.style.display = formatFromUrl() ? '' : 'none';
+    fu.textContent = formatFromUrl() ? 'Formato fijado por el lanzador (p. ej. start_instalacion_9600.bat): lo de abajo no se usa mientras tanto.' : '';
     const pg = this.$('[data-prompt-grilla]');
     if (document.activeElement !== pg) pg.value = s.prompt_grilla || this.defaultPromptGrid || '';
     this.$('select[data-sopt="director"]').value = s.director || 'openai';
@@ -831,7 +842,7 @@ export class ConfigPanel {
       return;
     }
     if (t.matches('[data-formato-otro]')) {
-      if (/^\s*\d{3,5}\s*[x×X*]\s*\d{3,5}\s*$/.test(t.value)) this._commit((s) => (s.formato = t.value.replace(/\s|×|\*/g, 'x').replace(/x+/g, 'x')), false);
+      if (/^\s*\d{3,5}\s*[x×X*]\s*\d{3,5}\s*(@\s*\d{1,5}\s*)?$/.test(t.value)) this._commit((s) => (s.formato = t.value.replace(/\s/g, '').replace(/×|\*|X/g, 'x').replace(/x+/g, 'x')), false);
       return;
     }
     if (t.dataset.sopt) {

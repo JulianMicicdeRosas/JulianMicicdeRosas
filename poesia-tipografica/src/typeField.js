@@ -2054,7 +2054,8 @@ export class TypeField {
       // los carriles, centrados en el alto
       let y = (ks.reduce((a, k) => a + k * W.rh, 0) + W.rh * 2.6 * (ks.length - 1)) / 2;
       this.lanes = ks.map((k, n) => {
-        const lane = { k, y: y - (k * W.rh) / 2, v: this.W * (0.16 / (0.6 + k * 0.3)) * (n % 2 ? 1 : 1.15), cur: 0, tail: -Infinity };
+        // velocidad según el alto (no el ancho): en un formato muy apaisado se lee igual, sólo tarda más en cruzar
+        const lane = { k, y: y - (k * W.rh) / 2, v: this.H * (0.4 / (0.6 + k * 0.3)) * (n % 2 ? 1 : 1.15), cur: 0, tail: -Infinity };
         y -= k * W.rh + W.rh * 2.6;
         return lane;
       });
@@ -2063,8 +2064,8 @@ export class TypeField {
     // carril con el tamaño más parecido; entre iguales, el más libre
     const lane = this.lanes.slice().sort((a, b) => Math.abs(a.k - want) - Math.abs(b.k - want) || a.tail - b.tail)[0];
     const k = lane.k, S = W.rh * k * 1.62, adv = W.cw * k, width = adv * len;
-    // aparece en el tercio derecho (o detrás de la anterior) y se desliza hacia la izquierda
-    const x0 = Math.max(this.W * (0.12 + Math.random() * 0.12), lane.tail + adv * 1.2);
+    // aparece a la derecha del centro (o detrás de la anterior) y se desliza hacia la izquierda
+    const x0 = Math.max(this.W * (-0.1 + Math.random() * 0.3), lane.tail + adv * 1.2);
     lane.tail = x0 + width;
     const word = { lane, x: x0, width, adv, idx: [] };
     word.idx = this._spawnLetters(text, S, (n) => ({ tx: x0 + adv * (n + 0.5), ty: lane.y }), { accent: k >= 5 && Math.random() < 0.5 ? 1 : 0, alpha: k >= 3 ? 1 : 0.8 });

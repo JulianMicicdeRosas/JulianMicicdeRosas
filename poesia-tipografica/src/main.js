@@ -7,7 +7,7 @@
 //    ?bloom=0.55  ?grain=0.055  ?dpr=1.5
 //    ?debug          abre el panel de calibración al inicio
 // ─────────────────────────────────────────────────────────────────────────────
-import { frameRect, setFormat, DEFAULT_FORMAT } from './frame.js'; // primero: fija el cuadro de salida
+import { frameRect, setFormat, visibleAspect, DEFAULT_FORMAT } from './frame.js'; // primero: fija el cuadro de salida
 import '@fontsource/cormorant-garamond/500.css';
 import '@fontsource/ibm-plex-mono/400.css';
 // Manual de marca FLAT: Geist Mono (títulos y destacados) y Roboto (texto). Empaquetadas: funcionan sin internet.
@@ -30,8 +30,20 @@ import { TREATMENTS, treat, pickTreatment, seedOf, composeFigure, figureToTone, 
 
 const params = new URLSearchParams(location.search);
 const num = (k, d) => (params.has(k) && Number.isFinite(+params.get(k)) ? +params.get(k) : d);
+const LS_KEY = 'poesia.settings.v1';
+// el telón tiene tantas columnas como entren a lo ancho: un formato muy apaisado (p. ej. 7680 × 1080 visibles)
+// necesita más letras que el de FLAT (1822 × 737). El pool se dimensiona al arrancar según el formato guardado.
+function poolFor() {
+  let fmt = DEFAULT_FORMAT;
+  try {
+    fmt = JSON.parse(localStorage.getItem(LS_KEY) || 'null')?.formato || fmt;
+  } catch {
+    /* sin localStorage: formato por defecto */
+  }
+  return Math.round(18000 * Math.max(1, visibleAspect(fmt) / 2.47));
+}
 const CONFIG = {
-  pool: Math.round(Math.min(30000, Math.max(2000, num('pool', 18000)))), // muro de 40 filas ≈ 11 000 letras + caída + títulos
+  pool: Math.round(Math.min(64000, Math.max(2000, num('pool', poolFor())))), // muro de 40 filas ≈ 11 000 letras (en 1822 × 737) + caída + títulos
   points: Math.round(Math.min(300000, Math.max(0, num('points', 80000)))),
   ws: params.get('ws') || 'ws://localhost:8765',
   worldH: 1000,
@@ -330,7 +342,6 @@ async function boot() {
   }
 
   // ── ajustes del show (backend = fuente de verdad, localStorage = respaldo) ─
-  const LS_KEY = 'poesia.settings.v1';
   let settings = structuredClone(DEFAULT_SETTINGS);
   try {
     const saved = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
@@ -377,6 +388,24 @@ async function boot() {
     }
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => socket.send({ type: 'save_settings', settings }), 400);
+    checkPool();
+  }
+
+  // se eligió un formato más apaisado que el del arranque: no entran todas las letras del telón → se recarga
+  // una vez con un pool más grande (el formato ya quedó guardado)
+  function checkPool() {
+    if (params.has('pool') || 18000 * Math.max(1, visibleAspect(settings.formato) / 2.47) <= field.N * 1.05) return;
+    try {
+      const key = 'poesia.poolReload', tag = String(settings.formato);
+      if (sessionStorage.getItem(key) === tag) return; // ya se recargó por este formato: no insistir
+      sessionStorage.setItem(key, tag);
+      localStorage.setItem(LS_KEY, JSON.stringify(settings));
+    } catch {
+      return;
+    }
+    clearTimeout(saveTimer);
+    socket.send({ type: 'save_settings', settings });
+    setTimeout(() => location.reload(), 300);
   }
 
   // El estado del show nunca se escribe en la pared: sólo en el panel C.
@@ -466,6 +495,7 @@ async function boot() {
         if (!m.replay && Object.keys(settings).some((k) => JSON.stringify(settings[k]) !== JSON.stringify(remote[k]))) {
           socket.send({ type: 'save_settings', settings });
         }
+        if (!m.replay) checkPool();
         if (config.isOpen) config.render();
         if (show.state === 'loop') show.goLoop();
       } else if (!Object.keys(remote).length) {
@@ -697,6 +727,7 @@ async function boot() {
     cloud.resize(field.W, field.H, renderer.domElement.height, fov, camDist);
   }
   window.addEventListener('resize', onResize);
+  onResize(); // el formato guardado pudo cambiar el cuadro antes de que existiera este listener
 
   // ── bucle ────────────────────────────────────────────────────────────────
   const clock = new THREE.Clock();

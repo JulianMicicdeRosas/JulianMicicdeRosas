@@ -22,17 +22,7 @@ start "Umbral - re-proyeccion" cmd /k ".venv\Scripts\python server.py --replay e
 echo Elige la sesion en la ventana "Umbral - re-proyeccion". Chrome se abre en unos segundos.
 timeout /t 6 /nobreak >nul
 
-set CHROME=%ProgramFiles%\Google\Chrome\Application\chrome.exe
-if not exist "%CHROME%" set CHROME=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe
-if not exist "%CHROME%" set CHROME=%LocalAppData%\Google\Chrome\Application\chrome.exe
-if not exist "%CHROME%" set CHROME=%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe
-if not exist "%CHROME%" set CHROME=%ProgramFiles%\Microsoft\Edge\Application\msedge.exe
-
-start "" "%CHROME%" --kiosk --start-fullscreen --no-first-run --disable-infobars ^
-  --force_high_performance_gpu --ignore-gpu-blocklist --enable-gpu-rasterization ^
-  --disable-session-crashed-bubble --overscroll-history-navigation=0 --disable-pinch ^
-  --autoplay-policy=no-user-gesture-required --disable-features=Translate ^
-  --user-data-dir="%~dp0.chrome-kiosk" "http://127.0.0.1:5173/"
+call "%~dp0abrir_pantalla.bat"
 exit /b 0
 
 :error

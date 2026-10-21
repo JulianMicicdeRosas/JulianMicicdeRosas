@@ -43,7 +43,7 @@ body.hide-cursor * {
 #debug {
   position: fixed;
   top: 16px;
-  left: 16px;
+  left: calc(var(--fx, 0px) + 16px); /* dentro del cuadro visible (con un proyector apagado a la izquierda) */
   width: min(420px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
   overflow-y: auto;

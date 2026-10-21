@@ -27,6 +27,8 @@ poesia-tipografica/
 ├── start_mac.command     Arranque completo en macOS (doble clic)
 ├── start_instalacion.bat Arranque completo en Windows (backend + frontend + Chrome kiosk)
 ├── reproyectar.bat      Re-proyección de una sesión grabada (también reproyectar_mac.command)
+├── start_instalacion_9600.bat / reproyectar_9600.bat   Lo mismo en 9600 × 1080 sin los primeros 1920 px
+├── abrir_pantalla.bat   Abre Chrome / Edge (kiosk o ventana) con el formato que fije el lanzador
 ├── public/loop/          Imágenes del loop (flat.png) y public/loop/sponsors/ (todos los logos)
 └── src/
     ├── main.js           Escena, cámara orbital, bucle, conexión al backend, simulador, teclado
@@ -130,7 +132,8 @@ npm run dev                     :: desarrollo: http://127.0.0.1:5173
 ```
 
 Producción: `start_instalacion.bat` compila el frontend, abre el backend minimizado y lanza Chrome en
-`--kiosk` contra `http://127.0.0.1:5173/`. Para la sala:
+`--kiosk` contra `http://127.0.0.1:5173/` (lo abre `abrir_pantalla.bat`, que comparten el show y la re-proyección).
+Para 9600 × 1080, ver «Versión 9600 × 1080» más abajo. Para la sala:
 
 - Windows: desactivar suspensión de pantalla, notificaciones y "mejoras de audio" del micrófono (Configuración →
   Sonido → Propiedades del dispositivo). El supresor de ruido de Windows recorta las colas de los versos.
@@ -166,6 +169,27 @@ Micrófono de condensador: activar **48V** en la placa. Ganancia: que la voz nor
 Panel C → **Formato de salida**: 1822 × 737 (por defecto, la pantalla del FLAT), 1920 × 1080, pantalla completa u
 otro («ancho x alto»). Con formato fijo todo se compone para esa proporción y se centra en la ventana; lo que sobra
 queda negro. El muro de palabras, el título, los nombres y la transcripción quedan centrados en el cuadro.
+
+Con **«@N»** los primeros N px del ancho no se usan: `9600x1080@1920` es una salida de 9600 × 1080 donde el primer
+proyector (a la izquierda) está apagado. Todo se compone y se centra en los 7680 × 1080 restantes; la franja de la
+izquierda queda negra. Los paneles C y D también se abren dentro de la parte visible.
+
+### Versión 9600 × 1080 (PC, primer proyector apagado)
+
+Doble clic en **`start_instalacion_9600.bat`** (y **`reproyectar_9600.bat`** para re-proyectar). Hacen lo mismo que
+los normales, pero fijan el formato `9600x1080@1920` desde el lanzador (manda sobre el panel C, que lo avisa) y el
+programa reserva más letras para el telón, que a esa proporción tiene casi el triple de columnas.
+
+- **Windows tiene que ver una sola pantalla de 9600 × 1080** (NVIDIA Surround, o un splitter / procesador de video
+  wall): Chrome en kiosk ocupa una pantalla entera. Panel C → Formato de salida muestra cuánto mide la ventana: tiene
+  que decir 9600 × 1080.
+- Si Windows ve los proyectores como **pantallas separadas** (escritorio extendido), el kiosk se queda en una sola. En
+  ese caso, editar `start_instalacion_9600.bat` y quitar el `REM` de `set UMBRAL_VENTANA=0,0,9600,1080`: abre una
+  ventana de esa medida que cruza todas las pantallas (x,y = esquina superior izquierda del primer proyector en la
+  disposición de Windows). Esa ventana conserva la barra de título, por eso es mejor la pantalla única.
+- La velocidad de la partitura (7) y los tamaños de letra dependen del alto, así que en el formato ancho se lee igual;
+  sólo hay más espacio a los costados.
+- Si se elige 9600 en el panel C (sin el lanzador), la página se recarga sola una vez para reservar más letras.
 
 ## Forma de las ilustraciones
 
