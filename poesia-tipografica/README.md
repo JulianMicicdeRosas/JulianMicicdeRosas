@@ -206,6 +206,22 @@ respaldo (un worker) que sigue moviendo la animación, el loop y los temporizado
 La transcripción y la grabación las hace el backend, así que tampoco dependen de la ventana. Si se abre el show a mano
 en un Chrome común, igual sigue gracias al reloj de respaldo.
 
+### Si se corta la transcripción o la imagen
+
+En la tecla 0 la pantalla está negra salvo las palabras dichas: si no llega transcripción, se ve todo negro. Para que
+eso no pase (o dure lo menos posible):
+
+- **OpenAI se corta, expira o se cuelga** (conectado pero sin responder): se detecta en ~20 s y se reconecta en ~1 s.
+  Si además hay voz en el micrófono y OpenAI no manda nada en 30 s, se fuerza la reconexión. Lo dicho durante el
+  corte no se transcribe (sí queda en la grabación de la sesión).
+- **La placa de video se reinicia** (se reconecta un proyector, cambia la resolución, el driver se recupera de un
+  cuelgue): la página se recarga sola y vuelve a la misma escena (la 0 sigue en la 0, grabando).
+- **El micrófono se desconecta**: se reabre solo apenas vuelve.
+- **Aviso al operador** (nunca en la pared): el título de la ventana —que se ve en la barra de tareas y en Alt+Tab—
+  pasa a «⚠ transcripción reconectando», «⚠ sin transcripción» o «⚠ micrófono sin señal» mientras dure el problema;
+  el detalle está en el panel C. «Sin transcripción» que no se va suele ser la clave o el saldo de OpenAI (panel C).
+- Ojo con **S**: detiene la grabación (lo dicho deja de transcribirse) y en la 0 la pantalla queda como está.
+
 ### Pantalla completa o ventana
 
 Todos los lanzadores (Windows y Mac, show y re-proyección) preguntan al abrir el navegador: **P** = pantalla completa

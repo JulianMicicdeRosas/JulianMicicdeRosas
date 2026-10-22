@@ -1077,6 +1077,8 @@ class RealtimeTranscriber:
         self.ws = None
         self.speaking = False  # VAD de OpenAI: hay voz en curso
         self.seg_t0 = 0.0  # inicio del tramo de audio actual (para cortar en micro-pausas)
+        self.last_event = time.monotonic()  # último mensaje de OpenAI (vigía de sesión colgada)
+        self.voiced = 0.0  # segundos con voz desde ese mensaje
 
     def set_key(self, key: str) -> None:
         """Clave nueva desde el panel C: reconectar ya, sin reiniciar nada."""
@@ -1155,10 +1157,12 @@ class RealtimeTranscriber:
             try:
                 log.info("Conectando a OpenAI Realtime (API %s)…", proto)
                 self._report("connecting", f"API {proto}")
+                # ping cada 10 s: una conexión colgada (sin respuesta) se detecta en ~20 s y se reconecta
                 async with ws_connect(url, additional_headers=headers, max_size=None,
-                                      open_timeout=15, ping_interval=20, ping_timeout=20,
+                                      open_timeout=15, ping_interval=10, ping_timeout=10,
                                       close_timeout=5) as ws:
                     self.ws = ws
+                    self.speaking = False  # sesión nueva: el VAD empieza de cero
                     await ws.send(json.dumps(self._session_update(proto)))
                     # audio acumulado mientras estábamos desconectados: conservar sólo ~0.5 s
                     keep = max(1, 500 // self.cfg.openai_chunk_ms)
@@ -1200,6 +1204,11 @@ class RealtimeTranscriber:
             except Exception as exc:
                 log.exception("Error inesperado en OpenAI Realtime")
                 self._report("error", f"inesperado: {exc}")
+            # una sesión que llegó a funcionar y se cortó (expiró, se colgó, se cayó la red) reconecta enseguida:
+            # la espera creciente es sólo para fallas seguidas al conectar (si no, tras un corte quedaba 16–30 s
+            # sin transcribir: en la tecla 0, pantalla negra)
+            if self.configured and not self.fatal:
+                backoff = 1.0
             # si la configuración nunca fue aceptada, probar el otro protocolo
             if not self.configured and not self.fatal and len(self.protocols) > 1:
                 self.pi += 1
@@ -1222,6 +1231,9 @@ class RealtimeTranscriber:
 
     async def _sender(self, ws) -> None:  # noqa: ANN001
         avg = 0.02
+        chunk_s = self.cfg.openai_chunk_ms / 1000
+        self.last_event = time.monotonic()
+        self.voiced = 0.0
         while True:
             chunk = await self.audio_q.get()
             if not chunk:  # centinela: fin de grabación → descartar el audio pendiente en OpenAI
@@ -1230,13 +1242,23 @@ class RealtimeTranscriber:
                 continue
             await ws.send(json.dumps({"type": "input_audio_buffer.append",
                                       "audio": base64.b64encode(chunk).decode("ascii")}))
+            x = np.frombuffer(chunk, dtype=np.int16).astype(np.float32) / 32768.0
+            rms = float(np.sqrt(np.mean(x * x) + 1e-12))
+            # vigía: se está grabando, hay voz en el micrófono y OpenAI no manda nada (ni «empezó a hablar») hace
+            # rato → la sesión quedó colgada sin cortarse: se cierra y se reconecta sola (en ~1 s)
+            if rms > 0.02:
+                self.voiced += chunk_s
+            silent_for = time.monotonic() - self.last_event
+            if self.voiced > STALL_VOICE_S and silent_for > STALL_SILENCE_S:
+                log.warning("OpenAI no responde hace %.0f s con voz en el micrófono: reconecto", silent_for)
+                self._report("reconnecting", "OpenAI no respondía: reconectando")
+                await ws.close()
+                return
             # palabras mientras se habla: OpenAI transcribe recién al cerrar un tramo de audio (la pausa del VAD).
             # Si la persona habla de corrido, se cierra el tramo en la primera micro-pausa entre palabras
             # pasados commit_s (y a los 4 s, igual): las palabras aparecen sin esperar a que termine.
             if self.cfg.commit_s <= 0 or not self.speaking:
                 continue
-            x = np.frombuffer(chunk, dtype=np.int16).astype(np.float32) / 32768.0
-            rms = float(np.sqrt(np.mean(x * x) + 1e-12))
             if rms > avg * 0.6:
                 avg += (rms - avg) * 0.08  # nivel típico de la voz
             # micro-pausa: la ventana de 10 ms más silenciosa del trozo (entre palabras)
@@ -1249,6 +1271,8 @@ class RealtimeTranscriber:
 
     async def _receiver(self, ws) -> None:  # noqa: ANN001
         async for raw in ws:
+            self.last_event = time.monotonic()  # OpenAI está vivo (ver el vigía en _sender)
+            self.voiced = 0.0
             try:
                 ev = json.loads(raw)
             except json.JSONDecodeError:
@@ -1354,6 +1378,10 @@ IMAGES_LIBRARY = f"""Imágenes CURADAS: cada estrofa produce una imagen (modo_vi
 
 # Imágenes en GRILLA DE TEXTO: el modelo devuelve la silueta como texto (# = figura, . = fondo); el programa la
 # compone con las palabras dichas, en positivo (la figura hecha de palabras) o en negativo (hueco en el muro).
+# vigía de la transcripción: con STALL_VOICE_S segundos de voz y nada de OpenAI en STALL_SILENCE_S, se reconecta
+STALL_VOICE_S = 15.0
+STALL_SILENCE_S = 30.0
+
 GRID_W, GRID_H = 48, 26          # grilla dibujada por el LLM (celda 1 × 2: el doble de alta que ancha)
 LETTER_W, LETTER_H = 64, 30      # arte ASCII con las letras transcriptas (celda ≈ 1 × 1,5, como las letras del muro)
 

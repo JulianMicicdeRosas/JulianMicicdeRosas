@@ -8,7 +8,7 @@
 //    ?debug          abre el panel de calibración al inicio
 // ─────────────────────────────────────────────────────────────────────────────
 import { frameRect, setFormat, visibleAspect, DEFAULT_FORMAT } from './frame.js'; // primero: fija el cuadro de salida
-import { nextFrame } from './ticker.js';
+import { nextFrame, later } from './ticker.js';
 import '@fontsource/cormorant-garamond/500.css';
 import '@fontsource/ibm-plex-mono/400.css';
 // Manual de marca FLAT: Geist Mono (títulos y destacados) y Roboto (texto). Empaquetadas: funcionan sin internet.
@@ -32,6 +32,7 @@ import { TREATMENTS, treat, pickTreatment, seedOf, composeFigure, figureToTone, 
 const params = new URLSearchParams(location.search);
 const num = (k, d) => (params.has(k) && Number.isFinite(+params.get(k)) ? +params.get(k) : d);
 const LS_KEY = 'poesia.settings.v1';
+const RESUME_KEY = 'poesia.resume'; // escena a la que volver tras recargar por pérdida del dibujo (GPU)
 // el telón tiene tantas columnas como entren a lo ancho: un formato muy apaisado (p. ej. 11560 × 1080 visibles)
 // necesita más letras que el de FLAT (1822 × 737). El pool se dimensiona al arrancar según el formato guardado.
 function poolFor() {
@@ -419,6 +420,19 @@ async function boot() {
     setTimeout(() => location.reload(), 300);
   }
 
+  // Si no se está transcribiendo (OpenAI caído o reconectando, micrófono sin señal), en la pared no se escribe
+  // nada: el aviso va al título de la ventana (se ve en la barra de tareas y en Alt+Tab) y al panel C.
+  const BASE_TITLE = document.title;
+  let lastStatus = {};
+  function warnOperator(st) {
+    lastStatus = { ...lastStatus, ...st };
+    const oa = lastStatus.openai, mic = lastStatus.mic;
+    let warn = '';
+    if (mic === 'error' || mic === 'unavailable') warn = 'micrófono sin señal';
+    else if (oa && oa !== 'connected') warn = oa === 'reconnecting' || oa === 'connecting' ? 'transcripción reconectando' : 'sin transcripción';
+    document.title = warn ? `⚠ ${warn} · ${BASE_TITLE}` : BASE_TITLE;
+  }
+
   // El estado del show nunca se escribe en la pared: sólo en el panel C.
   function notify(text) {
     config?.setState(show?.label?.() || text);
@@ -539,6 +553,7 @@ async function boot() {
     status: (m) => {
       debug.setStatus(m.status || {});
       config.setMicStatus(m.status || {});
+      warnOperator(m.status || {});
     },
     devices: (m) => config.setDevices(m.devices, m.current, m.channel),
     settings: () => {},
@@ -890,6 +905,45 @@ async function boot() {
   };
 
   show.goLoop(); // la noche empieza en el loop
+  resumeAfterReload();
+
+  // ── si la placa de video se reinicia (un proyector o una pantalla que se reconecta, el driver que se recupera
+  // de un cuelgue), el navegador pierde el dibujo y la imagen queda negra para siempre. Se recarga la página y
+  // se vuelve a la misma escena (la transcripción y la grabación siguen en el backend, sin cortes).
+  renderer.domElement.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    console.warn('[gpu] se perdió el contexto WebGL: recargo y vuelvo a la escena');
+    try {
+      sessionStorage.setItem(RESUME_KEY, JSON.stringify({ at: Date.now(), state: show.state, mode: show.mode, variant: show.variant, artist: show.artistIdx, recording: show.recording }));
+    } catch {
+      /* sin sessionStorage: vuelve al loop */
+    }
+    later(() => location.reload(), 1200);
+  });
+
+  function resumeAfterReload() {
+    let r = null;
+    try {
+      r = JSON.parse(sessionStorage.getItem(RESUME_KEY) || 'null');
+      sessionStorage.removeItem(RESUME_KEY);
+    } catch {
+      return;
+    }
+    if (!r || Date.now() - r.at > 120000 || replayMode) return;
+    const named = (i) => i >= 0 && show.artists[i]?.name?.trim();
+    if (r.state === 'artist' && named(r.artist)) show.goArtist(r.artist + 1);
+    else if (r.state === 'title') show.goTitle();
+    else if (r.state === 'flat') show.goFlatFinal();
+    else if (r.state === 'perform') {
+      if ((r.mode === 'muro' || r.mode === 'poema') && named(r.artist)) {
+        show.goArtist(r.artist + 1); // su nombre en el corpus y su animación
+        show.artistAt = 0; // sin los 3 s de gracia: ya estaba hablando
+      }
+      show.start(r.mode || 'poema', { variante: r.variant || null });
+      if (!r.recording) show.stop();
+    }
+    config.setState(show.label());
+  }
 }
 
 boot().catch((e) => {
