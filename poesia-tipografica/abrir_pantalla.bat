@@ -18,8 +18,10 @@ if not exist "%CHROME%" set CHROME=%ProgramFiles%\Microsoft\Edge\Application\mse
 set "FLAT_URL=http://127.0.0.1:5173/"
 if defined FLAT_FORMATO set "FLAT_URL=http://127.0.0.1:5173/?formato=%FLAT_FORMATO%"
 
-REM GPU dedicada (p. ej. RTX 3070 Ti): forzar la placa de alto rendimiento y no caer en la integrada
-set FLAGS=--no-first-run --disable-infobars --force_high_performance_gpu --ignore-gpu-blocklist --enable-gpu-rasterization --disable-session-crashed-bubble --overscroll-history-navigation=0 --disable-pinch --autoplay-policy=no-user-gesture-required --disable-features=Translate
+REM GPU dedicada (p. ej. RTX 3070 Ti): forzar la placa de alto rendimiento y no caer en la integrada.
+REM Que siga animando y tomando aunque otra ventana quede encima (Alt+Tab): sin ahorro de energía para ventanas
+REM tapadas ni en segundo plano, y sin frenar sus temporizadores.
+set FLAGS=--no-first-run --disable-infobars --force_high_performance_gpu --ignore-gpu-blocklist --enable-gpu-rasterization --disable-session-crashed-bubble --overscroll-history-navigation=0 --disable-pinch --autoplay-policy=no-user-gesture-required --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling --disable-features=Translate,CalculateNativeWinOcclusion,IntensiveWakeUpThrottling
 
 if /i "%FLAT_MODO%"=="P" goto :completa
 if /i "%FLAT_MODO%"=="V" goto :ventana

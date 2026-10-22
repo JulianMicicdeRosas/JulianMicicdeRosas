@@ -8,6 +8,7 @@
 //    ?debug          abre el panel de calibración al inicio
 // ─────────────────────────────────────────────────────────────────────────────
 import { frameRect, setFormat, visibleAspect, DEFAULT_FORMAT } from './frame.js'; // primero: fija el cuadro de salida
+import { nextFrame } from './ticker.js';
 import '@fontsource/cormorant-garamond/500.css';
 import '@fontsource/ibm-plex-mono/400.css';
 // Manual de marca FLAT: Geist Mono (títulos y destacados) y Roboto (texto). Empaquetadas: funcionan sin internet.
@@ -873,9 +874,9 @@ async function boot() {
       frames = 0;
       fpsT = 0;
     }
-    requestAnimationFrame(frame);
+    nextFrame(frame); // con la ventana oculta (Alt+Tab) también sigue
   }
-  requestAnimationFrame(frame);
+  nextFrame(frame);
   requestAnimationFrame(() => document.getElementById('boot')?.classList.add('gone'));
 
   // acceso desde consola para calibración

@@ -43,7 +43,9 @@ PIDS+=($!)
   if [ -d "/Applications/Google Chrome.app" ]; then
     open -na "Google Chrome" --args $CHROME_MODO --no-first-run --disable-infobars \
       --disable-session-crashed-bubble --overscroll-history-navigation=0 --disable-pinch \
-      --autoplay-policy=no-user-gesture-required --disable-features=Translate \
+      --autoplay-policy=no-user-gesture-required --disable-backgrounding-occluded-windows \
+    --disable-renderer-backgrounding --disable-background-timer-throttling \
+    --disable-features=Translate,CalculateNativeWinOcclusion,IntensiveWakeUpThrottling \
       --user-data-dir="$PWD/.chrome-$PERFIL" $DESTINO
   else
     open "http://127.0.0.1:5173/"

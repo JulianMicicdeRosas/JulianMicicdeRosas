@@ -1,4 +1,5 @@
 import { frameRect } from './frame.js';
+import { nextFrame } from './ticker.js';
 // ─────────────────────────────────────────────────────────────────────────────
 //  logos.js — Paso de loop «logos»: cualquier cantidad de logos en una grilla
 //  que se adapta sola.
@@ -231,7 +232,8 @@ export class LogoStage {
   }
 
   _transition(prev, next, duration, intensity, done) {
-    cancelAnimationFrame(this.anim);
+    const tok = (this.animTok = (this.animTok || 0) + 1); // una transición nueva corta la anterior
+    this.anim = tok;
     const { ctx, canvas } = this;
     const W = canvas.width, H = canvas.height;
     // separación de color con la paleta FLAT: rosa y lila «Ciclo Refracción»
@@ -239,7 +241,9 @@ export class LogoStage {
     const layers = [prev, next].map((b) => (b ? { b, r: this._tint(b, ca), c: this._tint(b, cb) } : null));
     const t0 = performance.now();
     let lastShuffle = 0, slices = [];
-    const step = (now) => {
+    const step = () => {
+      if (tok !== this.animTok) return;
+      const now = performance.now();
       const p = Math.min(1, (now - t0) / (duration * 1000));
       const chaos = Math.sin(Math.PI * p) * intensity; // máximo a mitad de la transición
       if (now - lastShuffle > 45) {
@@ -277,13 +281,13 @@ export class LogoStage {
           ctx.drawImage(L.b, sx, sy, bw, bh, sx + (Math.random() - 0.5) * W * 0.2, sy, bw, bh);
         }
       }
-      if (p < 1) this.anim = requestAnimationFrame(step);
+      if (p < 1) nextFrame(step);
       else {
         this.anim = 0;
         this._blit(next);
         done?.();
       }
     };
-    this.anim = requestAnimationFrame(step);
+    nextFrame(step); // con la ventana oculta (Alt+Tab) la transición también termina
   }
 }

@@ -198,6 +198,14 @@ letras para el telón, que a esa proporción tiene cuatro veces más columnas qu
 - Si se elige un formato más ancho en el panel C (sin el lanzador), la página se recarga sola una vez para reservar
   más letras.
 
+### Sigue animando con Alt+Tab
+
+El show no se frena aunque se cambie de ventana (Alt+Tab / Cmd+Tab), quede otra encima o se minimice: los lanzadores
+abren Chrome sin el ahorro de energía para ventanas tapadas o en segundo plano, y el programa tiene además un reloj de
+respaldo (un worker) que sigue moviendo la animación, el loop y los temporizadores si el navegador deja de dar cuadros.
+La transcripción y la grabación las hace el backend, así que tampoco dependen de la ventana. Si se abre el show a mano
+en un Chrome común, igual sigue gracias al reloj de respaldo.
+
 ### Pantalla completa o ventana
 
 Todos los lanzadores (Windows y Mac, show y re-proyección) preguntan al abrir el navegador: **P** = pantalla completa

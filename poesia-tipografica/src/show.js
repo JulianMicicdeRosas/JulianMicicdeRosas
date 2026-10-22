@@ -9,6 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { sampleText, sampleImage } from './svgSampler.js';
 import { processLogo, paginate, composeLogos, LogoStage } from './logos.js';
+import { later, every, cancel } from './ticker.js'; // no se frenan con la ventana oculta (Alt+Tab)
 
 export const ANIMS = ['clasica', 'muro', 'cruce', 'constelacion', 'sedimento', 'partitura'];
 // animación por número de tecla (5 es el cierre, 0 «pocas palabras»)
@@ -242,7 +243,7 @@ export class Show {
   // ── loop ─────────────────────────────────────────────────────────────────
   goLoop(fromIndex = -1) {
     this._setRecording(false);
-    clearTimeout(this.loopTimer);
+    cancel(this.loopTimer);
     const f = this.field;
     f.wallFx = false;
     f.sparseMode = false;
@@ -293,7 +294,7 @@ export class Show {
   }
 
   async _nextLoop() {
-    clearTimeout(this.loopTimer);
+    cancel(this.loopTimer);
     if (this.state !== 'loop') return;
     const steps = this._loopSteps();
     if (!steps.length) return;
@@ -315,7 +316,7 @@ export class Show {
       console.warn('[loop]', e);
     }
     if (token !== this.loopToken || this.state !== 'loop') return;
-    this.loopTimer = setTimeout(() => this._nextLoop(), secs * 1000);
+    this.loopTimer = later(() => this._nextLoop(), secs * 1000);
   }
 
   async _playStep(step, token) {
@@ -397,7 +398,7 @@ export class Show {
     const pages = step.de_a_uno ? logos.map((l) => [l]) : paginate(logos, +step.por_pagina || 8);
     const per = Math.min(600, Math.max(2, +step.duracion || 8));
     pages.forEach((page, p) => {
-      const t = setTimeout(() => token === this.loopToken && this._showLogoPage(page, step), p * per * 1000);
+      const t = later(() => token === this.loopToken && this._showLogoPage(page, step), p * per * 1000);
       this.pageTimers.push(t);
     });
     return per * pages.length;
@@ -433,11 +434,11 @@ export class Show {
   }
 
   _hideImage(keepStage = false) {
-    clearInterval(this.flatTimer);
+    cancel(this.flatTimer);
     this.flatTimer = 0;
     this.overlay.classList.remove('on');
     if (!keepStage) this.stage.hide();
-    this.pageTimers.forEach(clearTimeout);
+    this.pageTimers.forEach(cancel);
     this.pageTimers = [];
   }
 
@@ -445,7 +446,7 @@ export class Show {
   /** Todo se desarma (las letras caen) y queda el logo de FLAT; cada 4 s se rompe con glitch y se vuelve a armar. */
   async goFlatFinal() {
     this._setRecording(false);
-    clearTimeout(this.loopTimer);
+    cancel(this.loopTimer);
     const token = ++this.loopToken;
     this._hideImage(true);
     const f = this.field;
@@ -479,21 +480,21 @@ export class Show {
       return;
     }
     const area = { w: 0.5, h: 0.46 };
-    setTimeout(() => token === this.loopToken && this.stage.show([logo], { area, duration: 1.1, intensity: 1.3 }), 900);
-    this.flatTimer = setInterval(() => {
-      if (token !== this.loopToken || this.state !== 'flat') return clearInterval(this.flatTimer);
+    later(() => token === this.loopToken && this.stage.show([logo], { area, duration: 1.1, intensity: 1.3 }), 900);
+    this.flatTimer = every(() => {
+      if (token !== this.loopToken || this.state !== 'flat') return cancel(this.flatTimer);
       this.stage.hide({ duration: 0.45 }); // se rompe
       f.onTransition?.(0.8);
-      setTimeout(() => token === this.loopToken && this.state === 'flat' && this.stage.show([logo], { area, duration: 0.9, intensity: 1.4 }), 550); // y se vuelve a armar
+      later(() => token === this.loopToken && this.state === 'flat' && this.stage.show([logo], { area, duration: 0.9, intensity: 1.4 }), 550); // y se vuelve a armar
     }, 4000);
   }
 
   // ── título ───────────────────────────────────────────────────────────────
   /** La placa del título del loop queda fija (sin una segunda placa igual) hasta T. */
   _holdTitle(name) {
-    clearTimeout(this.loopTimer);
+    cancel(this.loopTimer);
     this.loopToken++;
-    for (const t of this.pageTimers) clearTimeout(t);
+    for (const t of this.pageTimers) cancel(t);
     this.pageTimers = [];
     this.state = 'title';
     this.notify(`${name} — T para comenzar`);
@@ -501,7 +502,7 @@ export class Show {
 
   goTitle() {
     this._setRecording(false);
-    clearTimeout(this.loopTimer);
+    cancel(this.loopTimer);
     this.loopToken++;
     this._hideImage();
     const f = this.field;
@@ -532,7 +533,7 @@ export class Show {
       return false;
     }
     this._setRecording(false);
-    clearTimeout(this.loopTimer);
+    cancel(this.loopTimer);
     this.loopToken++;
     this._hideImage();
     const f = this.field;
@@ -554,7 +555,7 @@ export class Show {
     this.artistAt = performance.now();
     // 3 s de gracia: el audio previo (presentación, aplausos) no entra a la transcripción
     const tok = this.loopToken;
-    setTimeout(() => tok === this.loopToken && this.state === 'artist' && this.onPrerollReset?.(), 3000);
+    later(() => tok === this.loopToken && this.state === 'artist' && this.onPrerollReset?.(), 3000);
     this.notify(`${artistKey(a, n - 1).toUpperCase()} · ${a.name} — S para comenzar`);
     return true;
   }
@@ -563,7 +564,7 @@ export class Show {
   start(mode = 'poema', { dissolve = false, variante = null } = {}) {
     const fromArtist = this.state === 'artist';
     const v = mode === 'muro' ? variante || 'muro' : null;
-    clearTimeout(this.loopTimer);
+    cancel(this.loopTimer);
     this.loopToken++;
     this._hideImage();
     const f = this.field;
@@ -634,7 +635,7 @@ export class Show {
     if (wait > 0) {
       const tok = ++this.recToken;
       this.recording = false;
-      setTimeout(() => tok === this.recToken && this.state === 'perform' && this._setRecording(true), wait);
+      later(() => tok === this.recToken && this.state === 'perform' && this._setRecording(true), wait);
     } else this._setRecording(true);
     this.notify(`● GRABANDO · ${{ palabras: 'palabras', pocas: 'pocas palabras', muro: 'artista' }[mode] || 'poema'}`);
   }
