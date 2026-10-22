@@ -31,7 +31,7 @@ import { TREATMENTS, treat, pickTreatment, seedOf, composeFigure, figureToTone, 
 const params = new URLSearchParams(location.search);
 const num = (k, d) => (params.has(k) && Number.isFinite(+params.get(k)) ? +params.get(k) : d);
 const LS_KEY = 'poesia.settings.v1';
-// el telón tiene tantas columnas como entren a lo ancho: un formato muy apaisado (p. ej. 7680 × 1080 visibles)
+// el telón tiene tantas columnas como entren a lo ancho: un formato muy apaisado (p. ej. 11560 × 1080 visibles)
 // necesita más letras que el de FLAT (1822 × 737). El pool se dimensiona al arrancar según el formato guardado.
 function poolFor() {
   let fmt = DEFAULT_FORMAT;
@@ -43,7 +43,7 @@ function poolFor() {
   return Math.round(18000 * Math.max(1, visibleAspect(fmt) / 2.47));
 }
 const CONFIG = {
-  pool: Math.round(Math.min(64000, Math.max(2000, num('pool', poolFor())))), // muro de 40 filas ≈ 11 000 letras (en 1822 × 737) + caída + títulos
+  pool: Math.round(Math.min(100000, Math.max(2000, num('pool', poolFor())))), // muro de 40 filas ≈ 11 000 letras (en 1822 × 737) + caída + títulos
   points: Math.round(Math.min(300000, Math.max(0, num('points', 80000)))),
   ws: params.get('ws') || 'ws://localhost:8765',
   worldH: 1000,
@@ -61,7 +61,11 @@ async function boot() {
   // ── render ───────────────────────────────────────────────────────────────
   const stage = document.getElementById('stage');
   const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false, powerPreference: 'high-performance', stencil: false });
-  renderer.setPixelRatio(CONFIG.dpr);
+  // un cuadro muy ancho (13480 px) con escalado de Windows pasaría el máximo de textura de la placa (16 384):
+  // la densidad de píxeles se recorta para que el lienzo y los pases de posproceso entren
+  const maxTex = Math.min(renderer.capabilities.maxTextureSize || 16384, 16384);
+  const fitDpr = (d, w = frameRect().w, h = frameRect().h) => Math.min(d, maxTex / Math.max(1, w), maxTex / Math.max(1, h));
+  renderer.setPixelRatio(fitDpr(CONFIG.dpr));
   const fr0 = frameRect();
   renderer.setSize(fr0.w, fr0.h);
   renderer.setClearColor(0x000000, 1);
@@ -672,7 +676,7 @@ async function boot() {
     }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key.toLowerCase();
-    if (SHOW_KEY.test(k)) {
+    if (SHOW_KEY.test(k) || show.artistForKey(k) >= 0) {
       if (replayMode) return; // re-proyectando: el show lo conduce la grabación
       e.preventDefault();
       logUi({ key: k });
@@ -693,11 +697,12 @@ async function boot() {
       else document.documentElement.requestFullscreen?.().catch(() => {});
     } else if (k === '5') show.goFlatFinal(); // cierre: todo se desarma y queda el logo de FLAT
     else if (k === '0') show.goSparse(); // sólo transcripción: pocas palabras que arman figuras y se rompen
-    else if (/^[0-9]$/.test(k)) show.goArtist(k === '0' ? 10 : +k);
     else if (k === 's') show.toggleRecord();
     else if (k === 'p') show.stop();
     else if (k === 't') show.startWords();
     else if (k === 'l') show.goLoop();
+    else if (show.artistForKey(k) >= 0) show.goArtist(show.artistForKey(k) + 1); // la tecla elegida en el panel C
+    else if (/^[1-9]$/.test(k)) show.notify(`Ningún artista tiene la tecla ${k} (panel C → Artistas)`);
     else if (k === 'escape') {
       config.toggle(false);
       debug.toggle(false);
@@ -717,8 +722,10 @@ async function boot() {
   window.addEventListener('mousemove', showCursor);
   showCursor();
 
+  let dprScale = 1; // lo baja la calidad adaptativa
   function onResize() {
     const { w, h } = frameRect();
+    renderer.setPixelRatio(fitDpr(CONFIG.dpr * dprScale, w, h));
     renderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
@@ -797,7 +804,8 @@ async function boot() {
   const adaptive = num('adaptativo', 1) !== 0;
   function applyQuality() {
     const q = QUALITY[quality];
-    renderer.setPixelRatio(CONFIG.dpr * q.dpr);
+    dprScale = q.dpr;
+    renderer.setPixelRatio(fitDpr(CONFIG.dpr * q.dpr));
     fx.setSize(frameRect().w, frameRect().h);
     cloud.points.geometry.setDrawRange(0, Math.round(CONFIG.points * q.points));
     cloud.resize(field.W, field.H, renderer.domElement.height, fov, camDist);

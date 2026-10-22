@@ -27,8 +27,8 @@ poesia-tipografica/
 ├── start_mac.command     Arranque completo en macOS (doble clic)
 ├── start_instalacion.bat Arranque completo en Windows (backend + frontend + Chrome kiosk)
 ├── reproyectar.bat      Re-proyección de una sesión grabada (también reproyectar_mac.command)
-├── start_instalacion_9600.bat / reproyectar_9600.bat   Lo mismo en 9600 × 1080 sin los primeros 1920 px
-├── abrir_pantalla.bat   Abre Chrome / Edge (kiosk o ventana) con el formato que fije el lanzador
+├── start_instalacion_13480.bat / reproyectar_13480.bat   Lo mismo en 13480 × 1080 sin los primeros 1920 px
+├── abrir_pantalla.bat   Abre Chrome / Edge (pregunta pantalla completa o ventana) con el formato del lanzador
 ├── public/loop/          Imágenes del loop (flat.png) y public/loop/sponsors/ (todos los logos)
 └── src/
     ├── main.js           Escena, cámara orbital, bucle, conexión al backend, simulador, teclado
@@ -133,7 +133,7 @@ npm run dev                     :: desarrollo: http://127.0.0.1:5173
 
 Producción: `start_instalacion.bat` compila el frontend, abre el backend minimizado y lanza Chrome en
 `--kiosk` contra `http://127.0.0.1:5173/` (lo abre `abrir_pantalla.bat`, que comparten el show y la re-proyección).
-Para 9600 × 1080, ver «Versión 9600 × 1080» más abajo. Para la sala:
+Para 13480 × 1080, ver «Versión 13480 × 1080» más abajo. Para la sala:
 
 - Windows: desactivar suspensión de pantalla, notificaciones y "mejoras de audio" del micrófono (Configuración →
   Sonido → Propiedades del dispositivo). El supresor de ruido de Windows recorta las colas de los versos.
@@ -170,26 +170,38 @@ Panel C → **Formato de salida**: 1822 × 737 (por defecto, la pantalla del FLA
 otro («ancho x alto»). Con formato fijo todo se compone para esa proporción y se centra en la ventana; lo que sobra
 queda negro. El muro de palabras, el título, los nombres y la transcripción quedan centrados en el cuadro.
 
-Con **«@N»** los primeros N px del ancho no se usan: `9600x1080@1920` es una salida de 9600 × 1080 donde el primer
-proyector (a la izquierda) está apagado. Todo se compone y se centra en los 7680 × 1080 restantes; la franja de la
-izquierda queda negra. Los paneles C y D también se abren dentro de la parte visible.
+Con **«@N»** los primeros N px del ancho no se usan: `13480x1080@1920` es una salida de 13480 × 1080 donde el
+primer proyector (a la izquierda) está apagado. Todo se compone y se centra en los 11560 × 1080 restantes; la franja de
+la izquierda queda negra. Los paneles C y D también se abren dentro de la parte visible.
 
-### Versión 9600 × 1080 (PC, primer proyector apagado)
+### Versión 13480 × 1080 (PC)
 
-Doble clic en **`start_instalacion_9600.bat`** (y **`reproyectar_9600.bat`** para re-proyectar). Hacen lo mismo que
-los normales, pero fijan el formato `9600x1080@1920` desde el lanzador (manda sobre el panel C, que lo avisa) y el
-programa reserva más letras para el telón, que a esa proporción tiene casi el triple de columnas.
+Doble clic en **`start_instalacion_13480.bat`** (y **`reproyectar_13480.bat`** para re-proyectar). Hacen lo mismo que
+los normales, pero fijan el formato desde el lanzador (manda sobre el panel C, que lo avisa) y el programa reserva más
+letras para el telón, que a esa proporción tiene cuatro veces más columnas que en el FLAT.
 
-- **Windows tiene que ver una sola pantalla de 9600 × 1080** (NVIDIA Surround, o un splitter / procesador de video
-  wall): Chrome en kiosk ocupa una pantalla entera. Panel C → Formato de salida muestra cuánto mide la ventana: tiene
-  que decir 9600 × 1080.
-- Si Windows ve los proyectores como **pantallas separadas** (escritorio extendido), el kiosk se queda en una sola. En
-  ese caso, editar `start_instalacion_9600.bat` y quitar el `REM` de `set UMBRAL_VENTANA=0,0,9600,1080`: abre una
-  ventana de esa medida que cruza todas las pantallas (x,y = esquina superior izquierda del primer proyector en la
-  disposición de Windows). Esa ventana conserva la barra de título, por eso es mejor la pantalla única.
+- Por defecto los **primeros 1920 px no se ven** (`13480x1080@1920`). Si ese proyector se usa, editar
+  `start_instalacion_13480.bat` y `reproyectar_13480.bat` y dejar `set UMBRAL_FORMATO=13480x1080` (o elegir «13480 ×
+  1080 completo» en el panel C si se arranca con el lanzador común).
+- Al abrir, el lanzador pregunta **pantalla completa o ventana** (ver abajo). Pantalla completa necesita que Windows
+  vea **una sola pantalla de 13480 × 1080** (NVIDIA Surround o un procesador de video wall). Si Windows ve los
+  proyectores como pantallas separadas (escritorio extendido), elegir **ventana**: abre una ventana de 13480 × 1080
+  desde la esquina 0,0 que cruza todas (si el primer proyector no está en 0,0, cambiar `UMBRAL_VENTANA=x,y,ancho,alto`
+  en el .bat). La ventana conserva la barra de título.
+- Panel C → Formato de salida muestra cuánto mide la ventana: tiene que decir 13480 × 1080.
+- La placa de video tiene un máximo de 16 384 px por lado: si Windows usa escalado (125 %, 150 %), el programa baja
+  la resolución interna lo justo para entrar. Conviene escala 100 % en esa pantalla.
 - La velocidad de la partitura (7) y los tamaños de letra dependen del alto, así que en el formato ancho se lee igual;
   sólo hay más espacio a los costados.
-- Si se elige 9600 en el panel C (sin el lanzador), la página se recarga sola una vez para reservar más letras.
+- Si se elige un formato más ancho en el panel C (sin el lanzador), la página se recarga sola una vez para reservar
+  más letras.
+
+### Pantalla completa o ventana
+
+Todos los lanzadores (Windows y Mac, show y re-proyección) preguntan al abrir el navegador: **P** = pantalla completa
+(kiosk, sin bordes) · **V** = ventana (la de 13480 × 1080 en los lanzadores de 13480; si no, una ventana común de
+1600 × 900 que se puede mover y agrandar, y `F` la pone en pantalla completa). Sin respuesta en 10 s abre en pantalla
+completa, así el arranque sin operador sigue funcionando. Para no preguntar: variable `UMBRAL_MODO=P` o `UMBRAL_MODO=V`.
 
 ## Forma de las ilustraciones
 
@@ -248,11 +260,15 @@ la figura de la biblioteca. En modo palabras (T) las ilustraciones también se c
 
 ## Placa del artista · tamaños en grilla · tecla 0
 
-**Placa del artista (1–4, 6–9)**: primero se ve el nombre sobre el muro. **Los primeros 3 s no se transcribe nada**
+**Disertantes y sus teclas**: en panel C → Artistas se escribe el nombre de cada disertante y **la tecla que muestra
+su placa** (una letra o un número). Vacía = su número de orden (1 … 4, 6 … 9). No se pueden usar C, D, F, S, P, T, L,
+0 ni 5 (son del show): el panel lo avisa; si dos comparten tecla, se marca en rojo y sólo funciona la primera.
+
+**Placa del artista**: primero se ve el nombre sobre el muro. **Los primeros 3 s no se transcribe nada**
 (presentación, aplausos: ni la voz dispara ni ese audio llega a OpenAI). Después, cuando la persona **empieza a
-hablar** (o se aprieta S), arranca su animación. Cada número tiene la suya (8 repite Muro y 9 Constelación) y en
-el panel C cada artista puede fijar otra. Para usar 6 y 7 tiene que haber artistas cargados en esas posiciones
-(panel C → Artistas):
+hablar** (o se aprieta S), arranca su animación. Cada tecla numérica tiene la suya (8 repite Muro y 9 Constelación);
+con una letra se reparten por orden. En el panel C cada artista puede fijar otra (el menú muestra cuál le toca en
+automático):
 
 | N.º | Animación | Qué se ve |
 | --- | --- | --- |
@@ -264,6 +280,12 @@ el panel C cada artista puede fijar otra. Para usar 6 y 7 tiene que haber artist
 | 7 | **Partitura** | cinco carriles horizontales (tamaños 1×, 3×, 2×, 5×, 1×) que se deslizan de derecha a izquierda a distinta velocidad —las grandes, lentas—; cada palabra entra en el carril de su tamaño, como una partitura o un subtitulado que corre; si un carril se atrasa, acelera hasta ponerse al día; un dibujo por oración de fondo |
 
 En las animaciones con dibujo, las palabras que lo tapan se rompen para que se lea.
+
+**Las palabras no se superponen**, en ninguna escena: cada palabra busca un lugar libre y, si no hay, se rompen las
+más viejas que estorban. Debajo de cada palabra (y del verso en vivo) el telón y el dibujo se apagan; las letras que
+caen pasan por detrás; las palabras grandes del muro no se ponen sobre el verso, el nombre, el dibujo ni otra palabra
+(y si algo nuevo aparece debajo, se rompen); lo que se está borrando con glitch (el nombre de la placa, el telón) se
+apaga en el acto si queda debajo de una palabra nueva.
 
 Se ajusta en panel C → Micrófono («Placa del artista…» y «Umbral de voz»); el comienzo de lo dicho no se pierde
 (el backend guarda el último segundo y medio de audio).
@@ -324,7 +346,8 @@ Para un video fijo, grabar la pantalla durante la re-proyección (OBS).
 | --- | --- |
 | `→` / `←` | loop: paso siguiente / anterior. Desde el último paso, `→` fija el título UMBRAL |
 | `T` | empieza a grabar en modo palabras (desde el título o cuando sea), hasta que se elige un artista |
-| `1`…`9`, `0` | nombre del artista N (0 = 10): deja de grabar; no empieza hasta apretar `S` |
+| tecla del artista | su placa (la tecla elegida en panel C → Artistas; por defecto 1 … 4, 6 … 9): deja de grabar; arranca cuando habla o con `S` |
+| `0` / `5` | sólo transcripción (pocas palabras) / cierre con el logo de FLAT |
 | `S` | grabar / dejar de grabar (el poema dibuja; lo dibujado queda en pantalla) |
 | `P` | detener la grabación (igual que `S` cuando graba) |
 | `L` | volver al loop (deja de grabar) |

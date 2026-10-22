@@ -294,6 +294,21 @@ body.hide-cursor * {
   padding: 5px 8px;
   font: inherit;
 }
+#config .item input.tecla {
+  width: 2.4em;
+  text-align: center;
+  text-transform: uppercase;
+  color: #e3a14b;
+}
+#config .item input.tecla.bad {
+  border-color: #c0392b;
+}
+#config .hint.warn {
+  color: #e07a6a;
+}
+#config .hint.warn:empty {
+  display: none;
+}
 #config .item input[data-field='artist'] {
   flex: 1;
   min-width: 180px;

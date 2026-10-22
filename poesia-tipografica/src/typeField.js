@@ -153,6 +153,9 @@ export class TypeField {
     this.fxVer = 0;
     this.fxNext = 0;
     this.breaking = []; // letras que se rompen con glitch y luego se apagan: {i, at}
+    this.wmask = null; // dónde hay palabras vivas (grilla del telón): nada se dibuja encima de ellas
+    this.maskNext = 0;
+    this.flowLead = 0;
     // tecla 0: pocas palabras que arman figuras entre ellas
     this.sparseMode = false;
     this.sparse = []; // {idx[], x, y, until, broken}
@@ -445,13 +448,19 @@ export class TypeField {
     }
     line.text += delta;
     // máximo 3 renglones vivos: el más antiguo se libera al campo
-    while (line.rows.length > 3) this._releaseEntries(line.rows.shift());
+    while (line.rows.length > 3) {
+      const row = line.rows.shift();
+      this._releaseEntries(row);
+      // su lugar lo toma el renglón siguiente: se suelta un renglón más arriba y cae por detrás del verso
+      for (const e of row) if (e.i >= 0) this.py[e.i] += S * 0.98;
+    }
     this._layoutLine();
   }
 
   _layoutLine() {
     const line = this.line;
     if (!line) return;
+    this.maskNext = 0; // la máscara de palabras se entera en el próximo cuadro
     const S = this.lineSize;
     const rows = line.rows;
     let maxW = 0;
@@ -471,6 +480,9 @@ export class TypeField {
         this.tx[e.i] = cx;
         this.ty[e.i] = y;
         this.tz[e.i] = 0;
+        // el verso se recentra de una vez, como bloque: si cada letra viajara por su cuenta, se pisarían
+        this.px[e.i] = cx;
+        this.py[e.i] = y;
         if (e.fresh) {
           // nacimiento exacto en su lugar del verso: sin vuelo, sin retardo
           this.px[e.i] = cx;
@@ -494,7 +506,7 @@ export class TypeField {
     } else if (norm(this.line.text) !== norm(final)) {
       const old = this.line;
       this.line = null;
-      for (const row of old.rows) this._releaseEntries(row, true);
+      for (const row of old.rows) this._releaseEntries(row, true, true); // la versión corregida reemplaza a la vieja en el acto
       this.typeDelta(itemId, final, { stagger: 0.008, level: 0.15 });
     }
     if (this.line) {
@@ -504,7 +516,7 @@ export class TypeField {
     this.addCorpus(final);
   }
 
-  _releaseEntries(row, quiet = false) {
+  _releaseEntries(row, quiet = false, swap = false) {
     for (const e of row) {
       if (e.i < 0) continue;
       const i = e.i;
@@ -514,6 +526,7 @@ export class TypeField {
       this.vz[i] = (Math.random() - 0.5) * 40;
       this.life[i] = 0;
       if (quiet) this.alphaT[i] = 0;
+      if (swap) this.alpha[i] = 0; // no se superpone con la que la reemplaza
     }
   }
 
@@ -896,6 +909,10 @@ export class TypeField {
     }
     if (this.line && t > this.line.releaseAt) this.releaseLine();
 
+    if (t >= this.maskNext) {
+      this.maskNext = t + 0.06;
+      this._maskUpdate(t);
+    }
     this._bdUpdate(dt, t);
     this._breakingUpdate(t);
     if (this.flow.length) this._flowUpdate(dt, t);
@@ -905,6 +922,7 @@ export class TypeField {
     const density = corpusFactor * (0.3 + 0.7 * dens) * this.figureDensity * this.sceneDensity * (wR > 0.5 ? 0.75 : 1) * (this.shape ? 0.12 : 1); // con ilustración: casi sin letras sueltas (la forma se lee limpia)
     const ambient = 0.42 + 0.4 * inten;
     const W = this.W, H = this.H, halfW = W / 2, halfH = H / 2;
+    const MK = this.wmask && this.wmask.any ? this.wmask : null;
 
     // ── rejilla agregada para el enjambre ─────────────────────────────────
     const gc = this.gridCols, gr = this.gridRows;
@@ -1151,6 +1169,19 @@ export class TypeField {
         const sizeTarget = awaiting ? size[i] : this._ambientSize(i);
         size[i] += (sizeTarget - size[i]) * kSize;
         alphaT[i] = vis ? ambient * (0.3 + 0.7 * fract(s * 13.7)) * lifeFade : 0;
+        // sobre una palabra viva no se ve: la letra que cae pasa por detrás (las palabras no se pisan)
+        if (MK && alpha[i] + alphaT[i] > 0.02) {
+          const hx = size[i] * 0.2, hy = size[i] * 0.15;
+          for (let q = 0; q < 5; q++) {
+            const qx = px[i] + (q === 1 ? -hx : q === 2 ? hx : 0), qy = py[i] + (q === 3 ? -hy : q === 4 ? hy : 0);
+            const mc = Math.floor((qx - MK.x0) / MK.cw), mr = Math.floor((MK.top - qy) / MK.rh);
+            if (mc >= 0 && mc < MK.colsN && mr >= 0 && mr < MK.rowsN && MK.m[mr * MK.colsN + mc]) {
+              alphaT[i] = 0;
+              alpha[i] *= 0.3;
+              break;
+            }
+          }
+        }
         alpha[i] += (alphaT[i] - alpha[i]) * kAlpha;
       }
 
@@ -1323,7 +1354,8 @@ export class TypeField {
     return gx >= 0 && gy >= 0 && gy < S.gh ? S.grid[gy][gx] || null : null;
   }
 
-  _bdBuild() {
+  /** Grilla del telón (también la de la máscara de palabras cuando no hay telón). */
+  _bdGeom() {
     const rowsN = Math.round(clamp(this.bdRows, 10, 60));
     // centrado en el cuadro: mismo margen arriba/abajo y a los lados
     const top = this.H * 0.45, bottom = -this.H * 0.45;
@@ -1332,7 +1364,11 @@ export class TypeField {
     const kind = this._k('mono');
     const cw = this.atlas.adv(this.atlas.slot('M', kind)) * size;
     const colsN = Math.max(8, Math.floor((this.W * 0.94) / cw));
-    const x0 = -(colsN * cw) / 2, x1 = (colsN * cw) / 2;
+    return { rowsN, top, bottom, rh, size, kind, cw, colsN, x0: -(colsN * cw) / 2, x1: (colsN * cw) / 2 };
+  }
+
+  _bdBuild() {
+    const { rowsN, top, bottom, rh, size, kind, cw, colsN, x0, x1 } = this._bdGeom();
     const cells = [];
     for (let r = 0; r < rowsN; r++) {
       for (let c = 0; c < colsN; c++) cells.push({ x: x0 + (c + 0.5) * cw, y: top - (r + 0.5) * rh, ch: ' ', i: -1, at: 0 });
@@ -1388,11 +1424,11 @@ export class TypeField {
       this.setShape(null);
       if (this.refillSecs) this.setBackdropFill(this.refillSecs); // el muro se reescribe hasta la próxima imagen
     }
-    if (this.wallFx) this._wallFxStep(t);
-    else if (this.bigWords.length) this.clearWallFx();
-    if (B.fxVer !== this.fxVer) this._fxRecompute();
-    const FX = B.fx;
     const holes = this._bdHoles();
+    if (this.wallFx) this._wallFxStep(t, holes);
+    else if (this.bigWords.length) this.clearWallFx();
+    this._fxRecompute(holes); // las palabras se mueven (partitura, sedimento): se recalcula en cada paso
+    const FX = B.fx;
     // llenado progresivo: sólo se escribe la fracción del muro que corresponde al tiempo transcurrido
     const F = this.bdFill;
     const limit = F ? Math.floor(B.cells.length * clamp((t - F.t0) / F.dur, 0.04, 1)) : B.cells.length;
@@ -1423,6 +1459,14 @@ export class TypeField {
         c.alpha = 0.82;
       }
       const fx = FX[j];
+      if (fx === 2) {
+        // debajo de una palabra: ni el telón ni el dibujo la pisan; vuelve cuando la palabra se va
+        if (c.i >= 0) {
+          this._bdDrop(c, t, false);
+          c.at = t + 0.4 + Math.random() * 0.8;
+        }
+        continue;
+      }
       if ((holes.length && this._inHoles(c.x, c.y, B.cw * 0.5, holes)) || (S && c.hide) || fx === 1 || (this.backdropOnlyShape && !S)) {
         if (c.i >= 0) this._bdDrop(c, t, Math.random() < 0.05); // casi todas se apagan; pocas caen (forma limpia)
         continue;
@@ -1913,7 +1957,7 @@ export class TypeField {
       this.trot[i] = this.rot[i] = 0;
       this.tsize[i] = this.size[i] = S;
       this.talpha[i] = k >= 5 ? 1 : 0.6 + Math.random() * 0.4;
-      this.px[i] = this.tx[i] + (Math.random() - 0.5) * W.cw * 10; // llega con saltos
+      this.px[i] = this.tx[i] + (Math.random() - 0.5) * W.cw * Math.min(10, k * 2); // llega con saltos, sin salir de su lugar
       this.py[i] = this.ty[i];
       this.pz[i] = 0;
       this.vx[i] = this.vy[i] = this.vz[i] = 0;
@@ -2039,10 +2083,10 @@ export class TypeField {
       w.idx.forEach((i, n) => {
         this.tx[i] = W.x0 + (w.c0 + n * w.k + w.k / 2) * W.cw;
         this.ty[i] = y;
-        if (onlyLast) {
-          this.px[i] = this.tx[i];
-          this.py[i] = Math.min(this.H / 2, y + (5 + w.k) * W.rh); // aparece unas filas arriba y cae a saltos sobre la pila
-        }
+        this.px[i] = this.tx[i];
+        // la nueva aparece unas filas arriba y cae a saltos sobre la pila; tras una erosión, todo baja de un salto
+        // (en el mismo glitch: las capas no se cruzan en el camino)
+        this.py[i] = onlyLast ? Math.min(this.H / 2, y + (5 + w.k) * W.rh) : y;
       });
     }
   }
@@ -2074,11 +2118,13 @@ export class TypeField {
 
   _flowUpdate(dt) {
     if (this.flowMode !== 'partitura') return;
+    this.flowLead = 0;
     for (const lane of this.lanes || []) {
       // si se acumula cola fuera de cuadro, el carril acelera hasta descargarla
       const over = Math.max(0, lane.tail - this.W / 2) / (this.W * 0.25);
       lane.cur = lane.v * (1 + over);
       lane.tail -= lane.cur * dt;
+      this.flowLead = Math.max(this.flowLead, lane.cur * 0.2); // lo que avanza hasta que el telón se entera
     }
     for (let k = this.flow.length - 1; k >= 0; k--) {
       const w = this.flow[k];
@@ -2169,6 +2215,7 @@ export class TypeField {
   placeWord(raw) {
     const word = String(raw).replace(/^[^\p{L}\p{N}¿¡]+|[^\p{L}\p{N}?!]+$/gu, '');
     if (!word) return;
+    this.maskNext = 0; // la máscara de palabras se entera en el próximo cuadro
     if (this.sparseMode) {
       this._placeSparse(word);
       return;
@@ -2213,9 +2260,18 @@ export class TypeField {
         best = { x, y, r };
       }
     }
-    // las palabras viejas pesan menos: con el tiempo se aceptan superposiciones
+    // sin lugar libre: las palabras que quedarían debajo (las más viejas pesan menos) se rompen, nunca se pisan
     for (const q of this.wordRects) q.w *= 0.995;
-    this.wordRects.push({ ...best.r, w: 1 });
+    if (bestScore > 0) {
+      const R = best.r;
+      this.wordRects = this.wordRects.filter((q) => {
+        const over = Math.min(R.x1, q.x1) > Math.max(R.x0, q.x0) && Math.min(R.y1, q.y1) > Math.max(R.y0, q.y0);
+        if (over) this._breakLetters(q.idx || [], this.time, S);
+        return !over;
+      });
+    }
+    const rect = { ...best.r, w: 1, idx: [] };
+    this.wordRects.push(rect);
     if (this.wordRects.length > 700) this.wordRects.shift();
 
     const t = this.time;
@@ -2253,6 +2309,7 @@ export class TypeField {
       this.birth[i] = this.delay[i];
       this.level[i] = born * 0.6;
       this.words.push(i);
+      rect.idx.push(i);
       x += adv;
     });
     this.metaDirty = true;
@@ -2276,7 +2333,7 @@ export class TypeField {
   // ════════════════════════════════════════════════════════════════════════
   //  Muro de artistas: fragmentos con glitch + palabras grandes en grilla
   // ════════════════════════════════════════════════════════════════════════
-  _wallFxStep(t) {
+  _wallFxStep(t, holes = []) {
     const B = this.backdrop;
     if (!B) return;
     let changed = false;
@@ -2289,7 +2346,7 @@ export class TypeField {
     }
     if (t >= this.fxNext) {
       this.fxNext = t + 2 + Math.random() * 2.5;
-      if (this.bigWords.length < 5 && this._spawnBigWord(t)) {
+      if (this.bigWords.length < 5 && this._spawnBigWord(t, holes)) {
         changed = true;
         this.onTransition?.(0.25);
       }
@@ -2298,7 +2355,7 @@ export class TypeField {
   }
 
   /** Una palabra dicha, 2, 3 o 4 veces más grande, ocupando exactamente k × k celdas por letra. */
-  _spawnBigWord(t) {
+  _spawnBigWord(t, holes = []) {
     const B = this.backdrop;
     const words = this.corpus.slice(-1600).split(/\s+/).map((w) => w.replace(/[^\p{L}\p{N}]/gu, '')).filter((w) => w.length >= 3 && w.length <= 10);
     if (!words.length) return false;
@@ -2313,7 +2370,7 @@ export class TypeField {
     for (let tries = 0; tries < 24; tries++) {
       const r0 = Math.floor(Math.random() * (B.rowsN - k + 1)), c0 = Math.floor(Math.random() * (B.colsN - len * k + 1));
       const hit = this.bigWords.some((b) => c0 < b.c0 + b.len * b.k + 2 && c0 + len * k + 2 > b.c0 && r0 < b.r0 + b.k + 1 && r0 + k + 1 > b.r0);
-      if (hit) continue;
+      if (hit || this._bigWordBlocked(r0 - 1, c0 - 1, k + 2, len * k + 2, holes)) continue;
       const idx = [];
       const accent = this.keywords.has(normalizeWord(word)) || Math.random() < 0.18 ? 1 : 0;
       [...word].forEach((ch, j) => {
@@ -2326,7 +2383,7 @@ export class TypeField {
         this.tx[i] = c.x + ((k - 1) * B.cw) / 2;
         this.ty[i] = c.y - ((k - 1) * B.rh) / 2;
         this.tz[i] = 0;
-        this.px[i] = this.tx[i] + (Math.random() - 0.5) * B.cw * 10; // llega con saltos
+        this.px[i] = this.tx[i] + (Math.random() - 0.5) * B.cw * k * 2; // llega con saltos, sin salir de su lugar
         this.py[i] = this.ty[i];
         this.pz[i] = 0;
         this.trot[i] = this.rot[i] = 0;
@@ -2348,16 +2405,104 @@ export class TypeField {
     return false;
   }
 
-  /** Celdas que tapan las palabras grandes (1 = oculta). */
-  _fxRecompute() {
-    const B = this.backdrop;
+  /**
+   * ¿El rectángulo de celdas (r0, c0, alto, ancho) toca algo que una palabra grande no puede tapar?
+   * Palabras vivas, el verso en vivo, el nombre, una figura o el dibujo.
+   */
+  _bigWordBlocked(r0, c0, hR, wC, holes) {
+    const B = this.backdrop, M = this.wmask, S = this.shape;
+    for (let r = Math.max(0, r0); r < Math.min(B.rowsN, r0 + hR); r++) {
+      for (let c = Math.max(0, c0); c < Math.min(B.colsN, c0 + wC); c++) {
+        const j = r * B.colsN + c;
+        if (M && M.m.length === B.cells.length && M.m[j] === 1) return true;
+        const cell = B.cells[j];
+        if (holes.length && this._inHoles(cell.x, cell.y, B.cw * 0.5, holes)) return true;
+        if (S && (S.pol === 'positivo') !== this._shapeHides(cell.x, cell.y)) return true; // parte del dibujo
+      }
+    }
+    return false;
+  }
+
+  /** Celdas del telón que no se dibujan: 1 = bajo una palabra grande · 2 = bajo una palabra viva. */
+  _fxRecompute(holes = []) {
+    const B = this.backdrop, M = this.wmask;
+    // una palabra grande que quedó encima de algo nuevo (una palabra dicha, el verso, un dibujo) se rompe
+    for (let k = this.bigWords.length - 1; k >= 0; k--) {
+      const b = this.bigWords[k];
+      if (this._bigWordBlocked(b.r0, b.c0, b.k, b.len * b.k, holes)) {
+        this._breakLetters(b.idx, this.time, B.cw * 3);
+        this.bigWords.splice(k, 1);
+      }
+    }
     B.fx.fill(0);
+    if (M && M.any && M.m.length === B.fx.length) for (let j = 0; j < M.m.length; j++) if (M.m[j] === 1) B.fx[j] = 2;
     for (const b of this.bigWords) {
       for (let r = b.r0; r < Math.min(B.rowsN, b.r0 + b.k); r++) {
         for (let c = b.c0; c < Math.min(B.colsN, b.c0 + b.len * b.k); c++) B.fx[r * B.colsN + c] = 1;
       }
     }
     B.fxVer = this.fxVer;
+  }
+
+  /**
+   * Máscara de palabras vivas (en la grilla del telón): cada letra de una palabra, el verso en vivo y las palabras
+   * grandes marcan las celdas que tapan (con medio módulo de margen). Lo que se está rompiendo y queda debajo de
+   * una palabra nueva (el nombre de la placa, el telón que se borra) se apaga ya: nada se superpone.
+   */
+  _maskUpdate(t) {
+    const G = this.backdrop || this._bdGeom();
+    let M = this.wmask;
+    if (!M || M.colsN !== G.colsN || M.rowsN !== G.rowsN || M.cw !== G.cw || M.top !== G.top) {
+      M = this.wmask = { x0: G.x0, top: G.top, cw: G.cw, rh: G.rh, colsN: G.colsN, rowsN: G.rowsN, m: new Uint8Array(G.colsN * G.rowsN), any: false };
+    }
+    M.m.fill(0);
+    M.any = false;
+    const skip = new Set();
+    for (const b of this.breaking) skip.add(b.i);
+    const big = new Set();
+    for (const b of this.bigWords) for (const i of b.idx) big.add(i);
+    // 1 = palabra dicha / verso · 2 = palabra grande del muro (ya tapa su rectángulo en el telón)
+    const mark = (x, y, hw, hh, v, lead = 0) => {
+      const c0 = Math.max(0, Math.floor((x - hw - lead - M.x0) / M.cw)), c1 = Math.min(M.colsN - 1, Math.floor((x + hw - M.x0) / M.cw));
+      const r0 = Math.max(0, Math.floor((M.top - y - hh) / M.rh)), r1 = Math.min(M.rowsN - 1, Math.floor((M.top - y + hh) / M.rh));
+      for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) if (M.m[r * M.colsN + c] !== 1) M.m[r * M.colsN + c] = v;
+      if (r0 <= r1 && c0 <= c1) M.any = true;
+    };
+    const st = this.state, atlas = this.atlas, slide = this.flowMode === 'partitura'; // en la partitura las palabras avanzan
+    for (let i = 1; i < this.N; i++) {
+      const s = st[i];
+      if (s === WORD) {
+        if (skip.has(i) || this.talpha[i] <= 0.01) continue;
+        const S = this.tsize[i], sl = this.pslot[i] >= 0 ? this.pslot[i] : this.slot[i];
+        // caja de la letra: su avance de ancho y un módulo de alto (S = módulo × 1,62), con un poco de aire
+        const hw = (atlas.adv(sl) * S) / 2 + M.cw * 0.25, hh = S * 0.31 + M.rh * 0.25, v = big.has(i) ? 2 : 1;
+        mark(this.tx[i], this.ty[i], hw, hh, v, slide ? this.flowLead : 0); // en la partitura, también lo que viene
+        // en camino (cae, llega con saltos): también donde está ahora
+        const dx = Math.abs(this.px[i] - this.tx[i]), dy = Math.abs(this.py[i] - this.ty[i]);
+        if (dx > M.cw * 0.5 || dy > M.rh * 0.5) mark((this.px[i] + this.tx[i]) / 2, (this.py[i] + this.ty[i]) / 2, hw + dx / 2, hh + dy / 2, v); // abre su camino
+      }
+    }
+    // el verso en vivo, entero apenas existe (sus letras aparecen con fundido)
+    if (this.line) {
+      for (const row of this.line.rows) {
+        for (const e of row) {
+          if (e.i < 0 || st[e.i] !== LINE) continue;
+          const S = this.tsize[e.i];
+          mark(this.tx[e.i], this.ty[e.i], (atlas.adv(this.slot[e.i]) * S) / 2 + M.cw * 0.25, S * 0.36 + M.rh * 0.25, 1);
+        }
+      }
+    }
+    if (!M.any) return;
+    // lo que se rompe con glitch y cae sobre una palabra viva se apaga en el acto
+    for (const b of this.breaking) {
+      const i = b.i;
+      if (t >= b.at || big.has(i)) continue;
+      const c = Math.floor((this.px[i] - M.x0) / M.cw), r = Math.floor((M.top - this.py[i]) / M.rh);
+      if (c >= 0 && c < M.colsN && r >= 0 && r < M.rowsN && M.m[r * M.colsN + c]) {
+        b.jumped = true;
+        b.at = t;
+      }
+    }
   }
 
   clearWallFx() {
@@ -2481,19 +2626,52 @@ export class TypeField {
     const adv = this.atlas.adv(this.atlas.slot('M', this._k('mono'))) * S; // monoespaciada: avance fijo
     const cw = this.atlas.adv(this.atlas.slot('M', this._k('mono'))) * base, rh = base * 1.1;
     const width = adv * slots.length;
-    x = clamp(x, -this.W / 2 + width / 2 + cw, this.W / 2 - width / 2 - cw);
-    y = clamp(y, -this.H / 2 + S, this.H / 2 - S);
-    x = Math.round((x - width / 2) / cw) * cw + width / 2; // alineada a la grilla del módulo mínimo
-    y = Math.round(y / rh) * rh;
-    // sin taparse: si choca con otra palabra viva, se corre de a una fila
-    const hits = (yy) => this.sparse.some((w) => Math.abs(w.y - yy) < (w.k * base + S) * 0.62 && Math.abs(w.x - x) < (w.w + width) / 2 + cw);
-    for (let k2 = 1; k2 <= 16 && hits(y); k2++) {
-      const yy = y + (k2 % 2 ? 1 : -1) * Math.ceil(k2 / 2) * rh * Math.max(1, k);
-      if (Math.abs(yy) < this.H / 2 - S && !hits(yy)) {
-        y = yy;
-        break;
+    // alineada a la grilla del módulo mínimo y dentro del cuadro
+    const snapX = (xx) => Math.round((clamp(xx, -this.W / 2 + width / 2 + cw, this.W / 2 - width / 2 - cw) - width / 2) / cw) * cw + width / 2;
+    const snapY = (yy) => Math.round(clamp(yy, -this.H / 2 + S, this.H / 2 - S) / rh) * rh;
+    x = snapX(x);
+    y = snapY(y);
+    // sin taparse: ni otra palabra viva ni (en la constelación) el dibujo
+    const hitsWord = (w, xx, yy) => Math.abs(w.y - yy) < (w.k * base + S) * 0.62 && Math.abs(w.x - xx) < (w.w + width) / 2 + cw;
+    const overShape = (xx, yy) => {
+      if (!this.shape || !this.backdrop || !this.backdropOnlyShape) return false;
+      const h = S * 0.32;
+      for (let j = 0; j < slots.length; j++) {
+        const lx = xx - width / 2 + adv * (j + 0.5);
+        for (const [dx, dy] of [[0, 0], [-h, -h], [h, -h], [-h, h], [h, h]]) if (!this._shapeHides(lx + dx, yy + dy)) return true;
       }
-      if (k2 === 8) x = clamp(x + (Math.random() < 0.5 ? -1 : 1) * (width + cw * 4), -this.W / 2 + width / 2 + cw, this.W / 2 - width / 2 - cw); // y si no, de costado
+      return false;
+    };
+    const free = (xx, yy) => !this.sparse.some((w) => hitsWord(w, xx, yy)) && !overShape(xx, yy);
+    let ok = free(x, y);
+    // 1) correrse de a una fila, arriba y abajo
+    for (let k2 = 1; k2 <= 12 && !ok; k2++) {
+      const yy = snapY(y + (k2 % 2 ? 1 : -1) * Math.ceil(k2 / 2) * rh * Math.max(1, k));
+      if (free(x, yy)) {
+        y = yy;
+        ok = true;
+      }
+    }
+    // 2) el lugar libre más cercano, cada vez más lejos
+    if (!ok) {
+      let best = null, bd = Infinity;
+      for (let n = 0; n < 160; n++) {
+        const r = 0.15 + (n / 160) * 0.85;
+        const xx = snapX(x + (Math.random() - 0.5) * this.W * r), yy = snapY(y + (Math.random() - 0.5) * this.H * r);
+        const d = Math.hypot((xx - x) / this.W, (yy - y) / this.H);
+        if (d < bd && free(xx, yy)) {
+          bd = d;
+          best = [xx, yy];
+        }
+      }
+      if (best) {
+        [x, y] = best;
+        ok = true;
+      }
+    }
+    // 3) no hay lugar: las más viejas que estorban se rompen (nunca quedan encimadas)
+    if (!ok) {
+      for (let q = this.sparse.length - 1; q >= 0; q--) if (hitsWord(this.sparse[q], x, y)) this._breakSparse(this.sparse.splice(q, 1)[0], t);
     }
     const idx = [];
     slots.forEach((sl, j) => {
@@ -2504,8 +2682,8 @@ export class TypeField {
       this.tx[i] = x - width / 2 + adv * (j + 0.5);
       this.ty[i] = y;
       this.tz[i] = 0;
-      this.px[i] = this.tx[i] + (Math.random() - 0.5) * cw * 8;
-      this.py[i] = this.ty[i] + (Math.random() - 0.5) * rh * 2;
+      this.px[i] = this.tx[i] + (Math.random() - 0.5) * cw * 2 * k; // llega con saltos, sin salir de su lugar
+      this.py[i] = this.ty[i] + (Math.random() - 0.5) * rh * 0.5;
       this.pz[i] = 0;
       this.trot[i] = this.rot[i] = 0;
       this.tsize[i] = this.size[i] = S;

@@ -13,6 +13,23 @@ import { processLogo, paginate, composeLogos, LogoStage } from './logos.js';
 export const ANIMS = ['clasica', 'muro', 'cruce', 'constelacion', 'sedimento', 'partitura'];
 // animación por número de tecla (5 es el cierre, 0 «pocas palabras»)
 const ANIM_BY_KEY = { 1: 'clasica', 2: 'muro', 3: 'cruce', 4: 'constelacion', 6: 'sedimento', 7: 'partitura', 8: 'muro', 9: 'constelacion' };
+// teclas del operador que no se pueden dar a un artista
+export const RESERVED_KEYS = new Set(['c', 'd', 'f', 's', 'p', 't', 'l', '0', '5', ' ']);
+
+/** Tecla de un artista: la elegida en el panel C o, si no tiene, su número de orden (1–4, 6–9). */
+export function artistKey(a, i) {
+  const k = String(a?.tecla || '').trim().toLowerCase().slice(0, 1);
+  if (k) return k;
+  return i < 9 && i !== 4 ? String(i + 1) : '';
+}
+
+/** Animación de un artista: la elegida en el panel C; si no, la de su tecla (1–9) o, con letra, por orden. */
+export function resolveAnim(a, i) {
+  if (ANIMS.includes(a?.animacion)) return a.animacion;
+  const k = artistKey(a, i);
+  if (ANIM_BY_KEY[k]) return ANIM_BY_KEY[k];
+  return ANIMS[i % ANIMS.length];
+}
 
 export const DEFAULT_SETTINGS = {
   artists: [{ name: 'Nombre del artista 1' }, { name: 'Nombre del artista 2' }, { name: 'Nombre del artista 3' }, { name: 'Nombre del artista 4' }],
@@ -165,14 +182,22 @@ export class Show {
     this.settings.loop_grupos_v2 = true;
   }
 
+  // la lista tal cual está en el panel C (con los vacíos: no corren el orden ni las teclas)
   get artists() {
-    return (this.settings.artists || []).filter((a) => a && a.name && a.name.trim());
+    return (this.settings.artists || []).map((a) => (a && typeof a === 'object' ? a : {}));
+  }
+
+  /** Artista (índice desde 0) que se activa con la tecla k, o -1. Si dos comparten tecla, gana el primero. */
+  artistForKey(k) {
+    k = String(k || '').toLowerCase();
+    if (!k || RESERVED_KEYS.has(k)) return -1;
+    return this.artists.findIndex((a, i) => a.name && a.name.trim() && artistKey(a, i) === k);
   }
 
   label() {
     if (this.state === 'loop') return 'loop';
     if (this.state === 'title') return 'título (T para comenzar)';
-    if (this.state === 'artist') return `artista ${this.artistIdx + 1}`;
+    if (this.state === 'artist') return `artista: ${this.artists[this.artistIdx]?.name || ''} (tecla ${artistKey(this.artists[this.artistIdx], this.artistIdx).toUpperCase()})`;
     if (this.state === 'flat') return 'cierre: logo de FLAT (glitch cada 4 s)';
     return `${this.mode} · ${this.recording ? 'grabando' : 'detenido'}`;
   }
@@ -190,8 +215,7 @@ export class Show {
    * Cada artista puede fijar la suya en el panel C.
    */
   artistAnim(n) {
-    const a = this.artists[n - 1] || {};
-    return ANIMS.includes(a.animacion) ? a.animacion : ANIM_BY_KEY[n] || 'muro';
+    return resolveAnim(this.artists[n - 1], n - 1);
   }
 
   /** Qué arranca S (o la voz): en la placa del artista, su animación; si no, lo que había. */
@@ -504,7 +528,7 @@ export class Show {
   // ── artista ──────────────────────────────────────────────────────────────
   goArtist(n) {
     const a = this.artists[n - 1];
-    if (!a) {
+    if (!a?.name?.trim()) {
       this.notify(`No hay artista ${n} (configúralo con C)`);
       return false;
     }
@@ -532,7 +556,7 @@ export class Show {
     // 3 s de gracia: el audio previo (presentación, aplausos) no entra a la transcripción
     const tok = this.loopToken;
     setTimeout(() => tok === this.loopToken && this.state === 'artist' && this.onPrerollReset?.(), 3000);
-    this.notify(`${n} · ${a.name} — S para comenzar`);
+    this.notify(`${artistKey(a, n - 1).toUpperCase()} · ${a.name} — S para comenzar`);
     return true;
   }
 
@@ -551,6 +575,11 @@ export class Show {
       if (dissolve) f.dissolveTitle(2.6); // la persona empezó a hablar: el nombre se borra de a poco
       else f.clearTitle();
     }
+    // lo de la escena anterior no queda congelado en pantalla (p. ej. la partitura al pasar a 0 o a T)
+    const nextFlow = v === 'sedimento' || v === 'partitura' ? v : null;
+    if (f.flowMode !== nextFlow) f.clearFlow();
+    const sameMode = this.state === 'perform' && this.mode === mode && this.variant === v;
+    if (!sameMode && mode !== 'muro') f.clearSparse(); // (el muro ya limpia todo al arrancar)
     f.sparseMode = mode === 'pocas' || v === 'constelacion';
     f.sparseMax = v === 'constelacion' ? 14 : 9;
     f.sparseKeep = mode === 'pocas' ? 10 : 0; // tecla 0: se acumulan 10 párrafos antes de borrar

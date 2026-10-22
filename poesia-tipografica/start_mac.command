@@ -142,19 +142,30 @@ PIDS+=($!)
 caffeinate -dimsu &
 PIDS+=($!)
 
+# Pantalla completa o ventana (sin respuesta en 10 s: pantalla completa). UMBRAL_MODO=P o V no pregunta.
+MODO="${UMBRAL_MODO:-}"
+if [ -z "$MODO" ]; then
+  read -r -t 10 -n 1 -p "¿Pantalla completa (P) o ventana (V)? [en 10 s: pantalla completa] " MODO || true
+  echo
+fi
+case "$MODO" in
+  v|V) CHROME_MODO="--app=http://127.0.0.1:5173/ --window-size=1600,900"; PERFIL=ventana; DESTINO="" ;;
+  *) CHROME_MODO="--kiosk"; PERFIL=kiosk; DESTINO="http://127.0.0.1:5173/" ;;
+esac
+
 for _ in $(seq 1 40); do curl -s -m 1 http://127.0.0.1:5173/ >/dev/null && break; sleep 0.25; done
 
 URL="http://127.0.0.1:5173/"
 if [ -d "/Applications/Google Chrome.app" ]; then
-  open -na "Google Chrome" --args --kiosk --no-first-run --disable-infobars \
+  open -na "Google Chrome" --args $CHROME_MODO --no-first-run --disable-infobars \
     --disable-session-crashed-bubble --overscroll-history-navigation=0 --disable-pinch \
     --autoplay-policy=no-user-gesture-required --disable-features=Translate \
-    --user-data-dir="$PWD/.chrome-kiosk" "$URL"
+    --user-data-dir="$PWD/.chrome-$PERFIL" $DESTINO
 else
   echo "Chrome no está instalado: abro el navegador por defecto (F = pantalla completa)."
   open "$URL"
 fi
 
-say "En marcha. Teclas en la ventana del show: C panel · 1-9 artistas · S grabar · T palabras · L loop."
+say "En marcha. Teclas en la ventana del show: C panel · tecla de cada artista · S grabar · T palabras · L loop."
 echo "Para apagar: cierra esta ventana o Ctrl+C. Para salir del kiosk: Cmd+Q en Chrome."
 wait

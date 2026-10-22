@@ -5,12 +5,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { formatFromUrl, formatLabel } from './frame.js';
+import { artistKey, resolveAnim, RESERVED_KEYS } from './show.js';
 
 const SHORTCUTS = [
   ['C', 'abrir / cerrar este panel'],
   ['→ / ←', 'loop: alterna FLAT ↔ UMBRAL (desde otro paso vuelve a FLAT). Los logos pasan solos en el loop automático'],
   ['T', 'desde el título (o cuando sea): empieza a grabar en modo palabras, hasta elegir artista'],
-  ['1 … 4, 6 … 9', 'placa del artista: cuando empieza a hablar el nombre se borra y arranca la animación (o con S)'],
+  ['tecla del artista', 'la que tiene cada uno en «Artistas» (por defecto 1 … 4, 6 … 9): su placa; cuando empieza a hablar el nombre se borra y arranca la animación (o con S)'],
   ['0', 'sólo transcripción: se borra todo; pocas palabras que arman figuras entre ellas y se rompen con glitch'],
   ['5', 'cierre: todo se desarma y queda el logo de FLAT, que cada 4 s se rompe con glitch y se vuelve a armar'],
   ['S', 'grabar / dejar de grabar (el poema dibuja; lo dibujado queda en pantalla)'],
@@ -25,6 +26,8 @@ export const CADENCE_PRESETS = {
   estrofa: { min_s: 14, palabras: 10, pausa_s: 1.8, max_s: 45 },
   contemplativa: { min_s: 25, palabras: 20, pausa_s: 2.5, max_s: 70 },
 };
+
+const ANIM_NAMES = { clasica: 'clásica', muro: 'muro', cruce: 'cruce', constelacion: 'constelación', sedimento: 'sedimento', partitura: 'partitura' };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
@@ -193,8 +196,11 @@ export class ConfigPanel {
         backend (server.py); si aparece «backend desconectado», arráncalo.</p>
       </section>
       <section>
-        <h2>Artistas (orden = número de tecla)</h2>
+        <h2>Artistas</h2>
+        <p class="hint">Nombre del disertante y la tecla que muestra su placa: una letra o un número. Vacía = su número
+        de orden (1 … 4, 6 … 9). No se pueden usar C, D, F, S, P, T, L, 0 ni 5 (son del show).</p>
         <div data-artists></div>
+        <p class="hint warn" data-artists-msg></p>
         <button data-act="add-artist">+ Agregar artista</button>
       </section>
       <section>
@@ -213,13 +219,14 @@ export class ConfigPanel {
         <h2>Formato de salida</h2>
         <p class="hint">Tamaño del cuadro proyectado. Con un formato fijo la imagen se compone para esa proporción y se
         centra en la ventana (lo que sobra queda negro). Escribe otro como «ancho x alto»; con «@N» los primeros N px
-        del ancho no se usan (un proyector apagado a la izquierda), p. ej. «9600x1080@1920».</p>
+        del ancho no se usan (un proyector apagado a la izquierda), p. ej. «13480x1080@1920».</p>
         <p class="hint" data-formato-url style="display:none"></p>
         <p class="hint" data-ventana></p>
         <div class="row">
           <select data-formato>
             <option value="1822x737">1822 × 737 (FLAT)</option>
-            <option value="9600x1080@1920">9600 × 1080 sin los primeros 1920 (se ven 7680 × 1080)</option>
+            <option value="13480x1080@1920">13480 × 1080 sin los primeros 1920 (se ven 11560 × 1080)</option>
+            <option value="13480x1080">13480 × 1080 completo</option>
             <option value="1920x1080">1920 × 1080</option>
             <option value="pantalla">Pantalla completa</option>
             <option value="otro">Otro…</option>
@@ -322,12 +329,22 @@ export class ConfigPanel {
   render() {
     const s = this.getSettings();
     const artists = s.artists || [];
+    // teclas repetidas: gana el primero; al otro se le avisa
+    const keyIssue = (i) => {
+      const k = artistKey(artists[i], i);
+      if (!k) return 'sin tecla: elegí una letra o un número';
+      const j = artists.findIndex((a, n) => n < i && a?.name?.trim() && artistKey(a, n) === k);
+      return j >= 0 ? `la tecla ${k.toUpperCase()} ya es de «${artists[j].name}»: este no se activa` : '';
+    };
+    const issues = artists.map((a, i) => (a?.name?.trim() ? keyIssue(i) : '')).filter(Boolean);
+    this.$('[data-artists-msg]').textContent = this._keyMsg || issues[0] || '';
+    this._keyMsg = '';
     this.$('[data-artists]').innerHTML = artists
       .map(
         (a, i) => `<div class="item" data-i="${i}">
-          <span class="num">${i < 9 ? i + 1 : i === 9 ? 0 : '–'}</span>
-          <input data-field="artist" value="${esc(a.name)}" placeholder="Nombre del artista">
-          <select data-field="animacion" title="animación al hablar">${[['', 'animación: según el número'], ['clasica', 'clásica (muro + transcripción)'], ['muro', 'muro de tamaños + dibujo'], ['cruce', 'cruce (horizontal/vertical) + dibujo'], ['constelacion', 'constelación + dibujo'], ['sedimento', 'sedimento (caen y se apilan) + dibujo'], ['partitura', 'partitura (carriles que se deslizan) + dibujo']].map(([v, l]) => `<option value="${v}"${(a.animacion || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
+          <input data-field="tecla" class="tecla${keyIssue(i) ? ' bad' : ''}" maxlength="1" value="${esc(a.tecla || '')}" placeholder="${esc(artistKey({}, i).toUpperCase() || '–')}" title="${esc(keyIssue(i) || 'tecla que muestra su placa (letra o número)')}">
+          <input data-field="artist" value="${esc(a.name)}" placeholder="Nombre del disertante">
+          <select data-field="animacion" title="animación al hablar">${[['', `animación: automática (${ANIM_NAMES[resolveAnim({ tecla: a.tecla }, i)]})`], ['clasica', 'clásica (muro + transcripción)'], ['muro', 'muro de tamaños + dibujo'], ['cruce', 'cruce (horizontal/vertical) + dibujo'], ['constelacion', 'constelación + dibujo'], ['sedimento', 'sedimento (caen y se apilan) + dibujo'], ['partitura', 'partitura (carriles que se deslizan) + dibujo']].map(([v, l]) => `<option value="${v}"${(a.animacion || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
           <button data-act="up" title="subir">↑</button><button data-act="down" title="bajar">↓</button>
           <button data-act="del" title="quitar">✕</button></div>`,
       )
@@ -374,7 +391,7 @@ export class ConfigPanel {
     this.$('[data-ventana]').textContent = `Esta ventana mide ${Math.round(innerWidth * dpr)} × ${Math.round(innerHeight * dpr)} px · se usa ${formatLabel()}.`;
     const fu = this.$('[data-formato-url]');
     fu.style.display = formatFromUrl() ? '' : 'none';
-    fu.textContent = formatFromUrl() ? 'Formato fijado por el lanzador (p. ej. start_instalacion_9600.bat): lo de abajo no se usa mientras tanto.' : '';
+    fu.textContent = formatFromUrl() ? 'Formato fijado por el lanzador (p. ej. start_instalacion_13480.bat): lo de abajo no se usa mientras tanto.' : '';
     const pg = this.$('[data-prompt-grilla]');
     if (document.activeElement !== pg) pg.value = s.prompt_grilla || this.defaultPromptGrid || '';
     this.$('select[data-sopt="director"]').value = s.director || 'openai';
@@ -863,6 +880,17 @@ export class ConfigPanel {
     const i = +item.dataset.i;
     if (field === 'artist') {
       this._commit((s) => (s.artists[i].name = t.value), false);
+      return;
+    }
+    if (field === 'tecla') {
+      if (ev.type !== 'input') return;
+      const k = t.value.trim().toLowerCase().slice(0, 1);
+      if (k && (RESERVED_KEYS.has(k) || !/^[\p{L}\p{N}]$/u.test(k))) {
+        this._keyMsg = RESERVED_KEYS.has(k) ? `La tecla ${k.toUpperCase()} es del show (C, D, F, S, P, T, L, 0, 5): elegí otra.` : 'Sólo una letra o un número.';
+        this.render();
+        return;
+      }
+      this._commit((s) => (s.artists[i].tecla = k || undefined));
       return;
     }
     if (field === 'animacion') {

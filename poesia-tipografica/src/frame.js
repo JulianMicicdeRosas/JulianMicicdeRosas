@@ -3,14 +3,14 @@
 
 export const DEFAULT_FORMAT = '1822x737';
 
-// Con '@N' los primeros N px del ancho no se ven (p. ej. '9600x1080@1920': cinco proyectores de 1920 y el primero
-// apagado): la salida ocupa la ventana entera pero todo se compone y se dibuja sólo en los 7680 px restantes.
+// Con '@N' los primeros N px del ancho no se ven (p. ej. '13480x1080@1920': el primer proyector apagado): la salida
+// ocupa la ventana entera pero todo se compone y se dibuja sólo en los 11560 px restantes.
 
-// el lanzador puede fijar el formato en la URL (?formato=9600x1080@1920): manda sobre el panel C
+// el lanzador puede fijar el formato en la URL (?formato=13480x1080@1920): manda sobre el panel C
 const URL_FORMAT = new URLSearchParams(location.search).get('formato');
 let fmt = parseFormat(URL_FORMAT || DEFAULT_FORMAT);
 
-/** '1822x737' / '1822 × 737' / '9600x1080@1920' → {w, h, skip}; 'pantalla' (o cualquier otra cosa) → null = pantalla completa. */
+/** '1822x737' / '1822 × 737' / '13480x1080@1920' → {w, h, skip}; 'pantalla' (o cualquier otra cosa) → null = pantalla completa. */
 export function parseFormat(s) {
   const m = String(s || '').match(/(\d{3,5})\s*[x×X*]\s*(\d{3,5})(?:\s*@\s*(\d{1,5}))?/);
   if (!m) return null;
