@@ -22,7 +22,7 @@ import { DebugPanel } from './debugPanel.js';
 import { localArtDirection, normalizeDirection } from './localDirector.js';
 import { sampleFigure } from './svgSampler.js';
 import { SHAPES } from './shapeLibrary.js';
-import { Show, DEFAULT_SETTINGS } from './show.js';
+import { Show, DEFAULT_SETTINGS, TITULO } from './show.js';
 import { ConfigPanel } from './configPanel.js';
 import { PointCloud } from './pointCloud.js';
 import { Overlay } from './overlay.js';
@@ -52,7 +52,7 @@ const CONFIG = {
   // En Mac (pantallas Retina, equipos sin ventilador) se limita la resolución interna: en el
   // proyector (1x) no cambia nada y en la pantalla del portátil ahorra mucho calor.
   dpr: Math.min(window.devicePixelRatio || 1, num('dpr', /Macintosh|Mac OS X/.test(navigator.userAgent) ? 1.25 : 1.5)),
-  idleText: 'UMBRAL',
+  idleText: 'FLAT',
 };
 
 async function boot() {
@@ -369,7 +369,7 @@ async function boot() {
     }
   }
 
-  // loop de versiones anteriores (FLAT + sponsors + UMBRAL) → nuevo loop de tres grupos de logos
+  // loop de versiones anteriores (FLAT + sponsors + título) → nuevo loop de grupos de logos
   function migrate(s) {
     const old = (s.loop || []).some((st) => st && (st.contenido === 'loop/flat.png' || st.carpeta === 'public/loop/sponsors'));
     if (old) s = { ...s, loop: structuredClone(DEFAULT_SETTINGS.loop) };
@@ -377,6 +377,12 @@ async function boot() {
     if (!s.imagenes_v5) s = { ...s, imagenes: 'grilla', imagenes_v4: true, imagenes_v5: true }; // la ilustración es la grilla de texto
     // ilustraciones: composición abstracta del LLM (no emoji) con tratamiento gráfico
     if (!s.imagenes_v7) s = { ...s, forma_grilla: 'llm', grilla_preset: 'composicion', tratamiento: s.tratamiento || 'azar', imagenes_v7: true };
+    // v8: el título del loop pasa a ser el del ciclo (una sola vez; después se respeta lo escrito en el panel)
+    if (!s.titulo_flat_v8) {
+      const viejo = (v) => /^\s*umbral\s*$/i.test(String(v || ''));
+      const loop = (s.loop || []).map((st) => (st && st.tipo === 'texto' && (viejo(st.contenido) || viejo(st.letras)) ? { ...st, contenido: TITULO, letras: TITULO.toUpperCase() } : st));
+      s = { ...s, loop, titulo_flat_v8: true };
+    }
     return s;
   }
 
@@ -580,7 +586,7 @@ async function boot() {
       // vista previa con el último verso: fuerza el estilo una vez
       const prev = settings.estilos;
       settings = { ...settings, estilos: { activos: [estilo], modo: 'azar' } };
-      applyDirection({ ...localArtDirection(field.corpus.slice(-120) || 'umbral'), modo_visual: 'concreto', verso: field.corpus.slice(-160) });
+      applyDirection({ ...localArtDirection(field.corpus.slice(-120) || 'flat'), modo_visual: 'concreto', verso: field.corpus.slice(-160) });
       settings = { ...settings, estilos: prev };
     },
     onRecord: () => {
@@ -843,7 +849,9 @@ async function boot() {
     field.depth = 80 + 380 * (settings.profundidad ?? 0.45);
     const orbitGoal = pc && field.figure ? settings.orbita ?? 0.6 : 0;
     orbit += (orbitGoal - orbit) * (1 - Math.exp(-dt * 0.35));
-    const yaw = Math.sin(t * 0.055) * 0.55 * orbit + Math.sin(t * 0.043) * 0.015;
+    // en formatos muy anchos el mismo giro corre y deforma mucho los bordes: se achica en proporción
+    const wide = Math.min(1, 2.5 / camera.aspect);
+    const yaw = (Math.sin(t * 0.055) * 0.55 * orbit + Math.sin(t * 0.043) * 0.015) * wide;
     const pitch = Math.sin(t * 0.037) * 0.16 * orbit + Math.sin(t * 0.031) * 0.008;
     camera.position.set(Math.sin(yaw) * Math.cos(pitch) * camDist, Math.sin(pitch) * camDist, Math.cos(yaw) * Math.cos(pitch) * camDist);
     camera.lookAt(0, field.figure ? field.figure.cy * orbit : 0, 0);

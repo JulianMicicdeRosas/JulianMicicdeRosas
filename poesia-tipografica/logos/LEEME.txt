@@ -14,5 +14,5 @@ Fuente: Drive «FLAT 2026 - Logos-2» (categorías de flatfestival.org). Orden d
 Dentro de cada carpeta se muestran en orden alfabético (por eso van numerados 01, 02, …).
 PNG con fondo transparente ideal; JPG con fondo blanco también.
 
-Si en la Mac hay logos en Documentos/Umbral/logos/<grupo>, esos tienen prioridad
+Si en la Mac hay logos en Documentos/Ciclo FLAT/logos/<grupo>, esos tienen prioridad
 (para cambiar un logo sin esperar una versión nueva del programa).

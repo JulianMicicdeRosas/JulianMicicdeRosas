@@ -9,7 +9,7 @@ import { artistKey, resolveAnim, RESERVED_KEYS } from './show.js';
 
 const SHORTCUTS = [
   ['C', 'abrir / cerrar este panel'],
-  ['→ / ←', 'loop: alterna FLAT ↔ UMBRAL (desde otro paso vuelve a FLAT). Los logos pasan solos en el loop automático'],
+  ['→ / ←', 'loop: alterna FLAT ↔ título del ciclo (desde otro paso vuelve a FLAT). Los logos pasan solos en el loop automático'],
   ['T', 'desde el título (o cuando sea): empieza a grabar en modo palabras, hasta elegir artista'],
   ['tecla del artista', 'la que tiene cada uno en «Artistas» (por defecto 1 … 4, 6 … 9): su placa; cuando empieza a hablar el nombre se borra y arranca la animación (o con S)'],
   ['0', 'sólo transcripción: se borra todo; pocas palabras que arman figuras entre ellas y se rompen con glitch'],
@@ -56,7 +56,7 @@ export class ConfigPanel {
     const el = document.createElement('div');
     el.id = 'config';
     el.innerHTML = `
-      <header><h1>Umbral · operación</h1><span class="saved" data-saved></span><button data-act="close">Cerrar (C)</button></header>
+      <header><h1>Ciclo de charlas y talleres FLAT · operación</h1><span class="saved" data-saved></span><button data-act="close">Cerrar (C)</button></header>
       <section>
         <h2>Atajos</h2>
         <dl class="keys">${SHORTCUTS.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
@@ -70,7 +70,7 @@ export class ConfigPanel {
         <h2>Curaduría</h2>
         <p class="hint">Escribe con tus palabras de qué trata la muestra, qué buscas que se vea y qué no. El director de
         arte lo lee antes de cada verso y lo toma como guía principal. Se aplica al siguiente verso.</p>
-        <textarea data-curaduria rows="7" spellcheck="true" placeholder="Ej.: Umbral es una muestra sobre lo que pasa en el borde entre decir y callar. Me interesa que las imágenes sean frágiles, a medio formar, como si la voz las sostuviera. Nada literal ni decorativo; preferir el cuerpo, la casa y el agua. Que el silencio también ocupe lugar."></textarea>
+        <textarea data-curaduria rows="7" spellcheck="true" placeholder="Ej.: El ciclo reúne charlas y talleres sobre arte, sonido y tecnología. Me interesa que las imágenes sean frágiles, a medio formar, como si la voz las sostuviera. Nada literal ni decorativo; preferir el cuerpo, la casa y el agua. Que el silencio también ocupe lugar."></textarea>
       </section>
       <section>
         <h2>Imágenes</h2>
@@ -120,11 +120,11 @@ export class ConfigPanel {
           <span class="unit" data-brand-font>—</span>
         </div>
         <div class="swatches" title="colores del manual FLAT: clic = acento">
-          ${[['#ff9898', 'Ciclo Umbral'], ['#9999ff', 'Ciclo Refracción'], ['#3333cb', 'Cinema Liminal'], ['#cccccc', 'Talleres y charlas'], ['#9900cc', 'Espacio Inmersivo'], ['#30d618', 'Blockchain'], ['#0074ff', 'Hackatón'], ['#ccff00', 'Conexión Sonora'], ['#e6005c', 'Exposición'], ['#8ecddd', 'Órbita Performer']]
+          ${[['#ff9898', 'Rosa'], ['#9999ff', 'Ciclo Refracción'], ['#3333cb', 'Cinema Liminal'], ['#cccccc', 'Talleres y charlas'], ['#9900cc', 'Espacio Inmersivo'], ['#30d618', 'Blockchain'], ['#0074ff', 'Hackatón'], ['#ccff00', 'Conexión Sonora'], ['#e6005c', 'Exposición'], ['#8ecddd', 'Órbita Performer']]
             .map(([c, n]) => `<button data-act="swatch" data-color="${c}" title="${n} ${c}" style="background:${c}"></button>`).join('')}
         </div>
         <p class="hint">Manual de marca FLAT: Geist Mono (títulos, nombres, muro, figuras) y Roboto (texto). Acento por
-        defecto: rosa «Ciclo Umbral». Clic en un color = acento.</p>
+        defecto: rosa (#ff9898); el gris de «Talleres y charlas» es #cccccc. Clic en un color = acento.</p>
         <h2>Cadencia: cada cuánto una imagen nueva</h2>
         <div class="row">
           <select data-cad="preset">
@@ -186,7 +186,7 @@ export class ConfigPanel {
         <div class="vu-info"><span>Transcripción (OpenAI)</span><span data-openai>—</span></div>
         <div class="row"><label><input type="checkbox" data-voz> Placa del artista: cuando la persona empieza a hablar, el nombre se borra y arranca la animación (sin apretar S)</label></div>
         <div class="row">
-          <span>Umbral de voz:</span>
+          <span>Nivel de voz para arrancar:</span>
           <input type="range" min="0.1" max="0.8" step="0.01" data-umbral-voz style="flex:1">
           <span data-umbral-val></span>
         </div>
@@ -205,12 +205,12 @@ export class ConfigPanel {
       </section>
       <section>
         <h2>Loop</h2>
-        <p class="hint">Cada paso: texto (p. ej. UMBRAL) o imagen (ruta dentro de <code>public/</code>, p. ej.
+        <p class="hint">Cada paso: texto (p. ej. el título del ciclo) o imagen (ruta dentro de <code>public/</code>, p. ej.
         <code>loop/flat.png</code>, o subir archivo). «letras» = la figura se forma con letras; «imagen» = se muestra tal cual;
         «título» = texto compuesto en tipografía.</p>
         <div class="row">
           <button data-act="open-logos">Abrir carpeta de logos</button>
-          <span class="unit" data-userdir>Documentos/Umbral/logos</span>
+          <span class="unit" data-userdir>Documentos/Ciclo FLAT/logos</span>
         </div>
         <div data-loop></div>
         <button data-act="add-step">+ Agregar paso</button>
@@ -357,7 +357,7 @@ export class ConfigPanel {
         return `<div class="item step" data-i="${i}">
           <span class="num">${i + 1}</span>
           ${this._tipoSelect(st)}
-          <input data-field="contenido" value="${isData ? '(archivo subido)' : esc(st.contenido)}" ${isData ? 'readonly' : ''} placeholder="${st.tipo === 'imagen' ? 'loop/logo.png' : 'UMBRAL'}">
+          <input data-field="contenido" value="${isData ? '(archivo subido)' : esc(st.contenido)}" ${isData ? 'readonly' : ''} placeholder="${st.tipo === 'imagen' ? 'loop/logo.png' : 'Ciclo de charlas y talleres FLAT'}">
           ${st.tipo === 'imagen' ? '<button data-act="upload">Subir…</button>' : ''}
           <select data-field="render">
             <option value="letras"${st.render === 'letras' ? ' selected' : ''}>letras</option>

@@ -1384,7 +1384,7 @@ export class TypeField {
    */
   _bdText(n) {
     const words = this.corpus.slice(-1600).split(/\s+/).filter(Boolean).slice(-60);
-    if (!words.length) words.push('umbral');
+    if (!words.length) words.push('flat');
     let out = '';
     let k = (Math.random() * words.length) | 0;
     while (out.length < n) out += words[k++ % words.length] + ' ';

@@ -23,11 +23,11 @@ fail() { printf '\n\033[31m[!] %s\033[0m\n' "$*"; read -r -p "Enter para cerrar�
 if ! touch .write_test 2>/dev/null; then
   fail "macOS no deja escribir en $(pwd).
     Opción 1: Ajustes del Sistema → Privacidad y seguridad → Archivos y carpetas (o Acceso total al disco) → Terminal.
-    Opción 2 (recomendada): mover la carpeta a tu carpeta personal, por ejemplo  ~/umbral"
+    Opción 2 (recomendada): mover la carpeta a tu carpeta personal, por ejemplo  ~/ciclo-flat"
 fi
 rm -f .write_test
 case "$(pwd)" in
-  *"Mobile Documents"*|*CloudDocs*) echo "Aviso: la carpeta está en iCloud Drive; si algo falla, muévela a ~/umbral." ;;
+  *"Mobile Documents"*|*CloudDocs*) echo "Aviso: la carpeta está en iCloud Drive; si algo falla, muévela a ~/ciclo-flat." ;;
 esac
 
 # ── Python ≥ 3.10 (el python3 de Xcode suele ser 3.9) ───────────────────────
@@ -142,8 +142,8 @@ PIDS+=($!)
 caffeinate -dimsu &
 PIDS+=($!)
 
-# Pantalla completa o ventana (sin respuesta en 10 s: pantalla completa). UMBRAL_MODO=P o V no pregunta.
-MODO="${UMBRAL_MODO:-}"
+# Pantalla completa o ventana (sin respuesta en 10 s: pantalla completa). FLAT_MODO=P o V no pregunta.
+MODO="${FLAT_MODO:-}"
 if [ -z "$MODO" ]; then
   read -r -t 10 -n 1 -p "¿Pantalla completa (P) o ventana (V)? [en 10 s: pantalla completa] " MODO || true
   echo

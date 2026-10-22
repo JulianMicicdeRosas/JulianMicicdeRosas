@@ -313,15 +313,41 @@ function maskCanvas() {
 }
 
 /**
- * Texto → figura (p. ej. "UMBRAL" o el nombre de un artista hecho de letras).
+ * Texto → figura (p. ej. el título del ciclo o el nombre de un artista hecho de letras).
  * Se dibuja engrosado para que el halftone tenga cuerpo dentro de cada trazo.
  */
-export function sampleText(text, { interiorTarget = 4000, font = '"Cormorant Garamond", Georgia, serif', weight = 500 } = {}) {
-  const lines = String(text || '').split('\n').map((l) => l.trim()).filter(Boolean);
+export function sampleText(text, { interiorTarget = 4000, font = '"Cormorant Garamond", Georgia, serif', weight = 500, aspect = 0 } = {}) {
+  let lines = String(text || '').split('\n').map((l) => l.trim()).filter(Boolean);
   if (!lines.length) return null;
   const ctx = maskCanvas();
   const probe = 200;
   ctx.font = `${weight} ${probe}px ${font}`;
+  // un texto largo de un renglón: se parte en los renglones (1 a 4) con los que se ve más grande en la pantalla
+  // (la figura se ajusta al 84 % del ancho y al 74 % del alto: ver TypeField.formFigure)
+  if (aspect > 0 && lines.length === 1 && lines[0].includes(' ')) {
+    const words = lines[0].split(/\s+/);
+    const total = ctx.measureText(lines[0]).width;
+    let best = lines, bestK = 0;
+    for (let n = 1; n <= Math.min(4, words.length); n++) {
+      const rows = [];
+      let cur = '';
+      for (const w of words) {
+        const next = cur ? `${cur} ${w}` : w;
+        if (cur && ctx.measureText(next).width > total / n && rows.length < n - 1) {
+          rows.push(cur);
+          cur = w;
+        } else cur = next;
+      }
+      rows.push(cur);
+      const widest = Math.max(...rows.map((l) => ctx.measureText(l).width));
+      const k = Math.min(0.74 / (rows.length * 1.02 * probe), (0.84 * aspect) / widest); // alto de letra en pantalla
+      if (k > bestK * 1.05) {
+        bestK = k;
+        best = rows;
+      }
+    }
+    lines = best;
+  }
   const widest = Math.max(...lines.map((l) => ctx.measureText(l).width));
   const lineH = 1.02;
   const size = Math.min((RES * 0.92 * probe) / widest, (RES * 0.86) / (lines.length * lineH));

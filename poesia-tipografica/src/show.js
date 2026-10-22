@@ -31,15 +31,18 @@ export function resolveAnim(a, i) {
   return ANIMS[i % ANIMS.length];
 }
 
+// título del evento: el loop lo escribe en letras después del logo de FLAT y queda fijo hasta T
+export const TITULO = 'Ciclo de charlas y talleres FLAT';
+
 export const DEFAULT_SETTINGS = {
   artists: [{ name: 'Nombre del artista 1' }, { name: 'Nombre del artista 2' }, { name: 'Nombre del artista 3' }, { name: 'Nombre del artista 4' }],
   // Loop hasta que empieza la noche (categorías de flatfestival.org): organizadores → socio cultural (más
-  // tiempo) → patrocinadores → acompañan → embajadas → media partner → UMBRAL. Carpeta vacía = se salta.
-  // Las carpetas se leen de Documentos/Umbral/logos/… (fuera del programa: no se pierden al actualizar).
+  // tiempo) → patrocinadores → acompañan → embajadas → media partner. Carpeta vacía = se salta.
+  // Las carpetas se leen de Documentos/Ciclo FLAT/logos/… (fuera del programa: no se pierden al actualizar).
   loop: [
     // FLAT es el centro del evento: abre el loop. Si falta el PNG (logos/flat), se escribe «FLAT».
     { tipo: 'logos', carpeta: 'logos/flat', imagenes: [], render: 'imagen', duracion: 10, por_pagina: 1, de_a_uno: true, monocromo: true, letras: '', alt: 'FLAT', fondo: true },
-    { tipo: 'texto', contenido: 'UMBRAL', render: 'letras', duracion: 12, letras: 'UMBRAL' },
+    { tipo: 'texto', contenido: TITULO, render: 'letras', duracion: 12, letras: TITULO.toUpperCase() },
     { tipo: 'logos', carpeta: 'logos/organizadores', imagenes: [], render: 'imagen', duracion: 8, por_pagina: 6, de_a_uno: false, monocromo: true, letras: '', alt: 'ORGANIZAN' },
     { tipo: 'logos', carpeta: 'logos/socio-cultural', imagenes: [], render: 'imagen', duracion: 16, por_pagina: 6, de_a_uno: false, monocromo: true, letras: '', alt: 'SOCIO CULTURAL' },
     { tipo: 'logos', carpeta: 'logos/patrocinadores', imagenes: [], render: 'imagen', duracion: 8, por_pagina: 8, de_a_uno: false, monocromo: true, letras: '', alt: 'PATROCINAN' },
@@ -65,7 +68,7 @@ export const DEFAULT_SETTINGS = {
   glitch_ambiente: 0, // 0..1: glitch ocasional también en los otros estilos
   ascii_filas: 40, // resolución de la grilla ASCII
   // marca FLAT (completar con el manual de marca)
-  // Manual de marca FLAT: acento ROSA «Ciclo Umbral» #ff9898, gris #cccccc; Geist Mono + Roboto
+  // Manual de marca FLAT: acento ROSA #ff9898, gris #cccccc; Geist Mono + Roboto
   marca: { base: '#FFFFFF', secundario: '#CCCCCC', acento: '#FF9898', fuente: '', fuente_nombre: '', mayusculas: true, global: true },
   // modo T: muro de palabras
   muro: { tipo: 'grilla', filas: 34, mayusculas: true }, // cada cuánto una imagen: verso | estrofa | contemplativa | personalizada
@@ -132,20 +135,20 @@ export class Show {
     this._addNewLogoGroups();
     this._addFlatStep();
     this._flatLogoCentered();
-    this._umbralAfterFlat();
+    this._titleAfterFlat();
   }
 
-  /** El loop: FLAT → UMBRAL → grupos de logos (las flechas alternan FLAT ↔ UMBRAL). */
-  _umbralAfterFlat() {
+  /** El loop: FLAT → título → grupos de logos (las flechas alternan FLAT ↔ título). */
+  _titleAfterFlat() {
     const loop = this.settings.loop;
-    if (!Array.isArray(loop) || this.settings.loop_umbral_v6) return;
+    if (!Array.isArray(loop) || this.settings.loop_titulo_v7) return;
     const t = loop.findIndex((s) => s && s.tipo === 'texto');
     if (t >= 0) {
-      const [umbral] = loop.splice(t, 1);
+      const [title] = loop.splice(t, 1);
       const f = loop.findIndex((s) => s && s.carpeta === 'logos/flat');
-      loop.splice(f + 1, 0, umbral);
+      loop.splice(f + 1, 0, title);
     }
-    this.settings.loop_umbral_v6 = true;
+    this.settings.loop_titulo_v7 = true;
   }
 
   /** FLAT: su logo al centro con el muro de palabras alrededor (ya no la palabra escrita). */
@@ -264,7 +267,7 @@ export class Show {
     words.push('FLAT');
     const cur = String(this.settings.curaduria || '').replace(/\s+/g, ' ').trim().slice(0, 500);
     if (cur) words.push(cur);
-    return words.filter(Boolean).join('  ') || 'UMBRAL';
+    return words.filter(Boolean).join('  ') || TITULO;
   }
 
   _loopSteps() {
@@ -272,19 +275,15 @@ export class Show {
   }
 
   /**
-   * Flecha derecha: avanza al paso siguiente del loop; desde el último paso pasa al título UMBRAL
-   * (que queda fijo hasta T). Flecha izquierda: paso anterior.
-   */
-  /**
-   * → / ←: alternan FLAT ↔ UMBRAL (desde cualquier otro paso o estado, vuelven a FLAT: el loop empieza de nuevo).
-   * Los grupos de logos pasan sólo en el loop automático, después de UMBRAL.
+   * → / ←: alternan FLAT ↔ título (desde cualquier otro paso o estado, vuelven a FLAT: el loop empieza de nuevo).
+   * Los grupos de logos pasan sólo en el loop automático, después del título.
    */
   step(dir = 1) {
     const steps = this._loopSteps();
     const flat = steps.findIndex((s) => s.tipo === 'logos' && /flat/i.test(s.carpeta || ''));
-    const umbral = steps.findIndex((s) => s.tipo === 'texto');
+    const title = steps.findIndex((s) => s.tipo === 'texto');
     const onFlat = this.state === 'loop' && this.loopIndex === flat;
-    const target = onFlat && umbral >= 0 ? umbral : Math.max(0, flat);
+    const target = onFlat && title >= 0 ? title : Math.max(0, flat);
     if (this.state !== 'loop') {
       this.goLoop(target - 1);
       return;
@@ -365,7 +364,8 @@ export class Show {
       f.showTitle(content);
       return;
     }
-    const fig = kind === 'imagen' ? sampleImage(img, { interiorTarget: this.interiorTarget }) : sampleText(content, { interiorTarget: this.interiorTarget });
+    // un título largo se parte en renglones según la proporción de la pantalla (que se lea grande)
+    const fig = kind === 'imagen' ? sampleImage(img, { interiorTarget: this.interiorTarget }) : sampleText(content, { interiorTarget: this.interiorTarget, aspect: f.W / f.H });
     if (fig) f.formFigure(fig, dir);
     else if (kind === 'imagen') this._showImage(img.src); // logo inutilizable como máscara: mostrarlo tal cual
     else f.showTitle(content);
@@ -489,8 +489,7 @@ export class Show {
   }
 
   // ── título ───────────────────────────────────────────────────────────────
-  /** UMBRAL fijo, calado en el telón de palabras, hasta que se aprieta T. */
-  /** La placa UMBRAL del loop queda fija como título (sin una segunda placa igual) hasta T. */
+  /** La placa del título del loop queda fija (sin una segunda placa igual) hasta T. */
   _holdTitle(name) {
     clearTimeout(this.loopTimer);
     this.loopToken++;
@@ -513,7 +512,7 @@ export class Show {
     f.backdropOnlyShape = false;
     f.clearScene();
     const txt = this._loopSteps().find((s) => s.tipo === 'texto');
-    const name = (txt && txt.contenido) || 'UMBRAL';
+    const name = (txt && txt.contenido) || TITULO;
     f.resetCorpus(this._loopCorpus());
     f.cursorEnabled = false;
     f.setSceneDensity(0.06);

@@ -238,7 +238,7 @@ class SettingsStore:
             "marca", "muro", "formato", "canal", "forma_grilla", "grilla_preset", "tratamiento",
             "inicio_por_voz", "umbral_voz",
             # marcas de migración: que una corrección automática se aplique una sola vez (y no pise lo elegido)
-            "imagenes_v4", "imagenes_v5", "loop_grupos_v2", "loop_flat_v3", "loop_flat_v4", "loop_umbral_v6", "imagenes_v7")
+            "imagenes_v4", "imagenes_v5", "loop_grupos_v2", "loop_flat_v3", "loop_flat_v4", "loop_titulo_v7", "titulo_flat_v8", "imagenes_v7")
 
     def __init__(self, path: str) -> None:
         self.path = path
@@ -268,7 +268,7 @@ class SettingsStore:
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Carpeta del usuario, FUERA del proyecto: actualizar o volver a descargar el programa no borra
-# los logos ni los ajustes. macOS/Windows: Documentos/Umbral (se puede cambiar con UMBRAL_DIR).
+# los logos ni los ajustes. macOS/Windows: Documentos/Ciclo FLAT (se puede cambiar con FLAT_DIR).
 def _documents_dir() -> str:
     """Documentos del usuario. En Windows se pregunta al sistema (suele estar redirigida a OneDrive)."""
     if sys.platform == "win32":
@@ -292,12 +292,21 @@ def _documents_dir() -> str:
 
 
 _docs = _documents_dir()
-USER_DIR = os.path.realpath(os.environ.get("UMBRAL_DIR") or os.path.join(_docs if os.path.isdir(_docs) else os.path.expanduser("~"), "Umbral"))
+_base = _docs if os.path.isdir(_docs) else os.path.expanduser("~")
+USER_DIR = os.path.realpath(os.environ.get("FLAT_DIR") or os.path.join(_base, "Ciclo FLAT"))
+# la carpeta de una versión anterior (logos, ajustes y grabaciones) se renombra una sola vez; si Windows no deja
+# (OneDrive sincronizando, un archivo abierto), se sigue usando la vieja para no perder nada
+_OLD_DIR = os.path.join(_base, "Umbral")
+if not os.environ.get("FLAT_DIR") and not os.path.exists(USER_DIR) and os.path.isdir(_OLD_DIR):
+    try:
+        os.rename(_OLD_DIR, USER_DIR)
+    except OSError:
+        USER_DIR = os.path.realpath(_OLD_DIR)
 LOGO_GROUPS = ("flat", "organizadores", "socio-cultural", "patrocinadores", "acompanan", "embajadas", "media-partner")
 
 
 def ensure_user_dir() -> None:
-    """Crea Documentos/Umbral/logos/<grupo> (ver LOGO_GROUPS) con un LEEME."""
+    """Crea Documentos/Ciclo FLAT/logos/<grupo> (ver LOGO_GROUPS) con un LEEME."""
     try:
         logos = os.path.join(USER_DIR, "logos")
         os.makedirs(logos, exist_ok=True)
@@ -308,7 +317,7 @@ def ensure_user_dir() -> None:
         readme = os.path.join(USER_DIR, "LEEME.txt")
         if not os.path.exists(readme):
             with open(readme, "w", encoding="utf-8") as fh:
-                fh.write("Umbral · carpeta de la muestra (no se borra al actualizar el programa)\n\n"
+                fh.write("Ciclo de charlas y talleres FLAT · carpeta del show (no se borra al actualizar el programa)\n\n"
                          "logos/flat             → abre el loop: el logo de FLAT (centro del evento)\n"
                          "logos/organizadores    → primero\n"
                          "logos/socio-cultural   → segundo (más tiempo en pantalla)\n"
@@ -340,7 +349,7 @@ def _has_images(path: str) -> bool:
 
 
 def _resolve_logo_folder(folder: str) -> str:
-    """Busca la carpeta en Documentos/Umbral y luego en el proyecto, tolerando «socio cultural» /
+    """Busca la carpeta en Documentos/Ciclo FLAT y luego en el proyecto, tolerando «socio cultural» /
     «socio-cultural» / «socio_cultural» y mayúsculas. Sólo dentro de esas dos raíces."""
     folder = (folder or "").strip().strip("/\\")
     found: list[str] = []
@@ -364,7 +373,7 @@ FLAT_LOGO_URL = "https://centroeesonoros.org/wp-content/uploads/2026/08/FLAT-Log
 
 
 def ensure_flat_logo() -> str:
-    """Si no hay logo de FLAT, lo toma de Descargas (FLAT-Logo*.png) o lo baja de la web a Documentos/Umbral/logos/flat."""
+    """Si no hay logo de FLAT, lo toma de Descargas (FLAT-Logo*.png) o lo baja de la web a Documentos/Ciclo FLAT/logos/flat."""
     if _has_images(_resolve_logo_folder("logos/flat") or ""):
         return "ya estaba"
     dest_dir = os.path.join(USER_DIR, "logos", "flat")
@@ -1349,8 +1358,8 @@ GRID_W, GRID_H = 48, 26          # grilla dibujada por el LLM (celda 1 × 2: el 
 LETTER_W, LETTER_H = 64, 30      # arte ASCII con las letras transcriptas (celda ≈ 1 × 1,5, como las letras del muro)
 
 # ── Prompt de la grilla (limpio: sólo lo que el programa usa) ─────────────────────────────────────────
-GRID_BASE = """Eres el director de arte de «Umbral», una instalación de poesía en vivo: una persona lee en voz alta y sus
-palabras forman un muro de texto proyectado. Por cada estrofa eliges UNA imagen que nazca de lo dicho; el programa la
+GRID_BASE = """Eres el director de arte del «Ciclo de charlas y talleres FLAT», una instalación de texto en vivo: una persona
+habla en voz alta y sus palabras forman un muro de texto proyectado. Por cada estrofa eliges UNA imagen que nazca de lo dicho; el programa la
 compone con esas mismas palabras (en positivo, la figura hecha de palabras sobre negro; en negativo, un hueco negro
 con la forma de la figura calado en el muro).
 
@@ -2724,7 +2733,7 @@ async def run_replay(args: argparse.Namespace) -> None:
     start = min(_parse_time(args.desde), max(0.0, duration - 1))
 
     cfg = dataclasses.replace(Config.from_env(), sample_rate=sr)
-    tmp = tempfile.mkdtemp(prefix="umbral-replay-")
+    tmp = tempfile.mkdtemp(prefix="flat-replay-")
     settings_path = os.path.join(tmp, "ajustes.json")
     if os.path.exists(os.path.join(folder, "ajustes.json")):
         shutil.copy2(os.path.join(folder, "ajustes.json"), settings_path)

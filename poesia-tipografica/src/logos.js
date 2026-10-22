@@ -234,7 +234,7 @@ export class LogoStage {
     cancelAnimationFrame(this.anim);
     const { ctx, canvas } = this;
     const W = canvas.width, H = canvas.height;
-    // separación de color con la paleta FLAT: rosa «Ciclo Umbral» y lila «Ciclo Refracción»
+    // separación de color con la paleta FLAT: rosa y lila «Ciclo Refracción»
     const [ca, cb] = this.colors || ['#ff9898', '#9999ff'];
     const layers = [prev, next].map((b) => (b ? { b, r: this._tint(b, ca), c: this._tint(b, cb) } : null));
     const t0 = performance.now();

@@ -2,12 +2,12 @@ Los logos del loop ya NO van acá (se perderían al actualizar el programa).
 
 Van en tu carpeta de Documentos:
 
-  Documentos/Umbral/logos/organizadores     → primero
-  Documentos/Umbral/logos/socio-cultural    → segundo (más tiempo)
-  Documentos/Umbral/logos/patrocinadores    → tercero
-  Documentos/Umbral/logos/acompanan         → cuarto
-  Documentos/Umbral/logos/embajadas         → quinto
-  Documentos/Umbral/logos/media-partner     → sexto
+  Documentos/Ciclo FLAT/logos/organizadores     → primero
+  Documentos/Ciclo FLAT/logos/socio-cultural    → segundo (más tiempo)
+  Documentos/Ciclo FLAT/logos/patrocinadores    → tercero
+  Documentos/Ciclo FLAT/logos/acompanan         → cuarto
+  Documentos/Ciclo FLAT/logos/embajadas         → quinto
+  Documentos/Ciclo FLAT/logos/media-partner     → sexto
 
 El programa crea esas carpetas solo la primera vez que arranca.
 Panel C → Loop → «Abrir carpeta de logos» las abre en el Finder.

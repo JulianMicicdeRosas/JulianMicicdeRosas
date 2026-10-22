@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //  pointCloud.js — Estética "pointcloud" (à la TouchDesigner) para las figuras.
 //
-//  Cada figura (caligrama, UMBRAL, logo) se acompaña de ~80 000 puntos luminosos
+//  Cada figura (caligrama, título, logo) se acompaña de ~80 000 puntos luminosos
 //  muestreados de su máscara y extruidos en Z según la luz volumétrica: un relieve
 //  de puntos que la cámara orbita lentamente. Los puntos viajan de una figura a la
 //  siguiente por una curva Bézier en GPU (sin trabajo de CPU por frame), respiran

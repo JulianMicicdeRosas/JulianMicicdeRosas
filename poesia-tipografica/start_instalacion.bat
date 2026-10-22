@@ -47,7 +47,7 @@ call npm run build || goto :error
 REM si quedó abierta una ejecución anterior, se cierra (si no, el puerto queda ocupado)
 taskkill /FI "WINDOWTITLE eq poesia-backend*" /T /F >nul 2>&1
 taskkill /FI "WINDOWTITLE eq poesia-frontend*" /T /F >nul 2>&1
-taskkill /FI "WINDOWTITLE eq Umbral - re-proyeccion*" /T /F >nul 2>&1
+taskkill /FI "WINDOWTITLE eq FLAT - re-proyeccion*" /T /F >nul 2>&1
 start "poesia-backend" /min cmd /k ".venv\Scripts\python server.py"
 start "poesia-frontend" /min cmd /k "npm run preview"
 timeout /t 4 /nobreak >nul

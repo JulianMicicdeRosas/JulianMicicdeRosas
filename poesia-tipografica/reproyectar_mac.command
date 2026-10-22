@@ -1,6 +1,6 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-#  Umbral — re-proyección de una sesión grabada (Mac)
+#  Ciclo de charlas y talleres FLAT — re-proyección de una sesión grabada (Mac)
 #  Elige la sesión en esta ventana: el audio sale por la salida de sonido de la Mac
 #  y el show se repite igual (mismas palabras, imágenes, teclas y tiempos).
 #  Uso avanzado:  ./reproyectar_mac.command        → elegir de la lista
@@ -22,8 +22,8 @@ PIDS=()
 cleanup() { for p in "${PIDS[@]}"; do kill "$p" 2>/dev/null; done; }
 trap cleanup EXIT INT TERM HUP
 
-# Pantalla completa o ventana (sin respuesta en 10 s: pantalla completa). UMBRAL_MODO=P o V no pregunta.
-MODO="${UMBRAL_MODO:-}"
+# Pantalla completa o ventana (sin respuesta en 10 s: pantalla completa). FLAT_MODO=P o V no pregunta.
+MODO="${FLAT_MODO:-}"
 if [ -z "$MODO" ]; then
   read -r -t 10 -n 1 -p "¿Pantalla completa (P) o ventana (V)? [en 10 s: pantalla completa] " MODO || true
   echo

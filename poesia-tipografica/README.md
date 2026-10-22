@@ -1,4 +1,6 @@
-# Poesía Tipográfica
+# Ciclo de charlas y talleres FLAT
+
+Programa de proyección en vivo para el **Ciclo de charlas y talleres FLAT** (basado en *Poesía Tipográfica*).
 
 Instalación interactiva para proyección mural. Una persona lee poemas frente a un micrófono; cada letra pronunciada
 nace en la pared en el instante en que se dice y, verso a verso, las mismas letras se reorganizan en **caligramas
@@ -57,7 +59,7 @@ Una sola vez, en Terminal:
 brew install python@3.12 node
 brew install ollama            # opcional: director de arte local (Metal, muy rápido en chips M)
 brew install --cask google-chrome   # si no tienes Chrome
-git clone -b claude/lucid-goldberg-asyjj8 https://github.com/JulianMicicdeRosas/JulianMicicdeRosas.git ~/umbral   # fuera del Escritorio/iCloud
+git clone -b claude/lucid-goldberg-asyjj8 https://github.com/JulianMicicdeRosas/JulianMicicdeRosas.git ~/ciclo-flat   # fuera del Escritorio/iCloud
 ```
 
 Después, cada noche: **doble clic en `poesia-tipografica/start_mac.command`** (la primera vez: clic derecho →
@@ -181,12 +183,12 @@ los normales, pero fijan el formato desde el lanzador (manda sobre el panel C, q
 letras para el telón, que a esa proporción tiene cuatro veces más columnas que en el FLAT.
 
 - Por defecto los **primeros 1920 px no se ven** (`13480x1080@1920`). Si ese proyector se usa, editar
-  `start_instalacion_13480.bat` y `reproyectar_13480.bat` y dejar `set UMBRAL_FORMATO=13480x1080` (o elegir «13480 ×
+  `start_instalacion_13480.bat` y `reproyectar_13480.bat` y dejar `set FLAT_FORMATO=13480x1080` (o elegir «13480 ×
   1080 completo» en el panel C si se arranca con el lanzador común).
 - Al abrir, el lanzador pregunta **pantalla completa o ventana** (ver abajo). Pantalla completa necesita que Windows
   vea **una sola pantalla de 13480 × 1080** (NVIDIA Surround o un procesador de video wall). Si Windows ve los
   proyectores como pantallas separadas (escritorio extendido), elegir **ventana**: abre una ventana de 13480 × 1080
-  desde la esquina 0,0 que cruza todas (si el primer proyector no está en 0,0, cambiar `UMBRAL_VENTANA=x,y,ancho,alto`
+  desde la esquina 0,0 que cruza todas (si el primer proyector no está en 0,0, cambiar `FLAT_VENTANA=x,y,ancho,alto`
   en el .bat). La ventana conserva la barra de título.
 - Panel C → Formato de salida muestra cuánto mide la ventana: tiene que decir 13480 × 1080.
 - La placa de video tiene un máximo de 16 384 px por lado: si Windows usa escalado (125 %, 150 %), el programa baja
@@ -201,7 +203,7 @@ letras para el telón, que a esa proporción tiene cuatro veces más columnas qu
 Todos los lanzadores (Windows y Mac, show y re-proyección) preguntan al abrir el navegador: **P** = pantalla completa
 (kiosk, sin bordes) · **V** = ventana (la de 13480 × 1080 en los lanzadores de 13480; si no, una ventana común de
 1600 × 900 que se puede mover y agrandar, y `F` la pone en pantalla completa). Sin respuesta en 10 s abre en pantalla
-completa, así el arranque sin operador sigue funcionando. Para no preguntar: variable `UMBRAL_MODO=P` o `UMBRAL_MODO=V`.
+completa, así el arranque sin operador sigue funcionando. Para no preguntar: variable `FLAT_MODO=P` o `FLAT_MODO=V`.
 
 ## Forma de las ilustraciones
 
@@ -287,7 +289,7 @@ caen pasan por detrás; las palabras grandes del muro no se ponen sobre el verso
 (y si algo nuevo aparece debajo, se rompen); lo que se está borrando con glitch (el nombre de la placa, el telón) se
 apaga en el acto si queda debajo de una palabra nueva.
 
-Se ajusta en panel C → Micrófono («Placa del artista…» y «Umbral de voz»); el comienzo de lo dicho no se pierde
+Se ajusta en panel C → Micrófono («Placa del artista…» y «Nivel de voz para arrancar»); el comienzo de lo dicho no se pierde
 (el backend guarda el último segundo y medio de audio).
 
 **Tecla 0 — sólo transcripción**: se apaga todo en su lugar (sin polvo que cae) y graba. Cada palabra dicha aparece
@@ -303,7 +305,7 @@ regula con `OPENAI_COMMIT_S` en `.env` (más chico = más rápido pero con más 
 ## Grabación de la sesión y re-proyección
 
 **Todo se graba desde que arranca el programa** (no hace falta apretar nada), en
-`Documentos/Umbral/grabaciones/AAAA-MM-DD_HH-MM-SS/`:
+`Documentos/Ciclo FLAT/grabaciones/AAAA-MM-DD_HH-MM-SS/`:
 
 | Archivo | Qué es |
 | --- | --- |
@@ -329,13 +331,13 @@ Para un video fijo, grabar la pantalla durante la re-proyección (OBS).
 ## Operación de la noche
 
 ```
- LOOP (FLAT · logos · UMBRAL, se repite)  ──→──→ (desde el último paso)
+ LOOP (FLAT · título · logos, se repite)  ──→──→ (desde el último paso)
    │  → / ← avanza / retrocede                         ▼
-   │                                          TÍTULO UMBRAL (fijo)
+   │                                       TÍTULO DEL CICLO (fijo)
    │                                                   │ T
    │                                                   ▼
    │                                      PALABRAS (graba sola)
-   │                                                   │ 1…9, 0
+   │                                                   │ tecla del artista
    │                                                   ▼
    │                                    NOMBRE DEL ARTISTA (no graba)
    │                                                   │ S ⇄ S
@@ -344,7 +346,7 @@ Para un video fijo, grabar la pantalla durante la re-proyección (OBS).
 
 | Tecla | Acción |
 | --- | --- |
-| `→` / `←` | loop: paso siguiente / anterior. Desde el último paso, `→` fija el título UMBRAL |
+| `→` / `←` | loop: alterna el logo de FLAT y el título «Ciclo de charlas y talleres FLAT» (que queda fijo) |
 | `T` | empieza a grabar en modo palabras (desde el título o cuando sea), hasta que se elige un artista |
 | tecla del artista | su placa (la tecla elegida en panel C → Artistas; por defecto 1 … 4, 6 … 9): deja de grabar; arranca cuando habla o con `S` |
 | `0` / `5` | sólo transcripción (pocas palabras) / cierre con el logo de FLAT |
@@ -388,10 +390,10 @@ Requisitos: Python 3.10+ (python.org, marcar «Add to PATH»), Node.js LTS y Goo
 ### Manual de marca FLAT (integrado)
 
 Tipografías **Geist Mono** (títulos, nombres, muro, figuras) y **Roboto** (texto), empaquetadas en el programa
-(sin internet). Acento por defecto: **rosa «Ciclo Umbral» `#ff9898`**; el panel C tiene la paleta completa del
-manual (Ciclo Refracción `#9999ff`, Cinema Liminal `#3333cb`, Talleres `#cccccc`, Espacio Inmersivo `#9900cc`,
+(sin internet). Acento por defecto: **rosa `#ff9898`**; el panel C tiene la paleta completa del
+manual (Ciclo Refracción `#9999ff`, Cinema Liminal `#3333cb`, Talleres y charlas `#cccccc`, Espacio Inmersivo `#9900cc`,
 Blockchain `#30d618`, Hackatón `#0074ff`, Conexión Sonora `#ccff00`, Exposición `#e6005c`, Órbita `#8ecddd`).
-El glitch de los logos separa el color en rosa Umbral y lila Refracción.
+El glitch de los logos separa el color en rosa y lila Refracción.
 
 ### Transcripción limpia
 
@@ -402,12 +404,14 @@ descarta y se desvanece. Cada estrofa produce una imagen (nunca queda sólo en f
 ### Loop de logos (hasta que empieza la noche)
 
 Los 39 logos de FLAT 2026 vienen **integrados en el programa** en `poesia-tipografica/logos/` (orden de la «Pirámide de logos»,
-ver `logos/LEEME.txt`). Para cambiar uno sin esperar una versión nueva, ponerlo en **Documentos/Umbral/logos/** (fuera del programa: actualizar o volver a descargar no los borra; los
-ajustes del panel C también viven ahí, en `Documentos/Umbral/ajustes.json`). El programa crea las carpetas solo.
+ver `logos/LEEME.txt`). Para cambiar uno sin esperar una versión nueva, ponerlo en **Documentos/Ciclo FLAT/logos/** (fuera del programa: actualizar o volver a descargar no los borra; los
+ajustes del panel C también viven ahí, en `Documentos/Ciclo FLAT/ajustes.json`). El programa crea las carpetas solo;
+si existe la carpeta de la versión anterior del programa, la renombra a `Ciclo FLAT` la primera vez (con logos, ajustes
+y grabaciones adentro). Otra ubicación: variable `FLAT_DIR`.
 
 **Atajo:** doble clic en `importar_logos.command` — busca la carpeta «FLAT 2026 - Logos…» en Descargas (o la que
 arrastres), reconoce las subcarpetas organizadores / socio cultural / patrocinadores, convierte PDF a PNG y copia
-todo a `Documentos/Umbral/logos/`:
+todo a `Documentos/Ciclo FLAT/logos/`:
 
 | Carpeta | Orden | Tiempo por página (por defecto) |
 | --- | --- | --- |
@@ -419,7 +423,8 @@ todo a `Documentos/Umbral/logos/`:
 | `embajadas` | 5º | 8 s |
 | `media-partner` | 6º | 6 s (vacía = se salta) |
 
-Luego UMBRAL en letras, y vuelve a empezar hasta que se aprieta un número de artista. Cada carpeta se muestra en grilla
+El título «Ciclo de charlas y talleres FLAT» se escribe en letras justo después del logo de FLAT (en uno a cuatro
+renglones, según la proporción de la pantalla); el loop vuelve a empezar hasta que se aprieta la tecla de un artista. Cada carpeta se muestra en grilla
 adaptativa (o «de a uno»); entre logo y logo hay una transición de **glitch** (cortes, separación rojo/cian, bloques).
 Se muestran en orden alfabético: para forzar un orden, numerar los archivos (`01-flat.png`, `02-…`).
 
@@ -475,7 +480,7 @@ Todo se guarda solo en `settings.local.json` junto a `server.py` (y en el navega
 
 ### Estética nube de puntos
 
-Cada figura (caligrama, UMBRAL, logos) se acompaña de ~80 000 puntos (`?points=`) muestreados de su máscara y
+Cada figura (caligrama, título, logos) se acompaña de ~80 000 puntos (`?points=`) muestreados de su máscara y
 extruidos en Z por una luz rasante: un relieve que la cámara orbita lentamente. Los puntos viajan entre figuras
 por curvas en GPU, se deshacen en polvo cuando la figura se suelta y la voz los empuja en profundidad. El brillo se
 normaliza por densidad para que el fondo siga siendo negro absoluto.
