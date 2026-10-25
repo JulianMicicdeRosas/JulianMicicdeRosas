@@ -30,12 +30,12 @@ mirador/
 │   ├── ui.js                  Panel lateral con pestañas
 │   └── main.js                Arranque, bucle, teclado, integración con las diapositivas
 ├── vendor/                    TF.js + pose-detection copiados (funciona sin CDN)
-│   └── movenet/               Modelo MoveNet (se baja con descargar_modelo.*)
+│   └── movenet/               Modelo MoveNet incluido (multipose + singlepose), ~14 MB
 ├── canciones/                 Dejá acá los mp3/wav: se listan solos (no van al repositorio)
 ├── presentacion-scramble.html Diapositivas (logos / artistas / cuenta regresiva) → arranca una performance
 ├── secuencia.js               La secuencia de las diapositivas (antes presets.js)
-├── start_mac.command · start_windows.bat · start_13440.bat   Lanzadores
-├── descargar_modelo.sh / .bat Baja el modelo para usar sin internet
+├── start_mac.command · start_windows.bat · start_8k.bat · start_13440.bat   Lanzadores
+├── descargar_modelo.sh / .bat Reemplaza el modelo por la copia oficial de tfhub (opcional)
 ├── REVISION.md                Qué podía fallar en el programa anterior y cómo quedó
 ├── PLANTILLAS.md              Obras de referencia de cada estética, con enlaces
 └── legado/                    El HTML original (Cuerpo / Señal, entrega 1), solo de consulta
@@ -45,19 +45,17 @@ mirador/
 
 ### Mac (MacBook Air, pruebas)
 
-1. Una vez: `./descargar_modelo.sh` con internet (opcional: si hay internet el modelo se baja solo y queda en caché del navegador).
-2. Doble clic en **`start_mac.command`** (la primera vez: clic derecho → Abrir). Abre Chrome en `http://127.0.0.1:8765`.
-3. En la puerta: elegí **sesión** (o escribí un nombre nuevo), **formato** (para ensayar la sala: `13440 × 1080`, se ve a escala) y **audio**. **Encender**, o **Probar sin cámara** para ver las estéticas con cuerpos simulados.
+1. Doble clic en **`start_mac.command`** (la primera vez: clic derecho → Abrir). Abre Chrome en `http://127.0.0.1:8765`.
+2. En la puerta: elegí **sesión** (o escribí un nombre nuevo), **formato** (para ensayar la sala: `13440 × 1080`, se ve a escala) y **audio**. **Encender**, o **Probar sin cámara** para ver las estéticas con cuerpos simulados.
 
 Permisos: la primera vez Chrome pide cámara y micrófono. Si la cámara no aparece, revisá Ajustes del Sistema → Privacidad y seguridad → Cámara → Google Chrome.
 
 ### Windows (PC de la sala, RTX 3070 Ti)
 
 1. Python 3 (`winget install Python.Python.3.12`) y Chrome o Edge.
-2. Una vez con internet: **`descargar_modelo.bat`**.
-3. Pruebas: **`start_windows.bat`**. Sala: **`start_13440.bat`** (ver abajo).
+2. Pruebas: **`start_windows.bat`**. Sala con salida 8K y splitter: **`start_8k.bat`** (ver abajo).
 
-Sin internet en la sala el programa arranca igual: las librerías están en `vendor/` y el modelo en `vendor/movenet/`. Si falta el modelo y no hay internet, avisa y arranca en **simulación** para que al menos puedas probar imagen y proyección.
+Sin internet en la sala el programa arranca igual: las librerías **y el modelo MoveNet** vienen en `vendor/` (ver `vendor/movenet/LEEME.md`; `descargar_modelo.*` lo reemplaza por la copia oficial de tfhub si querés). Si algo falla con TensorFlow, avisa y arranca en **simulación** para que al menos puedas probar imagen y proyección.
 
 ## El panel (tecla H)
 
@@ -86,17 +84,25 @@ Es el mismo programa con la fuente de audio elegida en la puerta (o `?audio=mic`
 
 Con la tecla `M` alternás el micrófono en cualquier momento. Si una plantilla queda demasiado nerviosa, bajá "Qué mueve la música" o usá el botón *Reacción suave*.
 
-## 7 proyectores Full HD (13440 × 1080)
+## 7 proyectores Full HD con una salida 8K y un splitter
 
-**Lo que la computadora puede y no puede.** Una RTX 3070 Ti tiene 4 salidas (3 DisplayPort + 1 HDMI) y maneja **4 pantallas** simultáneas. Para 7 proyectores hay tres caminos:
+El montaje previsto: **una sola salida de video 8K (7680 × 4320) de la RTX 3070 Ti a un splitter** que recorta 7 ventanas Full HD, una por proyector. Para eso Mirador tiene el modo **mosaico** (Proyección → *Salida 8K a splitter*, o `start_8k.bat`):
 
-1. **Procesador de video wall / splitters** (Datapath Fx4 ×2, Matrox QuadHead2Go ×2, o un procesador que acepte 13440×1080 o 2× 6720×1080): Windows ve una o dos pantallas grandes. Es lo más confiable.
-2. **Segunda placa de video** y escritorio extendido con 7 pantallas en fila (Windows lo permite; NVIDIA Surround en GeForce solo une 3).
-3. **Dos computadoras** (3 + 4 proyectores) corriendo Mirador cada una con la misma sesión, cámaras propias, y las dos recibiendo la misma música por micrófono. Más simple de lo que suena si la coreografía no cruza el borde entre las dos mitades.
+1. El programa compone el panorama de la sala, **13440 × 1080** (7 franjas de 1920 × 1080).
+2. En la salida, cada franja se coloca en una **baldosa** del cuadro 8K. Por defecto: franjas 1‑4 en la fila de arriba (y = 0) y 5‑7 en la segunda (y = 1080), de izquierda a derecha. El resto del cuadro queda negro.
+3. El splitter recorta sus 7 salidas exactamente en esas coordenadas. Si tu splitter usa otra disposición (otro orden, otra fila, centrado), se escribe en *mapa a mano* (una línea `x,y` por franja) y queda guardada en la sesión. Con el **patrón de ajuste** cada baldosa muestra su número y un círculo para comprobar que llega al proyector correcto y sin deformación.
 
-**Cómo abrir la imagen entera.** `start_13440.bat` abre una ventana sin bordes de 13440 × 1080 en la esquina 0,0, que cruza todas las pantallas del escritorio extendido (los proyectores tienen que estar ordenados de izquierda a derecha en Configuración de pantalla de Windows, todos a 1920 × 1080 y **escala 100 %**). Si Windows ve una sola pantalla de 13440 × 1080 (caso 1), cambiá en el .bat a `MIRADOR_KIOSK=1`. Si el primer proyector tiene 40 px extra como en tu montaje anterior, usá `13480x1080`.
+Windows: la pantalla 8K a **7680 × 4320, escala 100 %**, 60 Hz con DSC (HDMI 2.1 o DisplayPort 1.4a de la 3070 Ti) o 30 Hz si el splitter no acepta DSC. Chrome se abre en kiosk sobre esa pantalla y el canvas del programa es exactamente 7680 × 4320. Alternativas que también resuelve el mismo modo: cuadro 7680 × 2160 (si el splitter trabaja en "8K ancho"), o 3840 × 2160 con 2×2 baldosas para un splitter 4K → 4 Full HD.
 
-**Alineación.** Proyección → *Proyectores = 7* y *patrón de ajuste*: cada franja muestra su número y un círculo para ver deformaciones; *fundido de bordes* suaviza solapes. Las esquinas (tecla C) corrigen un keystone global; para keystone por proyector usá el ajuste del propio proyector o el procesador.
+A tener en cuenta con el splitter:
+
+- Verificá si acepta 8K a 60 Hz o solo a 30 Hz, y si fuerza submuestreo de color 4:2:0 (los bordes de las letras y las líneas finas se ven más blandos; en ese caso subí *grosor* en los módulos de línea).
+- Los splitters agregan latencia (1 cuadro o más); con la música por micrófono no se nota, con la cámara sí un poco. No afecta al programa.
+- Para ver qué llega, *ver panorama* en el mismo grupo muestra la imagen seguida (lo que ve el público) en lugar del mosaico (lo que recibe el splitter).
+
+Si en algún momento no hay splitter: `start_13440.bat` abre una ventana de 13440 × 1080 que cruza un escritorio extendido (recordá que la 3070 Ti sola saca 4 pantallas), y la opción B de Proyección reparte por ventanas.
+
+**Alineación.** Las esquinas (tecla C) corrigen un keystone global del panorama antes de cortarlo; para keystone por proyector usá el ajuste del propio proyector o del splitter. *Fundido de bordes* suaviza solapes entre franjas.
 
 **Cámaras y zonas.** Con una cámara, la zona es toda la pared (la cámara se ve "contenida": a 13440 × 1080 una cámara 16:9 ocupa el centro con bandas a los lados; para cubrir todo el ancho con una sola cámara, en Cámaras → disposición *a mano* podés estirar la zona, o aceptar las bandas y usar módulos que no dependan del video). Cuando sumes cámaras, cada una toma una columna: dos cámaras = dos mitades, tres = tres tercios, o rectángulos a mano. MoveNet pierde cuerpos chicos: conviene **una cámara cada 2–3 proyectores**.
 
@@ -105,7 +111,7 @@ Con la tecla `M` alternás el micrófono en cualquier momento. Si una plantilla 
 ## OBS
 
 - **Capturar**: en OBS, *Captura de ventana* de Chrome con método *Windows 10 (1903 y posterior)*, o *Captura de pantalla* del monitor. Chrome se abre con banderas para que siga pintando aunque esté tapado.
-- **Resolución**: NVENC H.264 acepta hasta 4096 px de ancho y HEVC/AV1 hasta 8192: **13440 no se puede codificar por hardware**. Opciones: lienzo de OBS 13440 × 1080 y *resolución de salida* 6720 × 540 (HEVC) o 3840 × 309 (H.264); o dos escenas de 6720 × 1080; o x264 por CPU (pesado). Para documentación de la obra, 3840 de ancho sobra.
+- **Resolución**: con el modo mosaico la pantalla es 7680 × 4320, que NVENC HEVC/AV1 sí codifica (8192 máx.; H.264 solo hasta 4096). Grabar el mosaico tal cual documenta lo que recibe el splitter, no lo que ve el público. Para una grabación "de público" conviene la grabación interna (tecla R) con *ver panorama* activado, o capturar en OBS una segunda instancia/ventana con el panorama. 13440 px de ancho no se codifican por hardware en ningún caso.
 - **Alternativa sin OBS**: tecla `R` graba desde el navegador a `.webm` (VP9) con el audio activo, reescalado a 1920 o 3840 de ancho (Proyección → Grabación). Es liviano y no pierde cuadros por foco de ventana.
 - **Volver a proyectar**: lo más fiel no es el video sino la **sesión**: guardá la sesión y la canción y volvé a correr el programa.
 

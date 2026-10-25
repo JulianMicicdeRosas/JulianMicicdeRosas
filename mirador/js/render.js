@@ -50,8 +50,18 @@ function render(t){
   gl.uniform1f(U(pComp, 'uGlitch'), prof.allowGlitch ? P.fx.glitch : 0); gl.uniform1f(U(pComp, 'uBlocks'), P.fx.glitchBlocks);
   gl.uniform1f(U(pComp, 'uTime'), t); gl.uniform1f(U(pComp, 'uVig'), P.fx.vignette); gl.uniform1f(U(pComp, 'uGamma'), P.fx.gamma);
   gl.uniform1f(U(pComp, 'uFlash'), P.map.blackout ? 0 : AM.flash); gl.uniform1f(U(pComp, 'uSlices'), P.map.slices); gl.uniform1f(U(pComp, 'uBlend'), P.map.blend); drawQuad(pComp);
-  gl.useProgram(pFinal); bindFBO(null); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
-  useTex(0, fbComp.t, pFinal, 'uTex'); gl.uniformMatrix3fv(U(pFinal, 'uH'), false, homography()); drawQuad(pFinal);
+  if (mosaicActive() && fbKey) {
+    // 1) panorama con keystone a un FBO; 2) cada franja a su baldosa del cuadro 8K
+    gl.useProgram(pFinal); bindFBO(fbKey); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+    useTex(0, fbComp.t, pFinal, 'uTex'); gl.uniformMatrix3fv(U(pFinal, 'uH'), false, homography()); drawQuad(pFinal);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, glCanvas.width, glCanvas.height); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.useProgram(pTile); useTex(0, fbKey.t, pTile, 'uTex');
+    const tiles = mosaicTiles(), n = tiles.length, CH = glCanvas.height;
+    for (const t of tiles) { gl.viewport(t.x, CH - t.y - t.h, t.w, t.h); gl.uniform2f(U(pTile, 'uOff'), t.i / n, 0); gl.uniform2f(U(pTile, 'uScale'), 1 / n, 1); drawQuad(pTile); }
+  } else {
+    gl.useProgram(pFinal); bindFBO(null); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+    useTex(0, fbComp.t, pFinal, 'uTex'); gl.uniformMatrix3fv(U(pFinal, 'uH'), false, homography()); drawQuad(pFinal);
+  }
   feedIdx = prev;
   if (typeof pushOutputs === 'function') pushOutputs();
   if (typeof Rec !== 'undefined') Rec.frame();

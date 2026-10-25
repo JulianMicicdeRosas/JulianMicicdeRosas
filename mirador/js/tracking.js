@@ -45,7 +45,21 @@ async function makeDetector(){
     return await poseDetection.createDetector(MN, cfg);
   }
 }
-async function initTF(){ await tf.setBackend('webgl'); await tf.ready(); }
+async function initTF(){
+  // El backend de TF exige una GPU "sin salvedades" (failIfMajorPerformanceCaveat). Si el navegador no la da
+  // (GPU en lista negra, render por software, máquina virtual), le pasamos un contexto propio sin esa exigencia
+  // ANTES de iniciar, porque TF guarda el resultado de la primera prueba.
+  const strict = document.createElement('canvas').getContext('webgl2', { failIfMajorPerformanceCaveat:true }) || document.createElement('canvas').getContext('webgl', { failIfMajorPerformanceCaveat:true });
+  const setCtx = tf.setWebGLContext || (tf.webgl && tf.webgl.setWebGLContext);
+  if (!strict && setCtx) {
+    const cv = document.createElement('canvas'), attrs = { alpha:false, antialias:false, premultipliedAlpha:false, preserveDrawingBuffer:false, depth:false, stencil:false, failIfMajorPerformanceCaveat:false };
+    let v = 2, ctx = cv.getContext('webgl2', attrs); if (!ctx) { v = 1; ctx = cv.getContext('webgl', attrs); }
+    if (!ctx) throw new Error('sin WebGL para TensorFlow');
+    setCtx(v, ctx); try { tf.env().set('HAS_WEBGL', true); tf.env().set('WEBGL_VERSION', v); } catch (e) {}
+    console.warn('TF: WebGL con salvedad de rendimiento (render por software?)');
+  }
+  if (!(await tf.setBackend('webgl'))) throw new Error('el backend WebGL de TensorFlow no inicia'); await tf.ready();
+}
 async function ensureDetector(src){ if (!src.detector && !simMode) src.detector = await makeDetector(); }
 
 async function detectLoop(){

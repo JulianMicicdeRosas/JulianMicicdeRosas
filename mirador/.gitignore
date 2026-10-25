@@ -33,6 +33,7 @@ __pycache__/
 *.flac
 *.ogg
 *.bin
+!vendor/movenet/**/*.bin
 *.gguf
 *.safetensors
 *.pt
@@ -45,9 +46,6 @@ __pycache__/
 *.pek
 
 # Mirador
-vendor/movenet/**/*.json
-vendor/movenet/**/*.bin
-!vendor/movenet/.gitkeep
 canciones/*
 !canciones/.gitkeep
 logs/

@@ -41,7 +41,7 @@ function applyScreens(){
   closeOutputs();
   if (!SC.enabled || SC.list.length < 2) { multiMode = false; virt = null; document.body.classList.remove('multi'); resize(); return; }
   multiMode = true; computeVirtual(); document.body.classList.add('multi');
-  P.map.calibrate = false; uiCanvas.classList.remove('calibrating');
+  P.map.calibrate = false; uiCanvas.classList.remove('calibrating');   // esquinas y mosaico no aplican al reparto por ventanas
   resize(); updateMainOut();
   const cur = SC.details.currentScreen; let blocked = 0;
   SC.order.forEach((si, k) => { const scr = SC.list[si];

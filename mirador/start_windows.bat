@@ -9,6 +9,7 @@ REM    MIRADOR_SALIDA   = 13440x1080 | 1920x1080 | ventana   (formato de salida)
 REM    MIRADOR_VENTANA  = x,y,ancho,alto   (posición y tamaño de la ventana de Chrome)
 REM    MIRADOR_KIOSK    = 1  (pantalla completa kiosk en la pantalla principal)
 REM    MIRADOR_AUDIO    = mic | cancion | off
+REM    MIRADOR_MOSAICO  = 7680x4320  (salida 8K a splitter: ver start_8k.bat)
 REM ─────────────────────────────────────────────────────────────
 setlocal
 cd /d "%~dp0"
@@ -26,6 +27,7 @@ start "Mirador servidor" /min python -m http.server %PORT% --bind 127.0.0.1
 timeout /t 1 /nobreak >nul
 
 set URL=http://127.0.0.1:%PORT%/index.html?salida=%MIRADOR_SALIDA%^&audio=%MIRADOR_AUDIO%
+if not "%MIRADOR_MOSAICO%"=="" set URL=%URL%^&mosaico=%MIRADOR_MOSAICO%
 set CHROME=
 for %%c in ("%ProgramFiles%\Google\Chrome\Application\chrome.exe" "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe" "%LocalAppData%\Google\Chrome\Application\chrome.exe" "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe") do (
   if "%CHROME%"=="" if exist %%c set CHROME=%%c

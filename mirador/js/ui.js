@@ -187,6 +187,18 @@ const UI = {
     if (outputSize().w * 1 > MAX_TEX) { const w = document.createElement('div'); w.className = 'warnbox'; w.textContent = `La GPU no puede renderizar más de ${MAX_TEX} px de ancho: la imagen se escala internamente.`; g.appendChild(w); }
     const gp = this.group(body, 'Proyectores', { desc:'Franjas numeradas en el patrón de ajuste para alinear cada proyector. El fundido suaviza los bordes entre franjas si hay solape.' });
     this.range(gp, P.map, 'slices', 1, 12, 1, 'cantidad'); this.range(gp, P.map, 'blend', 0, .5, .005, 'fundido de bordes'); this.toggle(gp, P.map, 'testGrid', 'patrón de ajuste'); this.toggle(gp, P.map, 'blackout', 'negro (B)');
+    const gm = this.group(body, 'Salida 8K a splitter (mosaico)', { closed:!P.map.mosaic, desc:'Para una sola salida de video (p. ej. 7680×4320) que un splitter reparte en proyectores Full HD: el panorama se corta en franjas (una por proyector) y cada una va a su baldosa del cuadro grande.' });
+    const reM = () => { resize(); buildRefBuffer(); Sessions.touch(); this.refresh(); };
+    this.toggle(gm, P.map, 'mosaic', 'activar mosaico', reM);
+    const szM = { v:`${P.map.mosW}x${P.map.mosH}` }; this.select(gm, szM, 'v', [['7680x4320', '7680 × 4320 (8K)'], ['7680x2160', '7680 × 2160 (8K ancho, 2 filas)'], ['3840x2160', '3840 × 2160 (4K: 2×2 Full HD)'], ['custom', 'otro (editar abajo)']], 'cuadro de salida', v => { const m = v.match(/^(\d+)x(\d+)$/); if (m) { P.map.mosW = +m[1]; P.map.mosH = +m[2]; } reM(); });
+    this.range(gm, P.map, 'mosW', 1920, 16384, 1, 'ancho del cuadro', reM); this.range(gm, P.map, 'mosH', 1080, 16384, 1, 'alto del cuadro', reM);
+    this.range(gm, P.map, 'tileW', 320, 3840, 1, 'ancho de baldosa', reM); this.range(gm, P.map, 'tileH', 180, 2160, 1, 'alto de baldosa', reM);
+    this.range(gm, P.map, 'mosCols', 1, 8, 1, 'baldosas por fila', reM);
+    this.select(gm, P.map, 'mosOrder', [['filas', 'de izquierda a derecha, fila por fila'], ['columnas', 'de arriba a abajo, columna por columna']], 'orden', reM);
+    const mp = this.text(gm, P.map, 'mosMap', 'mapa a mano', true); mp.placeholder = 'una baldosa por línea: x,y  (en px del cuadro)\n0,0\n1920,0\n…  (vacío = automático)'; mp.onchange = () => { P.map.mosMap = mp.value; reM(); };
+    this.toggle(gm, P.map, 'mosPreview', 'ver panorama (no el mosaico)', reM);
+    const tl = mosaicTiles(); this.kv(gm, [['franjas', `${tl.length} de ${Math.round(outputSize().w / tl.length)} × ${outputSize().h} px`], ['baldosas', tl.map(t => `${t.i + 1}:(${t.x},${t.y})`).join(' ')], ['cuadro', `${P.map.mosW} × ${P.map.mosH}` + (P.map.mosW > MAX_TEX || P.map.mosH > MAX_TEX ? ' · supera el tope de la GPU' : '')]]);
+    this.note(gm, 'El splitter tiene que recortar cada ventana Full HD exactamente en esas coordenadas. En Windows: pantalla a 7680 × 4320 (60 Hz con DSC o 30 Hz), escala 100 %, y <code>start_8k.bat</code>. Con <b>patrón de ajuste</b> cada baldosa muestra su número.');
     const gk = this.group(body, 'Esquinas (keystone global)', { closed:true });
     this.toggle(gk, P.map, 'calibrate', 'mover esquinas (C)', v => uiCanvas.classList.toggle('calibrating', v)); this.range(gk, P.map, 'scale', .5, 1.2, .005, 'escala'); this.buttons(gk, [['Reiniciar esquinas', () => { resetCorners(); Sessions.touch(); }]]);
     const gw = this.group(body, 'Ventana', { closed:false });

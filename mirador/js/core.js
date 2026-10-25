@@ -49,7 +49,8 @@ const P_DEFAULT = {
   // mezcla y posproceso
   echo: { mode:'screen', decay:.9, zoom:1.004, rotate:0, drift:0 },
   fx:   { bloom:1, threshold:.42, radius:1.6, chroma:.9, glitch:0, glitchBlocks:38, vignette:.35, gamma:1 },
-  map:  { blackout:false, testGrid:false, calibrate:false, scale:1, slices:1, blend:0 },
+  map:  { blackout:false, testGrid:false, calibrate:false, scale:1, slices:1, blend:0,
+          mosaic:false, mosW:7680, mosH:4320, tileW:1920, tileH:1080, mosCols:4, mosOrder:'filas', mosMap:'', mosPreview:false },
   perf: { targetFps:30, autoScale:true, scene2d:1 },
   // audio
   audio:{ source:'off', gain:1, smooth:.6, react:{ size:.8, glow:.6, bloom:.8, scatter:.5, hue:.3, echo:.4, flash:.3, speed:.5 } },
@@ -85,10 +86,22 @@ function outputSize(){
   return { w: OUT.w, h: OUT.h };
 }
 /* El canvas se ve "contenido" en la ventana si el formato es fijo (previsualización a escala). */
+/* Mosaico 8K: la salida (panorama) se recorta en franjas y se acomoda en un cuadro grande
+   (p. ej. 7680×4320) que un splitter vuelve a repartir en proyectores Full HD. */
+function mosaicActive(){ return !!(P.map.mosaic && !P.map.mosPreview && !(typeof multiMode !== 'undefined' && multiMode)); }
+function mosaicTiles(){
+  const n = Math.max(1, Math.round(P.map.slices)), tw = P.map.tileW | 0 || 1920, th = P.map.tileH | 0 || 1080, cols = Math.max(1, P.map.mosCols | 0 || 1);
+  const out = [];
+  const custom = String(P.map.mosMap || '').trim();
+  if (custom) { custom.split(/[;\n]+/).forEach((pair, i) => { const m = pair.trim().match(/^(-?\d+)\s*[, ]\s*(-?\d+)$/); if (m && i < n) out.push({ i, x:+m[1], y:+m[2], w:tw, h:th }); }); }
+  for (let i = out.length; i < n; i++) { const c = P.map.mosOrder === 'columnas' ? Math.floor(i / Math.max(1, Math.round(P.map.mosH / th))) : i % cols, r = P.map.mosOrder === 'columnas' ? i % Math.max(1, Math.round(P.map.mosH / th)) : Math.floor(i / cols); out.push({ i, x:c * tw, y:r * th, w:tw, h:th }); }
+  return out;
+}
+function canvasSize(){ return mosaicActive() ? { w:P.map.mosW | 0 || 7680, h:P.map.mosH | 0 || 4320 } : outputSize(); }
 function layoutStage(){
-  const o = outputSize(), stage = $('stage'), vw = innerWidth, vh = innerHeight;
+  const o = canvasSize(), stage = $('stage'), vw = innerWidth, vh = innerHeight;
   let cw = vw, ch = vh, left = 0, top = 0;
-  if (OUT.mode !== 'ventana' || (typeof multiMode !== 'undefined' && multiMode)) {
+  if (OUT.mode !== 'ventana' || mosaicActive() || (typeof multiMode !== 'undefined' && multiMode)) {
     const s = Math.min(vw / o.w, vh / o.h); cw = Math.round(o.w * s); ch = Math.round(o.h * s);
     left = Math.round((vw - cw) / 2); top = Math.round((vh - ch) / 2);
   }
@@ -204,11 +217,12 @@ vec3 hsv(float h,float s,float v){vec3 k=vec3(1.,2./3.,1./3.);vec3 p=abs(fract(v
 void main(){vec2 d=gl_PointCoord-.5;float r=dot(d,d);if(r>.25)discard;float a=(1.-r*4.)*v_b;
   float h=fract((uHue+v_z*180.+v_b*uSpread)/360.);gl_FragColor=vec4(hsv(h,.85,1.)*a,a);}`;
 
-let pBlit, pMask, pFeed, pBright, pBlur, pComp, pFinal, pPoints, pSil;
+const VS_TILE = `attribute vec2 a_pos;uniform vec2 uOff,uScale;varying vec2 v_uv;void main(){v_uv=(a_pos*.5+.5)*uScale+uOff;gl_Position=vec4(a_pos,0.,1.);}`;
+let pBlit, pMask, pFeed, pBright, pBlur, pComp, pFinal, pPoints, pSil, pTile;
 try {
   pBlit = prog(FS_BLIT, VS_QUAD); pMask = prog(FS_MASK, VS_QUAD); pFeed = prog(FS_FEED, VS_QUAD);
   pBright = prog(FS_BRIGHT, VS_QUAD); pBlur = prog(FS_BLUR, VS_QUAD); pComp = prog(FS_COMP, VS_QUAD); pFinal = prog(FS_FINAL, VS_KEY);
-  pSil = prog(FS_SIL, VS_QUAD);
+  pSil = prog(FS_SIL, VS_QUAD); pTile = prog(FS_BLIT, VS_TILE);
   if (EXT_VTF) pPoints = prog(FS_POINTS, VS_POINTS);
 } catch (e) { fail('Fallo al compilar shaders: ' + e.message); }
 
@@ -216,7 +230,7 @@ try {
    RECURSOS PERSISTENTES
    ===================================================================== */
 let sceneTex = makeTex(2, 2), skelTex = makeTex(2, 2);
-let fbScene = null, fbFeed = [null, null], fbBright = null, fbB1 = null, fbB2 = null, fbComp = null, fbMask = null;
+let fbScene = null, fbFeed = [null, null], fbBright = null, fbB1 = null, fbB2 = null, fbComp = null, fbMask = null, fbKey = null;
 let MASK_W = 384, MASK_H = 216;
 const maskCv = document.createElement('canvas'), mctx = maskCv.getContext('2d');   // silueta por esqueleto
 let readBuf = new Uint8Array(4);   // lectura CPU de la máscara (garabato, lluvia, grilla)
@@ -241,10 +255,12 @@ function resize(){
   if (scale > capScale) scale = capScale;
   W = Math.max(2, Math.floor(o.w * scale)); H = Math.max(2, Math.floor(o.h * scale)); DPR = W / o.w;
   S2 = clamp(P.perf.scene2d, .3, 1);
-  glCanvas.width = W; glCanvas.height = H; uiCanvas.width = W; uiCanvas.height = H;
+  const cs = canvasSize(); if (mosaicActive()) { glCanvas.width = Math.min(cs.w, MAX_TEX); glCanvas.height = Math.min(cs.h, MAX_TEX); } else { glCanvas.width = W; glCanvas.height = H; }
+  uiCanvas.width = W; uiCanvas.height = H;
   scene.width = Math.max(2, Math.round(W * S2)); scene.height = Math.max(2, Math.round(H * S2));
-  [fbScene, fbFeed[0], fbFeed[1], fbComp, fbBright, fbB1, fbB2, fbMask].forEach(freeFBO);
+  [fbScene, fbFeed[0], fbFeed[1], fbComp, fbBright, fbB1, fbB2, fbMask, fbKey].forEach(freeFBO); fbKey = null;
   fbScene = fboFixed(W, H); fbFeed[0] = fboFixed(W, H); fbFeed[1] = fboFixed(W, H); fbComp = fboFixed(W, H);
+  if (mosaicActive()) fbKey = fboFixed(W, H);
   const hw = Math.max(2, W >> 1), hh = Math.max(2, H >> 1);
   fbBright = fboFixed(hw, hh); fbB1 = fboFixed(hw, hh); fbB2 = fboFixed(hw, hh);
   MASK_H = 216; MASK_W = clamp(Math.round(MASK_H * W / H), 64, Math.min(4096, MAX_TEX));

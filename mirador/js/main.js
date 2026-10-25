@@ -4,7 +4,7 @@
    ===================================================================== */
 let started = false, last = performance.now(), t0 = performance.now(), fpsAcc = 0, fpsN = 0, uiTick = 0;
 const presetParam = urlParams.get('preset'), escenaParam = urlParams.get('escena'), audioParam = urlParams.get('audio');
-const salidaParam = urlParams.get('salida'), sesionParam = urlParams.get('sesion'), returnUrl = urlParams.get('return');
+const salidaParam = urlParams.get('salida'), sesionParam = urlParams.get('sesion'), returnUrl = urlParams.get('return'), mosaicoParam = urlParams.get('mosaico');
 const inIframe = (() => { try { return window.parent && window.parent !== window; } catch (e) { return true; } })();
 
 /* ---------- puerta ---------- */
@@ -58,6 +58,8 @@ async function start(sim){
   if (sess) { Sessions.current = sessName; localStorage.setItem(Sessions.CUR, sessName); await Sessions.apply(sess, { keepCams:true, keepOut:true }); }
   else { applyPlantilla('enjambre', { silent:true }); if (newName) Sessions.create(newName); else Sessions.updateName(); }
   if (escenaParam) applyPlantilla(ESCENA_ALIAS[escenaParam] || escenaParam, { silent:true });
+  if (mosaicoParam && mosaicoParam !== '0') { P.map.mosaic = true; P.map.mosPreview = false; const m = mosaicoParam.match(/^(\d+)x(\d+)$/); if (m) { P.map.mosW = +m[1]; P.map.mosH = +m[2]; }
+    if (P.map.slices < 2 && /^\d+x\d+$/.test(OUT.mode)) P.map.slices = Math.max(1, Math.round(OUT.w / (P.map.tileW || 1920))); resize(); }
   const audioSel = $('gateAudio').value; if (audioSel !== 'off' || P.audio.source !== 'off') { await Audio_.setSource(audioSel !== 'off' ? audioSel : P.audio.source); }
   await Playlist.autoFolder('canciones');
   if (audioParam && audioParam !== 'mic') { Playlist.fromUrlParam(audioParam); Playlist.play(); }

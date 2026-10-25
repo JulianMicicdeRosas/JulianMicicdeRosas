@@ -20,7 +20,7 @@ caffeinate -dimsu &
 CAF=$!
 trap 'kill $SRV $CAF 2>/dev/null; exit 0' INT TERM HUP EXIT
 sleep 1
-URL="http://127.0.0.1:$PORT/index.html?salida=$SALIDA&audio=$AUDIO"
+URL="http://127.0.0.1:$PORT/index.html?salida=$SALIDA&audio=$AUDIO${MIRADOR_MOSAICO:+&mosaico=$MIRADOR_MOSAICO}"
 FLAGS=(--no-first-run --disable-infobars --disable-session-crashed-bubble --overscroll-history-navigation=0 --disable-pinch
   --autoplay-policy=no-user-gesture-required --disable-backgrounding-occluded-windows --disable-renderer-backgrounding
   --disable-background-timer-throttling --disable-features=Translate,IntensiveWakeUpThrottling --user-data-dir="$PWD/.chrome-mirador")
