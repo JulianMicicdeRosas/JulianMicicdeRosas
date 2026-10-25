@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Mirador — cuerpos en movimiento, proyección en vivo</title>
+<link rel="stylesheet" href="css/mirador.css">
+<!-- TensorFlow.js + MoveNet: copia local (vendor/). Si falta, main.js carga la CDN. -->
+<script src="vendor/tf-core.min.js" onerror="window.__vendorMissing=true"></script>
+<script src="vendor/tf-converter.min.js" onerror="window.__vendorMissing=true"></script>
+<script src="vendor/tf-backend-webgl.min.js" onerror="window.__vendorMissing=true"></script>
+<script src="vendor/pose-detection.min.js" onerror="window.__vendorMissing=true"></script>
+</head>
+<body class="panel-hidden">
+
+<!-- Salida -->
+<div id="stage">
+  <canvas id="gl"></canvas>
+  <canvas id="ui"></canvas>
+</div>
+<canvas id="out" hidden></canvas>
+<audio id="track" preload="auto" crossorigin="anonymous"></audio>
+
+<!-- Panel lateral -->
+<aside id="panel" aria-label="Panel de control">
+  <header id="panelHead">
+    <div class="brand"><span class="dot"></span><b>Mirador</b></div>
+    <div id="sessionName" title="Sesión actual">—</div>
+    <button id="panelClose" class="icon" title="Ocultar panel (H)">×</button>
+  </header>
+  <nav id="tabs" role="tablist"></nav>
+  <section id="tabBody"></section>
+  <footer id="panelFoot">
+    <span id="fFps">— fps</span>
+    <span id="fBodies">sin cuerpos</span>
+    <span id="fAudio" class="meter" title="nivel de audio"><i></i></span>
+    <span id="fRec" class="rec" hidden>● REC</span>
+  </footer>
+</aside>
+
+<!-- Avisos -->
+<div id="toast" class="hide"></div>
+<div id="cue"></div>
+<div id="hint">H panel · F pantalla · C esquinas · B negro · X limpiar · R grabar · M micrófono · ␣ canción · 1‑9 plantillas</div>
+
+<!-- Puerta de entrada -->
+<div id="gate">
+  <div class="card">
+    <h1>Mirador</h1>
+    <p class="lead">Proyección en vivo para cuerpos en movimiento. La cámara sigue hasta cinco bailarines por zona y la imagen se arma con módulos que se combinan: partículas, siluetas, lluvia de letras, pintura, ecos.</p>
+
+    <div class="field">
+      <label>Sesión</label>
+      <div class="row">
+        <select id="gateSession"></select>
+        <input id="gateNewName" placeholder="nueva sesión… (nombre)">
+      </div>
+    </div>
+    <div class="field">
+      <label>Formato de salida</label>
+      <div class="row">
+        <select id="gateOut">
+          <option value="ventana">esta ventana (lo que mida)</option>
+          <option value="1920x1080">1920 × 1080 (un proyector / OBS)</option>
+          <option value="13440x1080">13440 × 1080 (7 proyectores Full HD)</option>
+          <option value="13480x1080">13480 × 1080 (7 proyectores + 40 px)</option>
+          <option value="custom">otro…</option>
+        </select>
+        <input id="gateOutW" type="number" placeholder="ancho" hidden>
+        <input id="gateOutH" type="number" placeholder="alto" hidden>
+      </div>
+    </div>
+    <div class="field">
+      <label>Audio</label>
+      <div class="row">
+        <select id="gateAudio">
+          <option value="off">sin reacción al audio</option>
+          <option value="mic">micrófono (reacciona a la música de la sala)</option>
+          <option value="cancion">canción del programa (reacciona a lo que reproduce)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <button id="start" class="primary">Encender</button>
+      <button id="startSim" title="Sin cámara: cuerpos simulados para probar estéticas y el formato">Probar sin cámara</button>
+    </div>
+    <div id="err"></div>
+    <small>Primera carga: baja el modelo de pose (~9 MB) y queda en caché. Para que el navegador dé la cámara, abrí esto por <code>http://localhost</code> (los lanzadores lo hacen solos). Chrome o Edge recomendados.</small>
+  </div>
+</div>
+
+<!-- Diapositivas (presentación) -->
+<div id="slides-overlay" class="hidden">
+  <iframe id="slides-frame" src="presentacion-scramble.html" allow="fullscreen; autoplay" allowfullscreen></iframe>
+</div>
+
+<input type="file" id="jsonInput" accept=".json" hidden>
+<input type="file" id="songInput" accept="audio/*" multiple hidden>
+<input type="file" id="folderInput" webkitdirectory directory multiple accept="audio/*" hidden>
+
+<script src="js/core.js"></script>
+<script src="js/tracking.js"></script>
+<script src="js/modules.js"></script>
+<script src="js/render.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/plantillas.js"></script>
+<script src="js/sessions.js"></script>
+<script src="js/screens.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

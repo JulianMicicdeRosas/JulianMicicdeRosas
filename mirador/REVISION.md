@@ -1,0 +1,53 @@
+# Revisión del código original (Cuerpo / Señal, entrega 1)
+
+Lo que podía no funcionar en el programa anterior, qué pasa con cada punto en **Mirador** y qué queda a cargo tuyo.
+Ordenado por gravedad para la sala inmersiva (7 proyectores Full HD, OBS, 3070 Ti).
+
+## 1. Bloqueantes para 7 proyectores
+
+| # | Problema en el original | Qué pasaba | En Mirador |
+|---|---|---|---|
+| 1 | **El canvas tomaba el tamaño de la ventana por `devicePixelRatio`** (`resize()`: `W = innerWidth × DPR`). En una ventana de 13440 px en un monitor con escala 125–200 % (muy común en Windows) pedía FBOs de 16 800–26 880 px de ancho, por encima de `MAX_TEXTURE_SIZE` (16 384 en RTX 30xx). | Los framebuffers quedan *incompletos* en silencio: pantalla negra o bloom/eco sin efecto, sin ningún error visible. | El tamaño de salida es un **formato fijo** (`13440×1080`, etc.), el DPR del monitor no interviene y todo se acota a `MAX_TEXTURE_SIZE` (`core.js: resize()`). Si el hardware no llega, se escala internamente y se avisa en Proyección. |
+| 2 | **La máscara (silueta) y el esqueleto no coincidían** salvo que el canvas tuviera exactamente la proporción de la cámara. `FS_MASK` muestreaba el video estirado a todo el canvas (`v_uv` directo) mientras el esqueleto usaba el ajuste *cover* de `computeFit()`. En 13440×1080 (12,4:1) el desfase era enorme. | Garabato, niebla, empuje y líneas vivas aparecían corridos y deformados respecto del esqueleto y del cuerpo real. | Las zonas de cámara se calculan **una sola vez** con ajuste *contain* y se usan tanto para el esqueleto como para la máscara (`uScale`/viewport por zona en `modules.js: mask`). Además la máscara por defecto se dibuja **desde el esqueleto**, con lo cual coincide por construcción. |
+| 3 | **La silueta dependía del brillo del video.** En una sala oscura con proyección, la cámara ve la propia proyección: cualquier módulo basado en máscara se realimentaba (la imagen proyectada "era" un cuerpo). | Siluetas fantasma, garabato dibujando la pared, puntos pegados a las zonas brillantes de la proyección. | Nueva fuente de silueta **esqueleto** (cápsulas por hueso + torso + cabeza), insensible a la luz proyectada. Brillo / fondo aprendido siguen disponibles para cuando la cámara ve bien a los cuerpos (luz frontal o IR). |
+| 4 | **La versión multi‑pantalla por ventanas limitaba la imagen virtual a 4096 px** (`computeVirtual(): cap = 4096/(tot×dpr)`). | En 7 pantallas cada proyector recibía una tira de ~585 px escalada a 1920: imagen borrosa. | El tope es el real de la GPU (`MAX_TEX`), y la opción recomendada pasa a ser **una sola ventana de 13440×1080** sobre el escritorio extendido o Surround (`start_13440.bat`). La opción por ventanas queda como alternativa (Proyección → Opción B). |
+| 5 | **La grilla de puntos era N×N** sobre todo el canvas. | En 12,4:1 los puntos quedaban 12 veces más separados en horizontal que en vertical. | La grilla se reparte por proporción (`buildRefBuffer()`), misma densidad en los dos ejes. |
+| 6 | **Nada avisaba si el proyector 1 se apagaba o si había 40 px de más** (en el proyecto anterior usaste 13480). | Había que adivinar la alineación. | Formato `13480×1080` disponible, **patrón de ajuste con franjas numeradas** (1…7) y fundido de bordes opcional (Proyección → Proyectores). |
+
+## 2. Rendimiento (importa en la Mac y también en la 3070 Ti a 13440 px)
+
+| # | Problema | En Mirador |
+|---|---|---|
+| 7 | **La capa 2D (canvas `scene`) se subía entera a la GPU cada cuadro** (`texImage2D` de 13440×1080 ≈ 58 MB/cuadro, ~3,5 GB/s a 60 fps). Es el cuello de botella real en formato ancho, no el shader. | Parámetro **resolución de la capa 2D** (`perf.scene2d`, 0,3–1) que dibuja la capa 2D más chica y la estira en GL; el escalador automático la baja primero. Lo que es GL puro (silueta, puntos, bloom, ecos) no pasa por ahí. |
+| 8 | **El benchmark duraba 150 cuadros fijos**: en una máquina lenta tardaba medio minuto y bloqueaba el arranque con un selector de perfil. | Se mide 90 cuadros **o 4 segundos**, se elige el perfil solo y se puede cambiar en Sistema. Sin diálogo intermedio. |
+| 9 | **`detectLoop` con `maxPoses:5` por cámara a 30 Hz, un detector por cámara.** Con 3 cámaras MultiPose Lightning son ~3×15–25 ms en la 3070 Ti: ocupa el mismo hilo que el render. | Se mantiene el diseño (no hay alternativa en WebGL sin Workers con OffscreenCanvas), pero `inferHz` y `maxPoses` son ajustables y el escalador baja la inferencia al final de la escalera. Para 3+ cámaras: 20 Hz y 3 poses es un buen punto. |
+| 10 | **`gl.readPixels` de la máscara cada 2 cuadros** para el garabato. Es un *stall* de GPU. | Igual, pero compartido: un único productor `maskcpu` sirve a garabato, lluvia de letras, grilla y cenizas; la lectura es de 216 px de alto, no de la salida completa. |
+| 11 | **Fuentes externas**: TF.js, el modelo y lil‑gui venían de CDN en cada carga. Sin internet en la sala no arranca. | TF.js y pose‑detection están **copiados en `vendor/`**; el modelo MoveNet se baja una vez con `descargar_modelo.sh/.bat` a `vendor/movenet/` y se usa desde ahí. Si falta, se intenta la CDN y, si tampoco hay, el programa arranca en **simulación** y lo dice. La interfaz es propia (sin lil‑gui). |
+
+## 3. Lógica y robustez
+
+| # | Problema | En Mirador |
+|---|---|---|
+| 12 | **Error en `rebuildPlan()`**: el `sort` de productores devolvía `1` o `-1` pero nunca `0`, un comparador inconsistente (con más de dos productores el orden podía ser cualquiera). | Comparador de tres valores. Importa ahora porque hay dos productores encadenados (`mask` → `maskcpu`). |
+| 13 | **`guessTier()`** marcaba como débil cualquier Intel "Iris" (incluye Macs antiguas) y no conocía "Apple GPU" (así reporta Chrome en Apple Silicon): la MacBook Air caía en *equilibrado* o *ligero* aunque pueda *completo*. | Reconoce `Apple GPU`, `SwiftShader` (sin aceleración) y usa la medición real para decidir. |
+| 14 | **`learnBackground()` guardaba el fondo pero no cambiaba la fuente**: había que marcar "usar fondo aprendido" aparte; si se cambiaba de cámara el fondo quedaba viejo. | Shift+B aprende y **cambia la fuente a "fondo"**; el fondo es por cámara. |
+| 15 | **La clave `cs.cams` en `localStorage` guardaba `deviceId`s**, que Chrome cambia si se borra el perfil o se usa otro navegador. No había aviso. | Las zonas se guardan en la sesión con `deviceId` y etiqueta; si el id no existe, se usa la primera cámara y la pestaña Cámaras lo muestra. |
+| 16 | **La exportación JSON guardaba `P` y esquinas, pero no cámaras, formato, canciones ni plantilla**; y al cargar hacía `Object.assign` sin validar tipos (un JSON ajeno rompía la escena). | Sesiones completas (`sessions.js`), importación que acepta el JSON viejo y lo convierte en sesión. |
+| 17 | **Teclas G/L registradas con un segundo `keydown`** sin comprobar si el foco estaba en un campo de texto: escribir "g" en la playlist disparaba una descarga. | Un solo manejador que ignora `INPUT/TEXTAREA/SELECT` y Ctrl/Cmd. |
+| 18 | **`presentacion-scramble.html` cargaba `presets.js`** (la secuencia) y el nombre chocaba con "presets" de perfil; `link` apuntaba a `cuerpo-senal-nucleo-e1.html`. | Renombrado a `secuencia.js`; `link` apunta a `index.html`. El protocolo `postMessage` (start‑performance / toggle‑fullscreen / close‑slides) se mantiene. |
+| 19 | **El bloque "Aviso" en lil‑gui era un botón con texto larguísimo**, y el panel de módulos solo mostraba controles del módulo activo (había que prender para ver qué hacía). | Panel propio con pestañas; cada módulo muestra su descripción, su interruptor y sus controles aunque esté apagado. |
+| 20 | **`video.readyState>=2` se usaba como "hay video" en lugares donde la fuente podía ser `null`** al cambiar cámaras (carrera entre `setCameras` y `render`). | `sources` se reemplaza atómicamente al final de `setCameras()`; los módulos toleran zonas sin video (simulación). |
+| 21 | **Autoplay**: `track.play()` sin gesto de usuario falla en Chrome y el error se tragaba (`catch(()=>{})`). | Se avisa con un toast; las canciones se disparan con Espacio/Enter o clic (gesto). |
+| 22 | **Grabar con OBS capturando la ventana de Chrome** pierde cuadros si Chrome deja de pintar al estar tapado o sin foco. | El lanzador abre Chrome con `--disable-backgrounding-occluded-windows` y `--disable-renderer-backgrounding`; además hay **grabación interna** (tecla R, `.webm`) con el audio. Ver README → OBS. |
+
+## 4. Lo que no cambia y conviene saber
+
+- **MoveNet MultiPose Lightning** sigue a 6 personas como máximo por cámara y pierde precisión con cuerpos muy chicos en cuadro (menos de ~1/6 de la altura). Con 7 proyectores y una cámara que cubre toda la sala, los bailarines del fondo salen chicos: conviene **una cámara por 2–3 proyectores** (zonas) o una lente más cerrada.
+- El esqueleto es 2D: no hay profundidad; dos cuerpos que se cruzan intercambian ids por un instante (los colores pueden saltar).
+- En Chrome, cada `getUserMedia` de una cámara USB a 1280×720 consume ancho de banda USB; **tres cámaras en el mismo hub USB 2.0 no entran**: usar puertos distintos o cámaras a 640×480.
+- WebGL 1 sin `float textures`: los ecos acumulan en 8 bits, así que con `permanencia` muy alta aparece banding en los degradados. Es estético; si molesta, bajar `permanencia` o subir `umbral brillo`.
+
+## 5. Límites del hardware y OBS (lo que la computadora no puede hacer por más código que haya)
+
+- **La RTX 3070 Ti saca 4 pantallas simultáneas** (3 DisplayPort + 1 HDMI). Para 7 proyectores Full HD hacen falta: una segunda GPU, o un procesador de video wall / splitters (Datapath Fx4 ×2, Matrox QuadHead2Go ×2), o enviar la imagen por NDI/Spout a otras máquinas. NVIDIA Surround (GeForce) une hasta **3** pantallas en una; Mosaic (hasta 8) es de Quadro/RTX A. Con un procesador de video wall, Windows ve **una** pantalla de 13440×1080 y el programa se abre a pantalla completa normal.
+- **OBS**: el codificador NVENC H.264 acepta hasta 4096 px de ancho y HEVC/AV1 hasta 8192; 13440 px no entra en ningún codificador por hardware. Opciones: grabar el canvas de OBS reescalado a 6720×540 o 3840×309 (misma proporción), o grabar dos mitades (dos salidas), o usar x264 por CPU (muy pesado). Para "foto" de la obra alcanza 3840 de ancho; para re‑proyectar a 13440 conviene grabar la **sesión** (parámetros + música) y volver a correr el programa.

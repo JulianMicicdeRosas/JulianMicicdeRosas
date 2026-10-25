@@ -1,0 +1,54 @@
+
+# --- Agregado al subir a GitHub ---
+# Sistema
+.DS_Store
+
+# Secretos
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.claude/settings.local.json
+
+# Entornos y dependencias
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.next/
+
+# Archivos pesados (quedan en la Mac, no van al repo)
+*.mp4
+*.mov
+*.m4v
+*.avi
+*.mkv
+*.wav
+*.mp3
+*.m4a
+*.aif
+*.aiff
+*.flac
+*.ogg
+*.bin
+*.gguf
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.so
+*.dylib
+*.cfa
+*.pek
+
+# Mirador
+vendor/movenet/**/*.json
+vendor/movenet/**/*.bin
+!vendor/movenet/.gitkeep
+canciones/*
+!canciones/.gitkeep
+logs/
+.chrome-*/
