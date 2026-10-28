@@ -35,9 +35,17 @@ export function processLogo(img, { monocromo = true, maxSide = 900 } = {}) {
   // logo transparente (versión para fondo oscuro): en monocromo, la intensidad sigue al brillo del
   // logo; así lo claro queda hueso y lo oscuro (texto sobre placas, detalles) se lee calado,
   // en lugar de una silueta llena. Se normaliza al punto más claro: un logo todo gris oscuro no se apaga.
-  let lumMax = 0;
+  // Logo oscuro sobre transparente (hecho para fondo claro: texto negro, tinta gris oscura): se invierte, así la
+  // tinta es lo que se enciende. Se decide por el brillo medio de lo opaco.
+  let lumMax = 0, dark = false;
   if (monocromo && !opaque) {
-    for (let o = 0; o < d.length; o += 4) if (d[o + 3] > 128) lumMax = Math.max(lumMax, lum(d, o));
+    let sum = 0, n = 0;
+    for (let o = 0; o < d.length; o += 4) if (d[o + 3] > 128) {
+      sum += lum(d, o);
+      n++;
+    }
+    dark = n > 0 && sum / n < 0.45;
+    for (let o = 0; o < d.length; o += 4) if (d[o + 3] > 128) lumMax = Math.max(lumMax, dark ? 1 - lum(d, o) : lum(d, o));
   }
   // logo oscuro sobre fondo claro → en monocromo, la tinta es lo que se ve
   for (let o = 0; o < d.length; o += 4) {
@@ -46,7 +54,8 @@ export function processLogo(img, { monocromo = true, maxSide = 900 } = {}) {
       const dist = Math.hypot(d[o] - bg[0], d[o + 1] - bg[1], d[o + 2] - bg[2]);
       a *= Math.min(1, Math.max(0, (dist - 24) / 56));
     } else if (lumMax > 0) {
-      a *= Math.min(1, Math.max(0, (lum(d, o) / lumMax - 0.18) / 0.5));
+      const l = dark ? 1 - lum(d, o) : lum(d, o);
+      a *= Math.min(1, Math.max(0, (l / lumMax - 0.18) / 0.5));
     }
     if (monocromo) {
       d[o] = BONE[0];
