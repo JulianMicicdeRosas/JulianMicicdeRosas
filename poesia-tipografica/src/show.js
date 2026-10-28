@@ -33,7 +33,7 @@ export function resolveAnim(a, i) {
 }
 
 // título del evento: el loop lo escribe en letras después del logo de FLAT y queda fijo hasta T
-export const TITULO = 'Ciclo de charlas y talleres FLAT';
+export const TITULO = 'Encuentro con Martel - Futuridades';
 
 export const DEFAULT_SETTINGS = {
   artists: [{ name: 'Nombre del artista 1' }, { name: 'Nombre del artista 2' }, { name: 'Nombre del artista 3' }, { name: 'Nombre del artista 4' }],
@@ -55,7 +55,7 @@ export const DEFAULT_SETTINGS = {
   curaduria: '', // texto curatorial en lenguaje normal (guía principal del director de arte)
   imagenes: 'grilla', // 'grilla' = el LLM devuelve la figura como texto · 'llm' = trazado SVG · 'biblioteca' = curadas
   polaridad: 'alternar', // grilla: positivo | negativo | alternar | llm
-  formato: '1822x737', // salida: 'ANCHOxALTO' (cuadro centrado) o 'pantalla'
+  formato: '1024x768', // salida: 'ANCHOxALTO' (cuadro centrado) o 'pantalla'
   inicio_por_voz: true, // placa del artista: arranca sola cuando la persona habla
   umbral_voz: 0.35,
   forma_grilla: 'llm', // ilustración: 'llm' (composición) · 'emoji' · 'letras'
@@ -456,6 +456,8 @@ export class Show {
     f.flowMode = null;
     f.backdropOnlyShape = false;
     f.clearSparse();
+    f.clearFlow(); // partitura / sedimento: se rompen
+    f.clearWords(); // muro y palabras sueltas: caen con el resto
     f.cursorEnabled = false;
     f.releaseFigure(true);
     f.clearTitle();
@@ -582,7 +584,7 @@ export class Show {
     if (!sameMode && mode !== 'muro') f.clearSparse(); // (el muro ya limpia todo al arrancar)
     f.sparseMode = mode === 'pocas' || v === 'constelacion';
     f.sparseMax = v === 'constelacion' ? 14 : 9;
-    f.sparseKeep = mode === 'pocas' ? 10 : 0; // tecla 0: se acumulan 10 párrafos antes de borrar
+    f.sparseKeep = 0; // tecla 0: pocas palabras que viven unos segundos y se rompen (sin acumular párrafos)
     f.artistWall = v === 'muro' || v === 'cruce';
     f.flowMode = v === 'sedimento' || v === 'partitura' ? v : null;
     f.artistCross = v === 'cruce';

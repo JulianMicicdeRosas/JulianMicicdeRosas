@@ -56,7 +56,7 @@ export class ConfigPanel {
     const el = document.createElement('div');
     el.id = 'config';
     el.innerHTML = `
-      <header><h1>Ciclo de charlas y talleres FLAT · operación</h1><span class="saved" data-saved></span><button data-act="close">Cerrar (C)</button></header>
+      <header><h1>Encuentro con Martel - Futuridades · operación</h1><span class="saved" data-saved></span><button data-act="close">Cerrar (C)</button></header>
       <section>
         <h2>Atajos</h2>
         <dl class="keys">${SHORTCUTS.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
@@ -181,6 +181,9 @@ export class ConfigPanel {
           <select data-channel><option value="1">1</option></select>
           <span class="hint" data-channel-hint></span>
         </div>
+        <p class="hint">Placa multicanal (Focusrite 18i20): se miden todas las entradas a la vez. Hablá al micrófono y
+        hacé clic en la barra que se mueve: ésa es la entrada que va al show.</p>
+        <div class="inputs" data-inputs></div>
         <div class="vu"><i data-vu></i><b data-peak></b></div>
         <div class="vu-info"><span data-db>—</span><span data-signal>—</span></div>
         <div class="vu-info"><span>Transcripción (OpenAI)</span><span data-openai>—</span></div>
@@ -224,7 +227,8 @@ export class ConfigPanel {
         <p class="hint" data-ventana></p>
         <div class="row">
           <select data-formato>
-            <option value="1822x737">1822 × 737 (FLAT)</option>
+            <option value="1024x768">1024 × 768 (por defecto)</option>
+            <option value="1822x737">1822 × 737</option>
             <option value="13480x1080@1920">13480 × 1080 sin los primeros 1920 (se ven 11560 × 1080)</option>
             <option value="13480x1080">13480 × 1080 completo</option>
             <option value="1920x1080">1920 × 1080</option>
@@ -357,7 +361,7 @@ export class ConfigPanel {
         return `<div class="item step" data-i="${i}">
           <span class="num">${i + 1}</span>
           ${this._tipoSelect(st)}
-          <input data-field="contenido" value="${isData ? '(archivo subido)' : esc(st.contenido)}" ${isData ? 'readonly' : ''} placeholder="${st.tipo === 'imagen' ? 'loop/logo.png' : 'Ciclo de charlas y talleres FLAT'}">
+          <input data-field="contenido" value="${isData ? '(archivo subido)' : esc(st.contenido)}" ${isData ? 'readonly' : ''} placeholder="${st.tipo === 'imagen' ? 'loop/logo.png' : 'Encuentro con Martel - Futuridades'}">
           ${st.tipo === 'imagen' ? '<button data-act="upload">Subir…</button>' : ''}
           <select data-field="render">
             <option value="letras"${st.render === 'letras' ? ' selected' : ''}>letras</option>
@@ -491,6 +495,45 @@ export class ConfigPanel {
     csel.value = String(cur);
     csel.disabled = n <= 1;
     this.$('[data-channel-hint]').textContent = n > 1 ? `${n} entradas en este dispositivo` : 'una sola entrada';
+  }
+
+  /** Nivel de cada entrada de la placa (lo manda el backend ~8 veces por segundo): barras, clic = elegir. */
+  setInputs(m) {
+    const box = this.$('[data-inputs]');
+    if (!box || !this.isOpen) return;
+    const n = m.n || 0, cur = m.current || 1;
+    if (n <= 1) {
+      box.innerHTML = '';
+      return;
+    }
+    if (box.childElementCount !== n) {
+      box.innerHTML = Array.from({ length: n }, (_, k) => `<button class="in" data-act="pick-input" data-ch="${k + 1}" title="entrada ${k + 1}"><i></i><b></b><span>${k + 1}</span></button>`).join('');
+      this.inputsN = n;
+    }
+    const csel = this.$('[data-channel]');
+    if (csel && csel.options.length !== n) {
+      // la cantidad real de entradas abiertas manda sobre lo que declaró la lista de dispositivos
+      csel.innerHTML = Array.from({ length: n }, (_, k) => `<option value="${k + 1}">${k + 1}</option>`).join('');
+      csel.disabled = false;
+      csel.value = String(Math.min(n, cur));
+    }
+    if (this.inputsCur !== cur) {
+      this.inputsCur = cur;
+      this.currentChannel = cur;
+      if (csel) csel.value = String(cur);
+      this.$('[data-channel-hint]').textContent = `${n} entradas · va al show la ${cur}`;
+    }
+    this.inputsHold = this.inputsHold || new Float32Array(32);
+    box.querySelectorAll('button.in').forEach((b, k) => {
+      const db = m.db?.[k] ?? -90;
+      const h = Math.max(0, Math.min(1, (db + 60) / 60));
+      b.firstElementChild.style.height = `${Math.round(h * 100)}%`;
+      const hold = Math.max(h, (this.inputsHold[k] || 0) * 0.92); // pico que baja despacio, para verlo
+      this.inputsHold[k] = hold;
+      b.children[1].style.bottom = `${Math.round(hold * 100)}%`;
+      b.classList.toggle('cur', k + 1 === cur);
+      b.classList.toggle('hot', db > -40);
+    });
   }
 
   setDevices(devices, current, channel) {
@@ -683,7 +726,7 @@ export class ConfigPanel {
   }
 
   _click(ev) {
-    const act = ev.target?.dataset?.act;
+    const act = ev.target?.closest?.('[data-act]')?.dataset?.act; // el clic puede caer en un hijo del botón
     if (!act) return;
     const item = ev.target.closest('.item');
     const i = item ? +item.dataset.i : -1;
@@ -694,6 +737,16 @@ export class ConfigPanel {
       [arr[i], arr[j]] = [arr[j], arr[i]];
     };
     if (act === 'close') this.toggle(false);
+    else if (act === 'pick-input') {
+      const ch = +ev.target.closest('button').dataset.ch;
+      this.currentChannel = ch;
+      this.inputsCur = ch;
+      const csel = this.$('[data-channel]');
+      if (csel && csel.options.length >= ch) csel.value = String(ch);
+      this.peak = 0;
+      this.onChannel?.(ch);
+      this.flashSaved();
+    }
     else if (act === 'devices') this.requestDevices();
     else if (act === 'show-prompt') this.onShowPrompt?.(this.$('[data-grid-text]')?.value || '');
     else if (act === 'add-artist') this._commit((s) => (s.artists = [...(s.artists || []), { name: '' }]));

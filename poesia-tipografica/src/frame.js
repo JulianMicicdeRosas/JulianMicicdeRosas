@@ -1,7 +1,7 @@
 // Formato de salida: un cuadro de proporción fija (p. ej. 1822 × 737) centrado en la ventana, o pantalla completa.
 // Todas las capas (WebGL, logos, imágenes) leen el mismo rectángulo; fuera de él queda negro.
 
-export const DEFAULT_FORMAT = '1822x737';
+export const DEFAULT_FORMAT = '1024x768';
 
 // Con '@N' los primeros N px del ancho no se ven (p. ej. '13480x1080@1920': el primer proyector apagado): la salida
 // ocupa la ventana entera pero todo se compone y se dibuja sólo en los 11560 px restantes.

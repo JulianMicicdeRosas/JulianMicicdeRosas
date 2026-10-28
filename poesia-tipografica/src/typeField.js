@@ -1636,7 +1636,9 @@ export class TypeField {
   /** Nombre de artista (o cualquier título) compuesto con letras que vuelan desde el campo. */
   showTitle(text, { cy = 0, maxSize = 0.13 } = {}) {
     this.clearTitle();
-    const words = this._u(String(text || '')).trim().split(/\s+/).filter(Boolean);
+    // un guion entre espacios parte el renglón ahí (título «Encuentro con Martel - Futuridades»)
+    const segs = this._u(String(text || '')).split(/\s[-–—]\s|\n/).map((x) => x.trim().split(/\s+/).filter(Boolean)).filter((x) => x.length);
+    const words = segs.flat();
     if (!words.length) return;
     const atlas = this.atlas;
     const tk = this.brandAll ? 'brand' : 'serif'; // títulos y destacados: Geist Mono
@@ -1647,19 +1649,22 @@ export class TypeField {
     for (let attempt = 0; attempt < 12; attempt++) {
       const maxW = this.W * 0.86, space = S * 0.3;
       rows = [];
-      let cur = [], cw = 0, fits = true;
-      for (const w of words) {
-        const ww = widthOf(w, S);
-        if (ww > maxW) fits = false;
-        if (cur.length && cw + space + ww > maxW) {
-          rows.push(cur);
-          cur = [];
-          cw = 0;
+      let fits = true;
+      for (const seg of segs) {
+        let cur = [], cw = 0;
+        for (const w of seg) {
+          const ww = widthOf(w, S);
+          if (ww > maxW) fits = false;
+          if (cur.length && cw + space + ww > maxW) {
+            rows.push(cur);
+            cur = [];
+            cw = 0;
+          }
+          cw += (cur.length ? space : 0) + ww;
+          cur.push(w);
         }
-        cw += (cur.length ? space : 0) + ww;
-        cur.push(w);
+        if (cur.length) rows.push(cur);
       }
-      if (cur.length) rows.push(cur);
       if (fits && rows.length * S * 1.05 <= this.H * 0.62) break;
       S *= 0.86;
     }

@@ -294,6 +294,58 @@ body.hide-cursor * {
   padding: 5px 8px;
   font: inherit;
 }
+#config .inputs {
+  display: flex;
+  gap: 4px;
+  align-items: flex-end;
+  height: 64px;
+  margin: 6px 0 10px;
+}
+#config .inputs button.in {
+  position: relative;
+  flex: 1;
+  min-width: 18px;
+  height: 100%;
+  padding: 0;
+  background: #111110;
+  border: 1px solid #34322e;
+  cursor: pointer;
+}
+#config .inputs button.in i {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 14px;
+  height: 0;
+  max-height: calc(100% - 16px);
+  background: #4f8a5a;
+}
+#config .inputs button.in.hot i {
+  background: #7ed08c;
+}
+#config .inputs button.in b {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  height: 2px;
+  margin-bottom: 14px;
+  background: #e3a14b;
+}
+#config .inputs button.in span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  font: 10px/14px 'IBM Plex Mono', Consolas, monospace;
+  color: #8c8984;
+  text-align: center;
+}
+#config .inputs button.in.cur {
+  border-color: #e3a14b;
+}
+#config .inputs button.in.cur span {
+  color: #e3a14b;
+}
 #config .item input.tecla {
   width: 2.4em;
   text-align: center;

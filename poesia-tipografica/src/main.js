@@ -116,6 +116,9 @@ async function boot() {
     return st;
   }
 
+  // columnas de la grilla de tonos (celdas 1 × 2): en 4:3 no puede ser más ancha que el cuadro
+  const toneCols = (gh) => Math.min(gh * 3, Math.round(gh * 2 * (field.W / field.H) * 0.85));
+
   function applyDirection(raw) {
     clearTimeout(pendingDirection);
     let dir = normalizeDirection(raw);
@@ -144,7 +147,7 @@ async function boot() {
     if ((settings.imagenes || 'grilla') === 'grilla' || raw.forzar_grilla) {
       // ilustración en grilla de texto: compuesta con las palabras del muro (positivo o negativo)
       // fuente de la imagen → tonos con la resolución del muro → tratamiento gráfico → muro de palabras
-      const gh = field.bdRows, gw = gh * 3;
+      const gh = field.bdRows, gw = toneCols(gh);
       const re = raw.grilla_origen === 'reintento' ? ' (2.º intento)' : '';
       const src = (tone, origen) => (tone ? { tone, origen } : null);
       const comp = () => (Array.isArray(raw.formas) && raw.formas.length ? src(figureToTone(composeFigure(raw.formas), gw, gh), `composición del LLM (${raw.formas.length} formas)${re}`) : null);
@@ -224,7 +227,7 @@ async function boot() {
    * Máscara (SVG, emoji o biblioteca) → grilla de '#'/'.' con celdas el doble de altas que anchas.
    * Cobertura promediada (bordes sin dientes) y un pase de suavizado: sin celdas sueltas ni agujeritos.
    */
-  function maskToGrid(fig, gw = field.bdRows * 3, gh = field.bdRows, alto = 0.8) {
+  function maskToGrid(fig, gw = toneCols(field.bdRows), gh = field.bdRows, alto = 0.8) {
     if (!fig || !fig.mask) return null;
     const R = 512, bb = fig.bbox || { x: 0, y: 0, w: R, h: R };
     // la figura ocupa ~80 % del alto; el ancho respeta la proporción real (cada celda cubre cell/2 × cell)
@@ -385,6 +388,13 @@ async function boot() {
       const loop = (s.loop || []).map((st) => (st && st.tipo === 'texto' && (viejo(st.contenido) || viejo(st.letras)) ? { ...st, contenido: TITULO, letras: TITULO.toUpperCase() } : st));
       s = { ...s, loop, titulo_flat_v8: true };
     }
+    // v9: el título pasa a «Encuentro con Martel - Futuridades» y el formato por defecto a 1024 × 768 (una vez)
+    if (!s.titulo_v9) {
+      const viejo = (v) => /^\s*(umbral|ciclo de charlas y talleres flat)\s*$/i.test(String(v || ''));
+      const loop = (s.loop || []).map((st) => (st && st.tipo === 'texto' && (viejo(st.contenido) || viejo(st.letras)) ? { ...st, contenido: TITULO, letras: TITULO.toUpperCase() } : st));
+      s = { ...s, loop, titulo_v9: true };
+    }
+    if (!s.formato_v9) s = { ...s, formato: s.formato === '1822x737' ? '1024x768' : s.formato, formato_v9: true };
     return s;
   }
 
@@ -556,6 +566,7 @@ async function boot() {
       warnOperator(m.status || {});
     },
     devices: (m) => config.setDevices(m.devices, m.current, m.channel),
+    inputs: (m) => config.setInputs(m),
     settings: () => {},
     logos: (m) => {
       logoRequests.get(m.id)?.(m.logos || []);
@@ -571,7 +582,7 @@ async function boot() {
       // tecla 0: una pausa de más de 1 s empieza un párrafo nuevo
       if (show.mode === 'pocas') {
         const now = performance.now();
-        if (m.state === 'started' && now - lastSpeechStop > 1000) field.newParagraph();
+        if (m.state === 'started' && field.sparseKeep > 0 && now - lastSpeechStop > 1000) field.newParagraph();
         if (m.state === 'stopped') lastSpeechStop = now;
       }
     },

@@ -1,6 +1,6 @@
 @echo off
 REM ─────────────────────────────────────────────────────────────
-REM  Ciclo de charlas y talleres FLAT — instalación en 13480 x 1080
+REM  Encuentro con Martel - Futuridades — instalación en 13480 x 1080
 REM  El primer proyector (los primeros 1920 px, a la izquierda) está apagado:
 REM  todo se compone y se ve en los 11560 x 1080 restantes.
 REM  Si ese proyector se usa, cambiar la línea de abajo por:  set FLAT_FORMATO=13480x1080

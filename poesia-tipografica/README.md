@@ -1,6 +1,7 @@
-# Ciclo de charlas y talleres FLAT
+# Encuentro con Martel - Futuridades
 
-Programa de proyección en vivo para el **Ciclo de charlas y talleres FLAT** (basado en *Poesía Tipográfica*).
+Programa de proyección en vivo para **«Encuentro con Martel - Futuridades»**, del festival FLAT (basado en *Poesía
+Tipográfica*). Salida por defecto: **1024 × 768**.
 
 Instalación interactiva para proyección mural. Una persona lee poemas frente a un micrófono; cada letra pronunciada
 nace en la pared en el instante en que se dice y, verso a verso, las mismas letras se reorganizan en **caligramas
@@ -157,10 +158,11 @@ el driver, como pares de entradas («Analogue 1 + 2», «Analogue 3 + 4»…) o 
 En el panel C → Micrófono:
 
 1. Elegir el dispositivo Focusrite del tipo **MME** o **Windows WASAPI** (WDM-KS suele fallar).
-2. En **«Entrada de la placa»** elegir dónde está el micrófono: en «Analogue 3 + 4» la entrada 1 es la 3 de la placa
-   y la 2 es la 4; en el dispositivo de 18 entradas es el número directo.
-3. Hablar y mirar el vúmetro. `diagnostico_windows.bat` graba todas las entradas a la vez y muestra el nivel de cada una
-   (con una flecha en la elegida): sirve para encontrar en qué entrada está la voz.
+2. Debajo de «Entrada de la placa» aparece **una barra por cada entrada de la placa**, midiendo todas a la vez (el
+   programa abre todas las entradas y manda al show sólo la elegida). Hablar al micrófono y **hacer clic en la barra
+   que se mueve**: ésa queda elegida al instante (sin reabrir la placa) y se guarda. En «Analogue 3 + 4» la entrada 1
+   es la 3 de la placa y la 2 es la 4; en el dispositivo de 18/20 entradas es el número directo.
+3. `diagnostico_windows.bat` hace lo mismo desde la consola (2 s de grabación con el nivel de cada entrada).
 
 Micrófono de condensador: activar **48V** en la placa. Ganancia: que la voz normal pique entre −18 y −10 dBFS; sin
 «Air» ni «Inst». Desactivar en Windows las «mejoras de audio» de la Focusrite. También se puede fijar en `.env`:
@@ -168,7 +170,7 @@ Micrófono de condensador: activar **48V** en la placa. Ganancia: que la voz nor
 
 ## Formato de salida
 
-Panel C → **Formato de salida**: 1822 × 737 (por defecto, la pantalla del FLAT), 1920 × 1080, pantalla completa u
+Panel C → **Formato de salida**: **1024 × 768** (por defecto), 1822 × 737, 1920 × 1080, pantalla completa u
 otro («ancho x alto»). Con formato fijo todo se compone para esa proporción y se centra en la ventana; lo que sobra
 queda negro. El muro de palabras, el título, los nombres y la transcripción quedan centrados en el cuadro.
 
@@ -317,10 +319,9 @@ Se ajusta en panel C → Micrófono («Placa del artista…» y «Nivel de voz p
 (el backend guarda el último segundo y medio de audio).
 
 **Tecla 0 — sólo transcripción**: se apaga todo en su lugar (sin polvo que cae) y graba. Cada palabra dicha aparece
-alineada a la grilla, en tamaño mínimo o 2× / 3× (todo un 30 % más grande que el muro), sobre el trazado de una figura (círculo, espiral, diagonal, onda,
-columna o constelación) que se renueva con cada párrafo; líneas finas las unen. **Las palabras se quedan y se
-acumulan**: cada pausa larga (más de 1 s) empieza un párrafo nuevo en otra zona de la pantalla, y recién cuando hay
-10 párrafos el más viejo se rompe con glitch. S detiene / retoma; L vuelve al loop.
+alineada a la grilla, en tamaño mínimo o 2× / 3× (todo un 30 % más grande que el muro), sobre el trazado de una figura
+(círculo, espiral, diagonal, onda, columna o constelación) que se renueva cada 7–10 palabras; líneas finas las unen.
+Quedan a lo sumo 9 palabras: cada una vive 7–12 s y se rompe con glitch. S detiene / retoma; L vuelve al loop.
 
 **Las palabras aparecen mientras se habla** (no al terminar la frase): el backend corta el audio en la primera
 micro-pausa después de 1,8 s de habla continua (o a los 4 s como máximo) y OpenAI devuelve ese tramo enseguida. Se
@@ -370,7 +371,7 @@ Para un video fijo, grabar la pantalla durante la re-proyección (OBS).
 
 | Tecla | Acción |
 | --- | --- |
-| `→` / `←` | loop: alterna el logo de FLAT y el título «Ciclo de charlas y talleres FLAT» (que queda fijo) |
+| `→` / `←` | loop: alterna el logo de FLAT y el título «Encuentro con Martel - Futuridades» (que queda fijo) |
 | `T` | empieza a grabar en modo palabras (desde el título o cuando sea), hasta que se elige un artista |
 | tecla del artista | su placa (la tecla elegida en panel C → Artistas; por defecto 1 … 4, 6 … 9): deja de grabar; arranca cuando habla o con `S` |
 | `0` / `5` | sólo transcripción (pocas palabras) / cierre con el logo de FLAT |
@@ -447,7 +448,7 @@ todo a `Documentos/Ciclo FLAT/logos/`:
 | `embajadas` | 5º | 8 s |
 | `media-partner` | 6º | 6 s (vacía = se salta) |
 
-El título «Ciclo de charlas y talleres FLAT» se escribe en letras justo después del logo de FLAT (en uno a cuatro
+El título «Encuentro con Martel - Futuridades» se escribe en letras justo después del logo de FLAT (en uno a cuatro
 renglones, según la proporción de la pantalla); el loop vuelve a empezar hasta que se aprieta la tecla de un artista. Cada carpeta se muestra en grilla
 adaptativa (o «de a uno»); entre logo y logo hay una transición de **glitch** (cortes, separación rojo/cian, bloques).
 Se muestran en orden alfabético: para forzar un orden, numerar los archivos (`01-flat.png`, `02-…`).

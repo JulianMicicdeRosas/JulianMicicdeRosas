@@ -1,6 +1,6 @@
 @echo off
 REM ─────────────────────────────────────────────────────────────
-REM  Ciclo de charlas y talleres FLAT — re-proyección de una sesión grabada (Windows)
+REM  Encuentro con Martel - Futuridades — re-proyección de una sesión grabada (Windows)
 REM  Elige la sesión en la ventana «FLAT - re-proyeccion»: el audio
 REM  sale por la salida de sonido de Windows y el show se repite igual.
 REM ─────────────────────────────────────────────────────────────

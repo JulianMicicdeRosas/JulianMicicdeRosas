@@ -238,7 +238,7 @@ class SettingsStore:
             "marca", "muro", "formato", "canal", "forma_grilla", "grilla_preset", "tratamiento",
             "inicio_por_voz", "umbral_voz",
             # marcas de migración: que una corrección automática se aplique una sola vez (y no pise lo elegido)
-            "imagenes_v4", "imagenes_v5", "loop_grupos_v2", "loop_flat_v3", "loop_flat_v4", "loop_titulo_v7", "titulo_flat_v8", "imagenes_v7")
+            "imagenes_v4", "imagenes_v5", "loop_grupos_v2", "loop_flat_v3", "loop_flat_v4", "loop_titulo_v7", "titulo_flat_v8", "titulo_v9", "formato_v9", "imagenes_v7")
 
     def __init__(self, path: str) -> None:
         self.path = path
@@ -317,7 +317,7 @@ def ensure_user_dir() -> None:
         readme = os.path.join(USER_DIR, "LEEME.txt")
         if not os.path.exists(readme):
             with open(readme, "w", encoding="utf-8") as fh:
-                fh.write("Ciclo de charlas y talleres FLAT · carpeta del show (no se borra al actualizar el programa)\n\n"
+                fh.write("Encuentro con Martel - Futuridades (FLAT) · carpeta del show (no se borra al actualizar el programa)\n\n"
                          "logos/flat             → abre el loop: el logo de FLAT (centro del evento)\n"
                          "logos/organizadores    → primero\n"
                          "logos/socio-cultural   → segundo (más tiempo en pantalla)\n"
@@ -444,7 +444,7 @@ def read_logo_folder(folder: str) -> list[dict[str, str]]:
 
 RECORDINGS_DIR = os.path.join(USER_DIR, "grabaciones")
 # mensajes al frontend que no se guardan: el análisis del audio se recalcula desde audio.wav al re-proyectar
-_NO_RECORD = {"audio_reactive", "pong", "hello", "devices", "logos", "grabacion"}
+_NO_RECORD = {"audio_reactive", "inputs", "pong", "hello", "devices", "logos", "grabacion"}
 
 
 def _wav_header(sr: int, n_samples: int) -> bytes:
@@ -690,7 +690,11 @@ class AudioEngine:
         self.resampler: LinearResampler | None = None
         self.device_override: str | None = None  # elegido desde el panel C (tiene prioridad sobre .env)
         self.channel_override: int | None = None  # entrada de una placa multicanal, 1 = la primera
-        self.nch = 1  # canales abiertos en el stream (se usa sólo self.ch_idx)
+        self.nch = 1  # entradas abiertas en el stream (se usa sólo self.ch_idx; las demás, para medir nivel)
+        self.live = False  # hay un stream abierto
+        self.base_name = ""
+        self.in_peaks: np.ndarray | None = None  # pico por entrada desde el último aviso «inputs»
+        self.in_next = 0.0
         self.ch_idx = 0
         self._restart = False
         self.device_name = ""
@@ -701,6 +705,14 @@ class AudioEngine:
             self.channel_override = max(1, int(channel)) if channel not in (None, "") else None
         except (TypeError, ValueError):
             self.channel_override = None
+        want = self.channel_override or self.cfg.audio_channel
+        if self.live and want <= self.nch:
+            # el stream ya tiene abiertas todas las entradas: cambiar de entrada es instantáneo (sin reabrir)
+            self.ch_idx = want - 1
+            self.device_name = f"{self.base_name} · entrada {want}"
+            self.hub.set_status(mic_device=self.device_name)
+            log.info("Entrada de la placa: %d", want)
+            return
         self._restart = True
 
     def request_device(self, device: str | int | None) -> None:
@@ -782,21 +794,36 @@ class AudioEngine:
         if want > maxch:
             log.warning("El dispositivo tiene %d entrada(s); el canal %d no existe, uso el %d", maxch, want, maxch)
         ch = min(want, maxch)
-        self.nch, self.ch_idx = ch, ch - 1
-        self.device_name = f"{info['name']} · canal {ch}" if maxch > 1 else info["name"]
+        self.ch_idx = ch - 1
+        self.base_name = info["name"]
+        self.device_name = f"{info['name']} · entrada {ch}" if maxch > 1 else info["name"]
+        self.in_peaks = None
+        # se abren TODAS las entradas de la placa (hasta 32): la elegida va al show y de las demás se mide el
+        # nivel, así el panel C muestra en cuál está la voz. Si el driver no deja, sólo hasta la elegida.
+        last: Exception | None = None
+        for nch in dict.fromkeys([min(maxch, 32), ch]):
+            self.nch = nch
+            try:
+                return self._open_with(device, info, nch)
+            except Exception as exc:  # noqa: BLE001
+                last = exc
+                log.warning("No pude abrir %d entrada(s) de %s: %s", nch, info["name"], exc)
+        raise last if last else RuntimeError("no se pudo abrir el micrófono")
+
+    def _open_with(self, device, info, nch: int):  # noqa: ANN001, ANN202
         try:
-            stream = sd.RawInputStream(samplerate=self.sr, channels=self.nch, dtype="int16",
+            stream = sd.RawInputStream(samplerate=self.sr, channels=nch, dtype="int16",
                                        blocksize=self.block, device=device, latency="low",
                                        callback=self._callback)
             self.resampler = None
-            log.info("Micrófono abierto a %d Hz, bloque %d muestras (%.1f ms)",
-                     self.sr, self.block, 1000 * self.block / self.sr)
+            log.info("Micrófono abierto a %d Hz, %d entrada(s), bloque %d muestras (%.1f ms)",
+                     self.sr, nch, self.block, 1000 * self.block / self.sr)
             return stream
         except Exception as exc:  # el dispositivo no soporta 24 kHz: abrir nativo y remuestrear
             native = int(info["default_samplerate"])
             log.warning("No se pudo abrir a %d Hz (%s). Abro a %d Hz y remuestreo.", self.sr, exc, native)
             native_block = max(64, int(native * self.cfg.block_ms / 1000))
-            stream = sd.RawInputStream(samplerate=native, channels=self.nch, dtype="int16",
+            stream = sd.RawInputStream(samplerate=native, channels=nch, dtype="int16",
                                        blocksize=native_block, device=device, latency="low",
                                        callback=self._callback)
             self.resampler = LinearResampler(native, self.sr)
@@ -856,6 +883,7 @@ class AudioEngine:
                 self._restart = False
                 stream = self._open_stream()
                 stream.start()
+                self.live = True
                 self.hub.set_status(mic="ok", mic_device=self.device_name)
                 backoff = 1.0
                 while not self._restart:
@@ -870,6 +898,7 @@ class AudioEngine:
                 log.error("Fallo de audio: %s — reintento en %.0fs", exc, backoff)
                 self.hub.set_status(mic="error", mic_device=str(exc)[:120])
             finally:
+                self.live = False
                 if stream is not None:
                     try:
                         stream.stop()
@@ -902,8 +931,17 @@ class AudioEngine:
             self.hub.set_status(mic="silencio", mic_device=hint)
 
     def _process(self, data: bytes) -> None:
-        if self.nch > 1:  # quedarse con el canal elegido
-            data = np.frombuffer(data, dtype=np.int16).reshape(-1, self.nch)[:, self.ch_idx].tobytes()
+        if self.nch > 1:  # quedarse con la entrada elegida; de todas, el pico (qué entrada tiene la voz)
+            arr = np.frombuffer(data, dtype=np.int16).reshape(-1, self.nch)
+            pk = np.abs(arr).max(axis=0)
+            self.in_peaks = pk if self.in_peaks is None or len(self.in_peaks) != self.nch else np.maximum(self.in_peaks, pk)
+            now = time.monotonic()
+            if now >= self.in_next:
+                self.in_next = now + 0.12
+                db = [round(20 * math.log10(max(int(v), 1) / 32768.0), 1) for v in self.in_peaks]
+                self.in_peaks = None
+                self.hub.emit("inputs", n=self.nch, current=self.ch_idx + 1, db=db)
+            data = arr[:, self.ch_idx].tobytes()
         self._check_digital_silence(data)
         x = np.frombuffer(data, dtype=np.int16).astype(np.float32) * (1.0 / 32768.0)
         if self.resampler is not None:
@@ -1386,8 +1424,8 @@ GRID_W, GRID_H = 48, 26          # grilla dibujada por el LLM (celda 1 × 2: el 
 LETTER_W, LETTER_H = 64, 30      # arte ASCII con las letras transcriptas (celda ≈ 1 × 1,5, como las letras del muro)
 
 # ── Prompt de la grilla (limpio: sólo lo que el programa usa) ─────────────────────────────────────────
-GRID_BASE = """Eres el director de arte del «Ciclo de charlas y talleres FLAT», una instalación de texto en vivo: una persona
-habla en voz alta y sus palabras forman un muro de texto proyectado. Por cada estrofa eliges UNA imagen que nazca de lo dicho; el programa la
+GRID_BASE = """Eres el director de arte de «Encuentro con Martel - Futuridades» (festival FLAT), una instalación de texto en
+vivo: una persona habla en voz alta y sus palabras forman un muro de texto proyectado. Por cada estrofa eliges UNA imagen que nazca de lo dicho; el programa la
 compone con esas mismas palabras (en positivo, la figura hecha de palabras sobre negro; en negativo, un hueco negro
 con la forma de la figura calado en el muro).
 
