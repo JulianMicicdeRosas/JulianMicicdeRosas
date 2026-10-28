@@ -7,8 +7,12 @@ Fuente: Drive «FLAT 2026 - Logos-2» (categorías de flatfestival.org). Orden d
   socio-cultural/    05–08  UM FAUD/FI · Huarpe Riglos · Fundación Werthein · Colección Pampa  (más tiempo)
   patrocinadores/    09–15  Azcuy · Corralón Luján · Rodríguez Hnos. · Mi Terruño · U. Champagnat ·
                             U. Maza · Villa Victoria Lodge
-  acompanan/         16–25  FNA · Manso Orgullo · FAD UNCuyo · Nave UNCuyo · Polo TIC · Loras · …
-  embajadas/         26–39  Consulados y embajadas (Perú, Panamá, Italia, Bolivia, Brasil, Chile, …)
+  acompanan/         16–25  FNA · Manso Orgullo · ERCCV · FAD UNCuyo · Nave UNCuyo · Polo TIC · Loras ·
+                            Torablock · Aureo Innova · Google Cloud Partner
+  embajadas/         26–39  MPBA · San Juan Gobierno · mesh. · Consulado del Perú · Panamá · Istituto Italiano ·
+                            Consulado de Bolivia · Instituto Confucio · Consulado-Geral do Brasil ·
+                            Sociedad Goetheana · Consulado de Chile · Consulado de Alemania · Embajada de Costa Rica
+                            (29 = Terrazas de los Andes: quitado en octubre de 2026)
   media-partner/     (vacía por ahora: se salta sola)
 
 Dentro de cada carpeta se muestran en orden alfabético (por eso van numerados 01, 02, …).
