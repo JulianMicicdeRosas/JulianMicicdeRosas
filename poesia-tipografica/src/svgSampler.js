@@ -323,14 +323,11 @@ export function sampleText(text, { interiorTarget = 4000, font = '"Cormorant Gar
   const ctx = maskCanvas();
   const probe = 200;
   ctx.font = `${weight} ${probe}px ${font}`;
-  // un texto largo de un renglón: se parte en los renglones (1 a 4) con los que se ve más grande en la pantalla
-  // (la figura se ajusta al 84 % del ancho y al 74 % del alto: ver TypeField.formFigure)
-  if (aspect > 0 && lines.length === 1 && lines[0].includes(' ')) {
-    const words = lines[0].split(/\s+/);
-    const total = ctx.measureText(lines[0]).width;
-    let best = lines, bestK = 0;
-    for (let n = 1; n <= Math.min(4, words.length); n++) {
-      const rows = [];
+  // cada tramo (entre guiones o saltos de línea) se parte en 1 a 3 renglones; se elige la combinación con la que el
+  // texto se ve más grande en la pantalla (la figura se ajusta al 84 % del ancho y al 74 % del alto: ver formFigure)
+  if (aspect > 0 && lines.some((l) => l.includes(' '))) {
+    const wrap = (line, n) => {
+      const words = line.split(/\s+/), total = ctx.measureText(line).width, rows = [];
       let cur = '';
       for (const w of words) {
         const next = cur ? `${cur} ${w}` : w;
@@ -340,13 +337,23 @@ export function sampleText(text, { interiorTarget = 4000, font = '"Cormorant Gar
         } else cur = next;
       }
       rows.push(cur);
-      const widest = Math.max(...rows.map((l) => ctx.measureText(l).width));
-      const k = Math.min(0.74 / (rows.length * 1.02 * probe), (0.84 * aspect) / widest); // alto de letra en pantalla
-      if (k > bestK * 1.05) {
-        bestK = k;
-        best = rows;
+      return rows;
+    };
+    const options = lines.map((l) => [1, 2, 3].filter((n) => n <= l.split(/\s+/).length).map((n) => wrap(l, n)));
+    let best = lines, bestK = 0;
+    const walk = (i, acc) => {
+      if (i === options.length) {
+        const widest = Math.max(...acc.map((l) => ctx.measureText(l).width));
+        const k = Math.min(0.74 / (acc.length * 1.02 * probe), (0.84 * aspect) / widest); // alto de letra en pantalla
+        if (k > bestK * 1.05) {
+          bestK = k;
+          best = acc;
+        }
+        return;
       }
-    }
+      for (const rows of options[i]) walk(i + 1, acc.concat(rows));
+    };
+    walk(0, []);
     lines = best;
   }
   const widest = Math.max(...lines.map((l) => ctx.measureText(l).width));
