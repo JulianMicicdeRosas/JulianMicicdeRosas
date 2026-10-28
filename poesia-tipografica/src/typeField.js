@@ -144,7 +144,8 @@ export class TypeField {
     // placas de artista hablando (modo «muro»): palabras de muchos tamaños + sólo el dibujo del telón
     this.artistWall = false;
     this.artistCross = false; // «cruce»: palabras horizontales y verticales, como un crucigrama
-    this.sparseMax = 9;
+    this.sparseMax = 12;
+    this.reservedFrac = []; // zonas (fracción del cuadro, 0..1 desde abajo a la izquierda) sin palabras sueltas: el logo de FLAT en la tecla 0
     this.sparseKeep = 0;
     this.flowMode = null; // 6 «sedimento» · 7 «partitura»
     this.flow = []; // tecla 0: párrafos que se acumulan antes de borrar (0 = cada palabra vence sola)
@@ -1015,7 +1016,7 @@ export class TypeField {
         rot[i] += angDiff(this.trot[i], rot[i]) * (arrived ? kRot : 1);
         size[i] += (this.tsize[i] - size[i]) * (arrived ? kSize : 0.5);
         alphaT[i] = this.talpha[i];
-        if (arrived) alpha[i] += (alphaT[i] - alpha[i]) * (title || st === BGW ? kAlpha * 2 : 1 - Math.exp(-dt * 1.4));
+        if (arrived) alpha[i] += (alphaT[i] - alpha[i]) * (title || st === BGW ? kAlpha * 2 : 1 - Math.exp(-dt * (this.sparseMode ? 1.75 : 1.4))); // tecla 0: aparece 25 % más rápido
         else alpha[i] = alphaT[i] * (Math.random() < 0.3 ? 0.15 : 1);
       } else {
         // ── FREE (o FIGURE esperando su turno) ─────────────────────────────
@@ -2647,7 +2648,8 @@ export class TypeField {
       }
       return false;
     };
-    const free = (xx, yy) => !this.sparse.some((w) => hitsWord(w, xx, yy)) && !overShape(xx, yy);
+    const inReserved = (xx, yy) => this.reservedFrac.some((r) => (xx + width / 2) / this.W + 0.5 > r.x0 && (xx - width / 2) / this.W + 0.5 < r.x1 && (yy + S / 2) / this.H + 0.5 > r.y0 && (yy - S / 2) / this.H + 0.5 < r.y1);
+    const free = (xx, yy) => !this.sparse.some((w) => hitsWord(w, xx, yy)) && !overShape(xx, yy) && !inReserved(xx, yy);
     let ok = free(x, y);
     // 1) correrse de a una fila, arriba y abajo
     for (let k2 = 1; k2 <= 12 && !ok; k2++) {
@@ -2697,13 +2699,13 @@ export class TypeField {
       this.pslot[i] = sl;
       this.ptint[i] = 0;
       this.paccent[i] = k === 3 ? 1 : 0;
-      this.delay[i] = t + j * 0.03;
+      this.delay[i] = t + j * 0.0225; // 25 % más rápido que el resto
       this.birth[i] = this.delay[i];
       this.level[i] = 0.1;
       idx.push(i);
     });
     const keep = this.sparseKeep > 0;
-    this.sparse.push({ idx, x, y, k, w: width, para: this.sparsePara, until: keep ? Infinity : t + 7 + Math.random() * 5 });
+    this.sparse.push({ idx, x, y, k, w: width, para: this.sparsePara, until: keep ? Infinity : t + 10 + Math.random() * 6 });
     this.metaDirty = true;
     this.onTransition?.(0.18);
     const cap = keep ? 160 : this.sparseMax;

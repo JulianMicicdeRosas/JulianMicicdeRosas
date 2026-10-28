@@ -602,6 +602,7 @@ async function boot() {
     onChange: (next) => setSettings(next),
     onDevice: (dev) => socket.send({ type: 'set_device', device: dev }),
     onChannel: (ch) => socket.send({ type: 'set_channel', channel: ch }),
+    onChannel2: (ch) => socket.send({ type: 'set_channel2', channel: ch }),
     requestDevices: () => socket.send({ type: 'list_devices' }),
     onSaveKey: (key) => socket.send({ type: 'set_api_key', key }),
     onOpenFolder: (que) => socket.send({ type: 'open_folder', que }),

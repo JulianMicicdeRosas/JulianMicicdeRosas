@@ -32,7 +32,7 @@ const ANIM_NAMES = { clasica: 'clásica', muro: 'muro', cruce: 'cruce', constela
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 export class ConfigPanel {
-  constructor({ getSettings, onChange, onDevice, onChannel, onShowPrompt, requestDevices, onScanLogos, onSaveKey, onRecord, onStop, onPreviewStyle, defaultPrompt }) {
+  constructor({ getSettings, onChange, onDevice, onChannel, onChannel2, onShowPrompt, requestDevices, onScanLogos, onSaveKey, onRecord, onStop, onPreviewStyle, defaultPrompt }) {
     this.onPreviewStyle = onPreviewStyle;
     this.onOpenFolder = arguments[0].onOpenFolder;
     this.onTestGrid = arguments[0].onTestGrid;
@@ -179,8 +179,12 @@ export class ConfigPanel {
         <div class="row">
           <span>Entrada de la placa:</span>
           <select data-channel><option value="1">1</option></select>
+          <span>+ segunda entrada:</span>
+          <select data-channel2><option value="0">(ninguna)</option></select>
           <span class="hint" data-channel-hint></span>
         </div>
+        <p class="hint">Dos micrófonos a la vez (p. ej. mic 1 y mic 2 de la Focusrite): elegí la segunda entrada y las
+        dos se suman. Clic en una barra = primera entrada; <b>Shift + clic</b> = segunda (otra vez = la saca).</p>
         <p class="hint">Placa multicanal (Focusrite 18i20): se miden todas las entradas a la vez. Hablá al micrófono y
         hacé clic en la barra que se mueve: ésa es la entrada que va al show.</p>
         <div class="inputs" data-inputs></div>
@@ -488,6 +492,7 @@ export class ConfigPanel {
   _renderChannels() {
     const csel = this.$('[data-channel]');
     if (!csel) return;
+    if (this.inputsN > 1) return; // el backend ya informó las entradas reales (setInputs): eso manda
     const d = this.devices.find((x) => String(x.index) === String(this.currentDevice)) || this.devices.find((x) => x.default);
     const n = Math.max(1, Math.min(32, d?.channels || 1));
     const cur = Math.min(n, Math.max(1, +this.currentChannel || 1));
@@ -502,26 +507,35 @@ export class ConfigPanel {
     const box = this.$('[data-inputs]');
     if (!box || !this.isOpen) return;
     const n = m.n || 0, cur = m.current || 1;
+    this.inputsN = n;
     if (n <= 1) {
       box.innerHTML = '';
+      this.inputsCur = this.inputsSec = undefined;
       return;
     }
     if (box.childElementCount !== n) {
       box.innerHTML = Array.from({ length: n }, (_, k) => `<button class="in" data-act="pick-input" data-ch="${k + 1}" title="entrada ${k + 1}"><i></i><b></b><span>${k + 1}</span></button>`).join('');
       this.inputsN = n;
     }
-    const csel = this.$('[data-channel]');
+    const csel = this.$('[data-channel]'), csel2 = this.$('[data-channel2]');
+    const sec = m.second || 0;
     if (csel && csel.options.length !== n) {
       // la cantidad real de entradas abiertas manda sobre lo que declaró la lista de dispositivos
       csel.innerHTML = Array.from({ length: n }, (_, k) => `<option value="${k + 1}">${k + 1}</option>`).join('');
       csel.disabled = false;
       csel.value = String(Math.min(n, cur));
     }
-    if (this.inputsCur !== cur) {
+    if (csel2 && csel2.options.length !== n + 1) {
+      csel2.innerHTML = '<option value="0">(ninguna)</option>' + Array.from({ length: n }, (_, k) => `<option value="${k + 1}">${k + 1}</option>`).join('');
+      csel2.value = String(sec);
+    }
+    if (this.inputsCur !== cur || this.inputsSec !== sec) {
       this.inputsCur = cur;
+      this.inputsSec = sec;
       this.currentChannel = cur;
       if (csel) csel.value = String(cur);
-      this.$('[data-channel-hint]').textContent = `${n} entradas · va al show la ${cur}`;
+      if (csel2) csel2.value = String(sec);
+      this.$('[data-channel-hint]').textContent = `${n} entradas · va al show la ${cur}${sec ? ` + la ${sec}` : ''}`;
     }
     this.inputsHold = this.inputsHold || new Float32Array(32);
     box.querySelectorAll('button.in').forEach((b, k) => {
@@ -532,6 +546,7 @@ export class ConfigPanel {
       this.inputsHold[k] = hold;
       b.children[1].style.bottom = `${Math.round(hold * 100)}%`;
       b.classList.toggle('cur', k + 1 === cur);
+      b.classList.toggle('sec', k + 1 === sec);
       b.classList.toggle('hot', db > -40);
     });
   }
@@ -737,7 +752,16 @@ export class ConfigPanel {
       [arr[i], arr[j]] = [arr[j], arr[i]];
     };
     if (act === 'close') this.toggle(false);
-    else if (act === 'pick-input') {
+    else if (act === 'pick-input' && ev.shiftKey) {
+      // Shift + clic: segunda entrada (sumada); sobre la que ya era segunda, la saca
+      const ch = +ev.target.closest('button').dataset.ch;
+      const next = ch === this.inputsSec || ch === this.currentChannel ? 0 : ch;
+      this.inputsSec = next;
+      const csel2 = this.$('[data-channel2]');
+      if (csel2) csel2.value = String(next);
+      this.onChannel2?.(next);
+      this.flashSaved();
+    } else if (act === 'pick-input') {
       const ch = +ev.target.closest('button').dataset.ch;
       this.currentChannel = ch;
       this.inputsCur = ch;
@@ -816,6 +840,14 @@ export class ConfigPanel {
 
   _input(ev) {
     const t = ev.target;
+    if (t.matches('[data-channel2]')) {
+      if (ev.type === 'change') {
+        this.inputsSec = +t.value;
+        this.onChannel2?.(+t.value);
+        this.flashSaved();
+      }
+      return;
+    }
     if (t.matches('[data-channel]')) {
       if (ev.type === 'change') {
         this.currentChannel = +t.value;

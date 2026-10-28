@@ -1,22 +1,31 @@
 LOGOS INTEGRADOS AL PROGRAMA (funcionan sin internet)
-Fuente: Drive «FLAT 2026 - Logos-2» (categorías de flatfestival.org). Orden de aparición en el loop:
+Fuente: planilla «FLAT 2026 · Aliados, patrocinadores y consulados» (octubre de 2026). Orden del loop:
 
   flat/              logo de FLAT (centro del evento): abre el loop, solo y grande.
-                     Mientras falte el PNG, se escribe «FLAT» con la tipografía de la marca.
-  organizadores/     01–04  El Zorro Azul · CEES · MMAMM · Mendoza Ciudad
-  socio-cultural/    05–08  UM FAUD/FI · Huarpe Riglos · Fundación Werthein · Colección Pampa  (más tiempo)
-  patrocinadores/    09–15  Azcuy · Corralón Luján · Rodríguez Hnos. · Mi Terruño · U. Champagnat ·
-                            U. Maza · Villa Victoria Lodge
-  acompanan/         16–25  FNA · Manso Orgullo · ERCCV · FAD UNCuyo · Nave UNCuyo · Polo TIC · Loras ·
-                            Torablock · Aureo Innova · Google Cloud Partner
-  embajadas/         26–39  MPBA · San Juan Gobierno · mesh. · Consulado del Perú · Panamá · Istituto Italiano ·
-                            Consulado de Bolivia · Instituto Confucio · Consulado-Geral do Brasil ·
-                            Sociedad Goetheana · Consulado de Chile · Consulado de Alemania · Embajada de Costa Rica
-                            (29 = Terrazas de los Andes: quitado en octubre de 2026)
-  media-partner/     (vacía por ahora: se salta sola)
+  organizadores/     01 CEES (organiza) · 02 MMAMM · 03 El Zorro Azul · 04 Municipalidad de Mendoza (coproducen)
+  socio-cultural/    01 Universidad de Mendoza (FADUM y FI) · 02 Bodega Riglos Wine Huarpe · 03 Colección Pampa ·
+                     04 Fundación Norma y Leo Werthein · [05 Los Andes Pass: FALTA el archivo]
+  patrocinadores/    01 Azcuy · 02 Corralón Luján · 03 Transporte Rodríguez · 04 Bodega Mi Terruño · 05 Universidad Maza ·
+                     06 Villa Victoria Lodge · 07 Universidad Champagnat (versión anterior: FALTA la nueva) ·
+                     [08 Bodega Tapiz: FALTA]
+  acompanan/         [01 Ministerio de Producción de Mendoza: FALTA] · [02 Grupo Huentala: FALTA] ·
+                     [03 Mendoza Film Commission: FALTA] · 04 FNA · [05 Santa Julia: FALTA] · 06 Loras ·
+                     07 Escuela Regional Cuyo de Cine y Video · 08 Museo BAF Rawson · 09 Gobierno de San Juan · 10 MESH ·
+                     11 Manso Orgullo · 12 FADUNCuyo · 13 Torablock · 14 Áureo Innova · 15 Google Cloud Partner ·
+                     16 Polo TIC · 17 Nave UNCuyo
+  media-partner/     [01 Inmendoza: FALTA] · [02 Unidiversidad: FALTA]  (vacía: se salta sola)
+  embajadas/         [01 Consulado de México: pendiente en la planilla] · [02 Embajada de Alemania: FALTA] ·
+                     [03 Goethe-Zentrum Mendoza: FALTA] · 04 Consulado Honorario de Alemania · 05 Consulado de Perú ·
+                     06 Consulado de Chile · 07 Consulado de Bolivia · 08 Consulado de Costa Rica · 09 Consulado de Brasil ·
+                     10 Consulado de Panamá · 11 Instituto Confucio · 12 Instituto Italiano ·
+                     [13 Centro Cultural de España: pendiente en la planilla]
+
+Los marcados FALTA están en la planilla pero el archivo no pudo bajarse (flatfestival.org/img/aliados/<nombre>.png):
+copiarlos a la carpeta con ese número adelante y aparecen en su lugar. Quitados respecto de la versión anterior:
+Terrazas de los Andes, Sociedad Goetheana.
 
 Dentro de cada carpeta se muestran en orden alfabético (por eso van numerados 01, 02, …).
 PNG con fondo transparente ideal; JPG con fondo blanco también.
 
-Si en la Mac hay logos en Documentos/Ciclo FLAT/logos/<grupo>, esos tienen prioridad
-(para cambiar un logo sin esperar una versión nueva del programa).
+Si en la computadora hay logos en Documentos/Ciclo FLAT/logos/<grupo>, ÉSOS tienen prioridad sobre los del programa:
+para usar esta lista, vaciar esas carpetas (o copiar ahí los de aquí).

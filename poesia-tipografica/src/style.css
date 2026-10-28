@@ -175,6 +175,29 @@ body.hide-cursor * {
   object-fit: contain;
 }
 
+/* ── Logo de FLAT abajo a la derecha (tecla 0) ─────────────────────── */
+#corner {
+  position: fixed;
+  left: var(--fx, 0);
+  top: var(--fy, 0);
+  width: var(--fw, 100%);
+  height: var(--fh, 100%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+  z-index: 3;
+}
+#corner.on {
+  opacity: 1;
+}
+#corner img {
+  position: absolute;
+  right: 3%;
+  bottom: 4%;
+  width: 14%;
+  height: auto;
+}
+
 /* ── Aviso de operador (2 s, discreto) ────────────────────────────── */
 #toast {
   position: fixed;
@@ -342,6 +365,12 @@ body.hide-cursor * {
 }
 #config .inputs button.in.cur {
   border-color: #e3a14b;
+}
+#config .inputs button.in.sec {
+  border-color: #6fa8dc;
+}
+#config .inputs button.in.sec span {
+  color: #6fa8dc;
 }
 #config .inputs button.in.cur span {
   color: #e3a14b;

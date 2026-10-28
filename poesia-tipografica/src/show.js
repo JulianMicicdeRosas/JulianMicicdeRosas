@@ -123,6 +123,44 @@ export class Show {
     this.overlay.appendChild(this.overlayImg);
     document.body.appendChild(this.overlay);
     this.stage = new LogoStage(); // logos con transición glitch
+    // logo de FLAT fijo abajo a la derecha (tecla 0)
+    this.corner = document.createElement('div');
+    this.corner.id = 'corner';
+    this.cornerImg = document.createElement('img');
+    this.corner.appendChild(this.cornerImg);
+    document.body.appendChild(this.corner);
+  }
+
+  /** Logo de FLAT abajo a la derecha (tecla 0); las palabras sueltas no se ponen encima. */
+  async _showCorner() {
+    const f = this.field;
+    const W = 0.14, M = 0.03; // ancho y margen, como fracción del cuadro
+    const place = (ar) => (f.reservedFrac = [{ x0: 1 - M - W - 0.02, x1: 1, y0: 0, y1: M + (W * (f.W / f.H)) / Math.max(0.3, ar) + 0.02 }]);
+    place(2.5);
+    if (!this.cornerSrc) {
+      try {
+        const step = this._loopSteps().find((st) => st.tipo === 'logos' && /flat/i.test(st.carpeta || '')) || { carpeta: 'logos/flat' };
+        const srcs = this.fetchLogos ? await this.fetchLogos(step.carpeta) : [];
+        if (srcs.length) {
+          const logo = processLogo(await loadImage(srcs[0]), { monocromo: true });
+          this.cornerSrc = typeof logo.toDataURL === 'function' ? logo.toDataURL() : srcs[0];
+          this.cornerAr = (logo.width || 1) / (logo.height || 1);
+        }
+      } catch (e) {
+        console.warn('[corner]', e.message);
+      }
+    }
+    if (this.state !== 'perform' || this.mode !== 'pocas') return;
+    if (this.cornerSrc) {
+      this.cornerImg.src = this.cornerSrc;
+      place(this.cornerAr || 2.5);
+      this.corner.classList.add('on');
+    }
+  }
+
+  _hideCorner() {
+    this.corner.classList.remove('on');
+    this.field.reservedFrac = [];
   }
 
   /** Paleta de base: la de la marca si está aplicada a todo. */
@@ -434,6 +472,7 @@ export class Show {
   }
 
   _hideImage(keepStage = false) {
+    this._hideCorner();
     cancel(this.flatTimer);
     this.flatTimer = 0;
     this.overlay.classList.remove('on');
@@ -583,7 +622,7 @@ export class Show {
     const sameMode = this.state === 'perform' && this.mode === mode && this.variant === v;
     if (!sameMode && mode !== 'muro') f.clearSparse(); // (el muro ya limpia todo al arrancar)
     f.sparseMode = mode === 'pocas' || v === 'constelacion';
-    f.sparseMax = v === 'constelacion' ? 14 : 9;
+    f.sparseMax = v === 'constelacion' ? 14 : 12;
     f.sparseKeep = 0; // tecla 0: pocas palabras que viven unos segundos y se rompen (sin acumular párrafos)
     f.artistWall = v === 'muro' || v === 'cruce';
     f.flowMode = v === 'sedimento' || v === 'partitura' ? v : null;
@@ -632,6 +671,7 @@ export class Show {
     this.state = 'perform';
     this.mode = mode;
     this.variant = v;
+    if (mode === 'pocas') this._showCorner();
     // al poner el número del artista, los primeros 3 s no se transcribe nada (presentación, aplausos)
     const wait = fromArtist && this.artistAt ? 3000 - (performance.now() - this.artistAt) : 0;
     if (wait > 0) {

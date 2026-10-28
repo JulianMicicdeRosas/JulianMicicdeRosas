@@ -155,6 +155,7 @@ class Config:
     audio_file: str
     openai_base_url: str
     audio_channel: int
+    audio_channel2: int  # segunda entrada (0 = ninguna): se suman las dos (dos micrófonos a la vez)
     sample_rate: int
     block_ms: int
     fft_size: int
@@ -195,11 +196,12 @@ class Config:
             vad_silence_ms=_env_int("VAD_SILENCE_MS", 350),
             vad_prefix_ms=_env_int("VAD_PREFIX_PADDING_MS", 300),
             # no esperar a que la persona termine: tras 1,8 s de habla continua se transcribe en la primera micro-pausa
-            commit_s=_env_float("OPENAI_COMMIT_S", 1.8),
+            commit_s=_env_float("OPENAI_COMMIT_S", 1.35),
             audio_device=_env("AUDIO_DEVICE"),
             audio_file=_env("AUDIO_FILE"),  # prueba sin micrófono: un .wav entra como si fuera la voz
             openai_base_url=_env("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/"),
             audio_channel=max(1, _env_int("AUDIO_CHANNEL", 1)),  # entrada de la placa (Focusrite: 1..18)
+            audio_channel2=max(0, _env_int("AUDIO_CHANNEL2", 0)),  # segunda entrada que se suma (0 = ninguna)
             sample_rate=_env_int("AUDIO_SAMPLE_RATE", 24000),
             block_ms=max(5, _env_int("AUDIO_BLOCK_MS", 10)),
             fft_size=max(512, _env_int("AUDIO_FFT_SIZE", 2048)),
@@ -235,7 +237,7 @@ class SettingsStore:
 
     KEYS = ("device", "artists", "loop", "prompt_estetica", "avisos", "pointcloud", "profundidad", "nube", "orbita",
             "curaduria", "imagenes", "prompt_grilla", "polaridad", "director", "cadencia", "estilos", "glitch_ambiente", "ascii_filas",
-            "marca", "muro", "formato", "canal", "forma_grilla", "grilla_preset", "tratamiento",
+            "marca", "muro", "formato", "canal", "canal2", "forma_grilla", "grilla_preset", "tratamiento",
             "inicio_por_voz", "umbral_voz",
             # marcas de migración: que una corrección automática se aplique una sola vez (y no pise lo elegido)
             "imagenes_v4", "imagenes_v5", "loop_grupos_v2", "loop_flat_v3", "loop_flat_v4", "loop_titulo_v7", "titulo_flat_v8", "titulo_v9", "formato_v9", "imagenes_v7")
@@ -690,6 +692,8 @@ class AudioEngine:
         self.resampler: LinearResampler | None = None
         self.device_override: str | None = None  # elegido desde el panel C (tiene prioridad sobre .env)
         self.channel_override: int | None = None  # entrada de una placa multicanal, 1 = la primera
+        self.channel2_override: int | None = None  # segunda entrada (se suma a la primera); 0 = ninguna
+        self.ch2_idx = -1
         self.nch = 1  # entradas abiertas en el stream (se usa sólo self.ch_idx; las demás, para medir nivel)
         self.live = False  # hay un stream abierto
         self.base_name = ""
@@ -705,13 +709,29 @@ class AudioEngine:
             self.channel_override = max(1, int(channel)) if channel not in (None, "") else None
         except (TypeError, ValueError):
             self.channel_override = None
+        self._apply_channels()
+
+    def request_channel2(self, channel: int | str | None) -> None:
+        """Segunda entrada que se suma a la primera (dos micrófonos a la vez). 0 / vacío = ninguna."""
+        try:
+            self.channel2_override = max(0, int(channel)) if channel not in (None, "") else 0
+        except (TypeError, ValueError):
+            self.channel2_override = 0
+        self._apply_channels()
+
+    def _wanted(self) -> tuple[int, int]:
         want = self.channel_override or self.cfg.audio_channel
-        if self.live and want <= self.nch:
+        want2 = self.cfg.audio_channel2 if self.channel2_override is None else self.channel2_override
+        return want, (0 if want2 == want else want2)
+
+    def _apply_channels(self) -> None:
+        want, want2 = self._wanted()
+        if self.live and want <= self.nch and want2 <= self.nch:
             # el stream ya tiene abiertas todas las entradas: cambiar de entrada es instantáneo (sin reabrir)
-            self.ch_idx = want - 1
-            self.device_name = f"{self.base_name} · entrada {want}"
+            self.ch_idx, self.ch2_idx = want - 1, want2 - 1
+            self.device_name = f"{self.base_name} · entrada {want}" + (f" + {want2}" if want2 else "")
             self.hub.set_status(mic_device=self.device_name)
-            log.info("Entrada de la placa: %d", want)
+            log.info("Entrada de la placa: %d%s", want, f" + {want2}" if want2 else "")
             return
         self._restart = True
 
@@ -789,19 +809,20 @@ class AudioEngine:
         device = self._resolve_device()
         info = sd.query_devices(device, "input")
         # placa multicanal (p. ej. Focusrite 18i20): se abren los canales hasta el elegido y se usa sólo ése
-        want = self.channel_override or self.cfg.audio_channel
+        want, want2 = self._wanted()
         maxch = max(1, int(info.get("max_input_channels", 1)))
         if want > maxch:
             log.warning("El dispositivo tiene %d entrada(s); el canal %d no existe, uso el %d", maxch, want, maxch)
         ch = min(want, maxch)
-        self.ch_idx = ch - 1
+        ch2 = want2 if 0 < want2 <= maxch and want2 != ch else 0
+        self.ch_idx, self.ch2_idx = ch - 1, ch2 - 1
         self.base_name = info["name"]
-        self.device_name = f"{info['name']} · entrada {ch}" if maxch > 1 else info["name"]
+        self.device_name = (f"{info['name']} · entrada {ch}" + (f" + {ch2}" if ch2 else "")) if maxch > 1 else info["name"]
         self.in_peaks = None
         # se abren TODAS las entradas de la placa (hasta 32): la elegida va al show y de las demás se mide el
         # nivel, así el panel C muestra en cuál está la voz. Si el driver no deja, sólo hasta la elegida.
         last: Exception | None = None
-        for nch in dict.fromkeys([min(maxch, 32), ch]):
+        for nch in dict.fromkeys([min(maxch, 32), max(ch, ch2)]):
             self.nch = nch
             try:
                 return self._open_with(device, info, nch)
@@ -885,6 +906,8 @@ class AudioEngine:
                 stream.start()
                 self.live = True
                 self.hub.set_status(mic="ok", mic_device=self.device_name)
+                # el panel C se entera de cuántas entradas hay (con una sola, borra las barras)
+                self.hub.emit("inputs", n=self.nch, current=self.ch_idx + 1, second=self.ch2_idx + 1, db=[])
                 backoff = 1.0
                 while not self._restart:
                     # Watchdog: si el driver deja de entregar bloques (USB desconectado), reabrir.
@@ -940,8 +963,13 @@ class AudioEngine:
                 self.in_next = now + 0.12
                 db = [round(20 * math.log10(max(int(v), 1) / 32768.0), 1) for v in self.in_peaks]
                 self.in_peaks = None
-                self.hub.emit("inputs", n=self.nch, current=self.ch_idx + 1, db=db)
-            data = arr[:, self.ch_idx].tobytes()
+                self.hub.emit("inputs", n=self.nch, current=self.ch_idx + 1, second=self.ch2_idx + 1, db=db)
+            if 0 <= self.ch2_idx < self.nch and self.ch2_idx != self.ch_idx:
+                # dos micrófonos a la vez: se suman (cada uno conserva su nivel; si hablan juntos, se recorta)
+                mixed = arr[:, self.ch_idx].astype(np.int32) + arr[:, self.ch2_idx].astype(np.int32)
+                data = np.clip(mixed, -32768, 32767).astype(np.int16).tobytes()
+            else:
+                data = arr[:, self.ch_idx].tobytes()
         self._check_digital_silence(data)
         x = np.frombuffer(data, dtype=np.int16).astype(np.float32) * (1.0 / 32768.0)
         if self.resampler is not None:
@@ -2511,6 +2539,8 @@ async def main_async(args: argparse.Namespace) -> None:
         audio.device_override = saved or None
     if audio is not None and settings.get("canal") not in (None, ""):
         audio.request_channel(settings.get("canal"))
+    if audio is not None and settings.get("canal2") not in (None, ""):
+        audio.request_channel2(settings.get("canal2"))
 
     def key_status() -> dict[str, Any]:
         return {"has_key": bool(cfg.openai_api_key), "masked": mask_key(cfg.openai_api_key),
@@ -2563,6 +2593,11 @@ async def main_async(args: argparse.Namespace) -> None:
             await hub.reply(ws, "devices", devices=AudioEngine.list_devices(), current=current or "",
                             active=audio.device_name if audio else "",
                             channel=(audio.channel_override or cfg.audio_channel) if audio else cfg.audio_channel)
+        elif kind == "set_channel2":  # segunda entrada que se suma (0 = ninguna)
+            ch = msg.get("channel")
+            settings.update({"canal2": ch})
+            if audio is not None:
+                audio.request_channel2(ch)
         elif kind == "set_channel":
             ch = msg.get("channel")
             settings.update({"canal": ch})

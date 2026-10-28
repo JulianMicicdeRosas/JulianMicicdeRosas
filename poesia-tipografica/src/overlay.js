@@ -37,7 +37,7 @@ export class Overlay {
     const px = this.dpr;
     // ── tecla 0: la figura que arman las palabras ──
     if (f.sparse.length > 1) {
-      g.lineWidth = px;
+      g.lineWidth = px * 1.2;
       g.strokeStyle = `rgba(220,220,220,${f.sparse.length > 40 ? 0.12 : 0.22})`; // con muchas palabras, líneas más tenues
       g.beginPath();
       // una línea por párrafo: las palabras de cada párrafo arman su figura

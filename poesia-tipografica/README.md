@@ -162,7 +162,10 @@ En el panel C → Micrófono:
    programa abre todas las entradas y manda al show sólo la elegida). Hablar al micrófono y **hacer clic en la barra
    que se mueve**: ésa queda elegida al instante (sin reabrir la placa) y se guarda. En «Analogue 3 + 4» la entrada 1
    es la 3 de la placa y la 2 es la 4; en el dispositivo de 18/20 entradas es el número directo.
-3. `diagnostico_windows.bat` hace lo mismo desde la consola (2 s de grabación con el nivel de cada entrada).
+3. **Dos micrófonos a la vez** (mic 1 y mic 2): en «+ segunda entrada» elegir la otra (o Shift + clic en su barra);
+   las dos se suman y van juntas al show y a la grabación. Shift + clic de nuevo la saca. También en `.env`:
+   `AUDIO_CHANNEL2=2`.
+4. `diagnostico_windows.bat` hace lo mismo desde la consola (2 s de grabación con el nivel de cada entrada).
 
 Micrófono de condensador: activar **48V** en la placa. Ganancia: que la voz normal pique entre −18 y −10 dBFS; sin
 «Air» ni «Inst». Desactivar en Windows las «mejoras de audio» de la Focusrite. También se puede fijar en `.env`:
@@ -321,10 +324,12 @@ Se ajusta en panel C → Micrófono («Placa del artista…» y «Nivel de voz p
 **Tecla 0 — sólo transcripción**: se apaga todo en su lugar (sin polvo que cae) y graba. Cada palabra dicha aparece
 alineada a la grilla, en tamaño mínimo o 2× / 3× (todo un 30 % más grande que el muro), sobre el trazado de una figura
 (círculo, espiral, diagonal, onda, columna o constelación) que se renueva cada 7–10 palabras; líneas finas las unen.
-Quedan a lo sumo 9 palabras: cada una vive 7–12 s y se rompe con glitch. S detiene / retoma; L vuelve al loop.
+Quedan a lo sumo 12 palabras: cada una vive 10–16 s y se rompe con glitch. Las letras llegan un 25 % más rápido que
+en el resto de las escenas. **Abajo a la derecha queda fijo el logo de FLAT** (el de `logos/flat`), y ninguna palabra
+se pone encima. S detiene / retoma; L vuelve al loop.
 
 **Las palabras aparecen mientras se habla** (no al terminar la frase): el backend corta el audio en la primera
-micro-pausa después de 1,8 s de habla continua (o a los 4 s como máximo) y OpenAI devuelve ese tramo enseguida. Se
+micro-pausa después de 1,35 s de habla continua (o a los 4 s como máximo) y OpenAI devuelve ese tramo enseguida. Se
 regula con `OPENAI_COMMIT_S` en `.env` (más chico = más rápido pero con más cortes; `0` = esperar al silencio).
 
 ## Grabación de la sesión y re-proyección
