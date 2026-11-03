@@ -7,7 +7,7 @@
 //    ?bloom=0.55  ?grain=0.055  ?dpr=1.5
 //    ?debug          abre el panel de calibración al inicio
 // ─────────────────────────────────────────────────────────────────────────────
-import { frameRect, setFormat, visibleAspect, DEFAULT_FORMAT } from './frame.js'; // primero: fija el cuadro de salida
+import { frameRect, setFormat, visibleAspect, wallLayout, DEFAULT_FORMAT } from './frame.js'; // primero: fija el cuadro de salida
 import { nextFrame, later } from './ticker.js';
 import '@fontsource/cormorant-garamond/500.css';
 import '@fontsource/ibm-plex-mono/400.css';
@@ -117,7 +117,7 @@ async function boot() {
   }
 
   // columnas de la grilla de tonos (celdas 1 × 2): en 4:3 no puede ser más ancha que el cuadro
-  const toneCols = (gh) => Math.min(gh * 3, Math.round(gh * 2 * (field.W / field.H) * 0.85));
+  const toneCols = (gh) => Math.min(gh * 3, Math.round(gh * 2 * (field.focus.w / field.H) * 0.85)); // el dibujo va en la pared de frente
 
   function applyDirection(raw) {
     clearTimeout(pendingDirection);
@@ -362,6 +362,8 @@ async function boot() {
   let brandFontLoaded = '';
   function applyLiveSettings() {
     setFormat(settings.formato || DEFAULT_FORMAT);
+    const wl = wallLayout(); // paredes: la de frente y las esquinas
+    field.setWalls(wl.walls, wl.front);
     field.wallMode = (settings.muro?.tipo || 'grilla') === 'grilla';
     field.brandAll = settings.marca?.global === true;
     field.brandUpper = field.brandAll && settings.marca?.mayusculas !== false;
@@ -395,6 +397,8 @@ async function boot() {
       s = { ...s, loop, titulo_v9: true };
     }
     if (!s.formato_v9) s = { ...s, formato: s.formato === '1822x737' ? '1024x768' : s.formato, formato_v9: true };
+    // v10: tres paredes (oeste 3175 · norte 1775 · este 3450) en 8400 × 690, una sola vez si estaba un formato anterior
+    if (!s.formato_v10) s = { ...s, formato: ['1024x768', '1822x737', '', undefined].includes(s.formato) ? '8400x690/3175,1775,3450' : s.formato, formato_v10: true };
     return s;
   }
 

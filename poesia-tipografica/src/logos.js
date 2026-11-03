@@ -1,4 +1,4 @@
-import { frameRect } from './frame.js';
+import { frameRect, frontWall } from './frame.js';
 import { nextFrame } from './ticker.js';
 // ─────────────────────────────────────────────────────────────────────────────
 //  logos.js — Paso de loop «logos»: cualquier cantidad de logos en una grilla
@@ -192,10 +192,11 @@ export class LogoStage {
     buf.width = W;
     buf.height = H;
     const g = buf.getContext('2d');
-    const A = this.area || { w: 0.8, h: 0.62 }; // fracción del cuadro que ocupan los logos
-    const aw = W * A.w, ah = H * A.h;
+    const A = this.area || { w: 0.8, h: 0.62 }; // fracción de la pared de frente que ocupan los logos
+    const F = frontWall(), fx0 = W * F.x0, fw = W * (F.x1 - F.x0);
+    const aw = fw * A.w, ah = H * A.h;
     const rects = layoutLogos(page.map((c) => c.width / c.height), aw, ah);
-    page.forEach((c, i) => g.drawImage(c, (W - aw) / 2 + rects[i].x, (H - ah) / 2 + rects[i].y, rects[i].w, rects[i].h));
+    page.forEach((c, i) => g.drawImage(c, fx0 + (fw - aw) / 2 + rects[i].x, (H - ah) / 2 + rects[i].y, rects[i].w, rects[i].h));
     return buf;
   }
 

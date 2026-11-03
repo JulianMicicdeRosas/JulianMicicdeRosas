@@ -1,7 +1,7 @@
 # Encuentro con Martel - Futuridades
 
 Programa de proyección en vivo para **«Encuentro con Martel - Futuridades»**, del festival FLAT (basado en *Poesía
-Tipográfica*). Salida por defecto: **1024 × 768**.
+Tipográfica*). Salida por defecto: **8400 × 690 en tres paredes** (oeste 3175 · norte 1775 · este 3450).
 
 Instalación interactiva para proyección mural. Una persona lee poemas frente a un micrófono; cada letra pronunciada
 nace en la pared en el instante en que se dice y, verso a verso, las mismas letras se reorganizan en **caligramas
@@ -30,6 +30,7 @@ poesia-tipografica/
 ├── start_mac.command     Arranque completo en macOS (doble clic)
 ├── start_instalacion.bat Arranque completo en Windows (backend + frontend + Chrome kiosk)
 ├── reproyectar.bat      Re-proyección de una sesión grabada (también reproyectar_mac.command)
+├── start_instalacion_8400.bat / reproyectar_8400.bat     Tres paredes: 8400 × 690 (oeste · norte · este)
 ├── start_instalacion_13480.bat / reproyectar_13480.bat   Lo mismo en 13480 × 1080 sin los primeros 1920 px
 ├── abrir_pantalla.bat   Abre Chrome / Edge (pregunta pantalla completa o ventana) con el formato del lanzador
 ├── public/loop/          Imágenes del loop (flat.png) y public/loop/sponsors/ (todos los logos)
@@ -173,7 +174,7 @@ Micrófono de condensador: activar **48V** en la placa. Ganancia: que la voz nor
 
 ## Formato de salida
 
-Panel C → **Formato de salida**: **1024 × 768** (por defecto), 1822 × 737, 1920 × 1080, pantalla completa u
+Panel C → **Formato de salida**: **8400 × 690 en tres paredes** (por defecto), 1024 × 768, 1822 × 737, 1920 × 1080, pantalla completa u
 otro («ancho x alto»). Con formato fijo todo se compone para esa proporción y se centra en la ventana; lo que sobra
 queda negro. El muro de palabras, el título, los nombres y la transcripción quedan centrados en el cuadro.
 
@@ -233,6 +234,27 @@ Todos los lanzadores (Windows y Mac, show y re-proyección) preguntan al abrir e
 (kiosk, sin bordes) · **V** = ventana (la de 13480 × 1080 en los lanzadores de 13480; si no, una ventana común de
 1600 × 900 que se puede mover y agrandar, y `F` la pone en pantalla completa). Sin respuesta en 10 s abre en pantalla
 completa, así el arranque sin operador sigue funcionando. Para no preguntar: variable `FLAT_MODO=P` o `FLAT_MODO=V`.
+
+
+### Tres paredes: 8400 × 690 (oeste 3175 · norte 1775 · este 3450)
+
+La salida es un solo cuadro de 8400 × 690 que recorre tres paredes contiguas. Mirando de frente: a la izquierda la
+pared **oeste** (3175 px), al frente la **norte** (1775 px) y a la derecha la **este** (3450 px). En el panel C y en
+`FLAT_FORMATO` se escribe `8400x690/3175,1775,3450` (con `/A,B,C` = anchos de cada pared, de izquierda a derecha).
+
+- **Pared de frente (norte):** ahí van el título del loop, los logos de los sponsors, el logo de FLAT del cierre (5),
+  los nombres de los disertantes, el verso en vivo de la clásica (1), los dibujos por oración y el logo de FLAT fijo de
+  la tecla 0. Es una pared de 1775 × 690 (casi la misma proporción que la pantalla del FLAT), así que todo eso se compone
+  como antes, pero en el frente.
+- **Todo el recorrido (las tres paredes):** el telón de texto, el muro de palabras (2, 3), el sedimento (6), la
+  partitura (7, corre de una pared a otra) y la lluvia de letras.
+- **Esquinas:** ninguna palabra queda partida en un rincón (las columnas de las esquinas están bloqueadas para el muro,
+  el sedimento, las palabras grandes y el telón). En la 0 y la 4, cada figura de palabras va entera en una pared (la
+  mitad de las veces, en la de frente) y las líneas que las unen nunca cruzan de una pared a otra.
+- Si la pared de frente fuera otra, se marca con `*`: `8400x690/*3175,1775,3450` pone el frente a la izquierda.
+- Con el lanzador común (`start_instalacion.bat`) ya sale en este formato (es el de fábrica); la ventana o la pantalla
+  completa tiene que medir 8400 × 690 para que cada pared caiga en su lugar. Panel C → Formato de salida muestra cuánto
+  mide la ventana.
 
 ## Forma de las ilustraciones
 

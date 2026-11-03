@@ -154,9 +154,9 @@ body.hide-cursor * {
 /* ── Logo / imagen del loop ───────────────────────────────────────── */
 #overlay {
   position: fixed;
-  left: var(--fx, 0);
+  left: calc(var(--fx, 0px) + var(--wx, 0px)); /* en la pared de frente */
   top: var(--fy, 0);
-  width: var(--fw, 100%);
+  width: var(--ww, var(--fw, 100%));
   height: var(--fh, 100%);
   display: flex;
   align-items: center;
@@ -170,7 +170,7 @@ body.hide-cursor * {
   opacity: 1;
 }
 #overlay img {
-  max-width: calc(var(--fw, 100vw) * 0.62);
+  max-width: calc(var(--ww, var(--fw, 100vw)) * 0.62);
   max-height: calc(var(--fh, 100vh) * 0.58);
   object-fit: contain;
 }
@@ -178,9 +178,9 @@ body.hide-cursor * {
 /* ── Logo de FLAT abajo a la derecha (tecla 0) ─────────────────────── */
 #corner {
   position: fixed;
-  left: var(--fx, 0);
+  left: calc(var(--fx, 0px) + var(--wx, 0px)); /* abajo a la derecha de la pared de frente */
   top: var(--fy, 0);
-  width: var(--fw, 100%);
+  width: var(--ww, var(--fw, 100%));
   height: var(--fh, 100%);
   pointer-events: none;
   opacity: 0;

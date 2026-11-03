@@ -226,12 +226,15 @@ export class ConfigPanel {
         <h2>Formato de salida</h2>
         <p class="hint">Tamaño del cuadro proyectado. Con un formato fijo la imagen se compone para esa proporción y se
         centra en la ventana (lo que sobra queda negro). Escribe otro como «ancho x alto»; con «@N» los primeros N px
-        del ancho no se usan (un proyector apagado a la izquierda), p. ej. «13480x1080@1920».</p>
+        del ancho no se usan (un proyector apagado a la izquierda), p. ej. «13480x1080@1920». Con «/A,B,C» la salida son
+        paredes contiguas de A, B y C px (p. ej. «8400x690/3175,1775,3450»): la de frente es la del medio (o la marcada con
+        *); ahí van título, logos, nombres, verso y dibujos, y ninguna palabra se parte en una esquina.</p>
         <p class="hint" data-formato-url style="display:none"></p>
         <p class="hint" data-ventana></p>
         <div class="row">
           <select data-formato>
-            <option value="1024x768">1024 × 768 (por defecto)</option>
+            <option value="8400x690/3175,1775,3450">8400 × 690 · tres paredes: oeste 3175 · norte 1775 (frente) · este 3450</option>
+            <option value="1024x768">1024 × 768</option>
             <option value="1822x737">1822 × 737</option>
             <option value="13480x1080@1920">13480 × 1080 sin los primeros 1920 (se ven 11560 × 1080)</option>
             <option value="13480x1080">13480 × 1080 completo</option>
@@ -944,7 +947,7 @@ export class ConfigPanel {
       return;
     }
     if (t.matches('[data-formato-otro]')) {
-      if (/^\s*\d{3,5}\s*[x×X*]\s*\d{3,5}\s*(@\s*\d{1,5}\s*)?$/.test(t.value)) this._commit((s) => (s.formato = t.value.replace(/\s/g, '').replace(/×|\*|X/g, 'x').replace(/x+/g, 'x')), false);
+      if (/^\s*\d{3,5}\s*[x×X*]\s*\d{3,5}\s*(@\s*\d{1,5}\s*)?(\/\s*\*?\d{2,5}(\s*,\s*\*?\d{2,5})+\s*)?$/.test(t.value)) this._commit((s) => (s.formato = t.value.replace(/\s/g, '').replace(/^(\d+)[×*X]+(\d+)/, '$1x$2')), false);
       return;
     }
     if (t.dataset.sopt) {

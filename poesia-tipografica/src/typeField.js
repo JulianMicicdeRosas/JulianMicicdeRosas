@@ -264,7 +264,7 @@ export class TypeField {
     this.W = worldH * aspect;
     this.lineSize = clamp(this.H * 0.05, 34, 70);
     this.lineY = -this.lineSize * 0.5; // centrada: el muro le abre un hueco (ver _bdHoles)
-    this.lineMaxW = this.W * 0.78;
+    this._applyWalls(); // pared de frente (verso, título, figuras) y esquinas, en coordenadas del mundo
     this.colW = this.W / RAIN_COLS;
     this.gridCols = Math.ceil(this.W / GRID_CELL) + 2;
     this.gridRows = Math.ceil(this.H / GRID_CELL) + 2;
@@ -277,6 +277,44 @@ export class TypeField {
     this._recomputeFloor();
     if (this.line) this._layoutLine();
     if (this.backdrop) this._bdClear(); // cambio de formato: el telón se rearma a la medida nueva
+  }
+
+  /**
+   * Paredes contiguas (fracciones 0..1 del cuadro) y cuál es la de frente. En la de frente se centran el verso, el
+   * título, los nombres, las figuras y los dibujos; en las uniones entre paredes (esquinas) no se parte ninguna palabra.
+   */
+  setWalls(walls = [{ x0: 0, x1: 1 }], front = 0) {
+    const key = JSON.stringify([walls, front]);
+    if (key === this.wallsKey) return;
+    this.wallsKey = key;
+    this.wallFracs = walls;
+    this.wallFront = front;
+    this._applyWalls();
+    if (this.wall) this._markSeams(this.wall);
+  }
+
+  _applyWalls() {
+    const fr = this.wallFracs && this.wallFracs.length ? this.wallFracs : [{ x0: 0, x1: 1 }];
+    this.walls = fr.map((w) => ({ x0: (w.x0 - 0.5) * this.W, x1: (w.x1 - 0.5) * this.W }));
+    const f = this.walls[this.wallFront || 0] || this.walls[0];
+    this.focus = { x0: f.x0, x1: f.x1, cx: (f.x0 + f.x1) / 2, w: f.x1 - f.x0 };
+    this.seams = this.walls.slice(1).map((w) => w.x0); // dónde dobla la pared (esquinas)
+    this.lineMaxW = this.focus.w * 0.78;
+  }
+
+  /** ¿El tramo horizontal [x0, x1] (mundo) cruza una esquina? */
+  _crossesSeam(x0, x1, pad = 0) {
+    return this.seams.some((sx) => x0 - pad < sx && x1 + pad > sx);
+  }
+
+  /** En la grilla del muro, las columnas de las esquinas quedan bloqueadas (-2): ninguna palabra las cruza. */
+  _markSeams(W) {
+    for (let q = 0; q < W.occ.length; q++) if (W.occ[q] === -2) W.occ[q] = -1;
+    for (const sx of this.seams) {
+      const c = Math.floor((sx - W.x0) / W.cw);
+      if (c < 0 || c >= W.colsN) continue;
+      for (let r = 0; r < W.rowsN; r++) if (W.occ[r * W.colsN + c] === -1) W.occ[r * W.colsN + c] = -2;
+    }
   }
 
   // ════════════════════════════════════════════════════════════════════════
@@ -467,12 +505,13 @@ export class TypeField {
     let maxW = 0;
     for (const row of rows) maxW = Math.max(maxW, row.reduce((a, e) => a + e.adv, 0));
     const pad = S * 0.6;
-    line.rect = { x0: -maxW / 2 - pad, x1: maxW / 2 + pad, y0: this.lineY - S * 0.5 - pad, y1: this.lineY + (rows.length - 0.5) * S * 0.98 + pad };
+    const fx = this.focus.cx; // el verso va en la pared de frente
+    line.rect = { x0: fx - maxW / 2 - pad, x1: fx + maxW / 2 + pad, y0: this.lineY - S * 0.5 - pad, y1: this.lineY + (rows.length - 0.5) * S * 0.98 + pad };
     for (let r = 0; r < rows.length; r++) {
       const row = rows[r];
       let width = 0;
       for (const e of row) width += e.adv;
-      let x = -width / 2;
+      let x = fx - width / 2;
       const y = this.lineY + (rows.length - 1 - r) * S * 0.98;
       for (const e of row) {
         const cx = x + e.adv / 2;
@@ -599,9 +638,9 @@ export class TypeField {
     const atlas = this.atlas;
     // escala por la caja real de la figura: una palabra o un logo apaisado ocupa el ancho
     const bb = fig.bbox || { x: 0, y: 0, w: RES, h: RES };
-    const k = Math.min((this.H * 0.74) / bb.h, (this.W * 0.84) / bb.w) * clamp(+dir.escala || 1, 0.2, 1.5);
+    const k = Math.min((this.H * 0.74) / bb.h, (this.focus.w * 0.84) / bb.w) * clamp(+dir.escala || 1, 0.2, 1.5);
     const ox = bb.x + bb.w / 2, oy = bb.y + bb.h / 2; // centro de la figura en el lienzo
-    const cx = 0;
+    const cx = this.focus.cx; // en la pared de frente
     const cy = Number.isFinite(dir.cy) ? dir.cy * this.H : this.H * 0.055;
     const typo = dir.tipografia || 'mixta';
     const brand = dir.estilo === 'marca' || this.brandAll;
@@ -1335,7 +1374,7 @@ export class TypeField {
   _toneIndex(x, y) {
     const S = this.shape, B = this.backdrop;
     const cellH = (B.top - B.bottom) / S.gh, cellW = cellH / 2;
-    const gx = Math.floor((x - ((B.x0 + B.x1) / 2 - (cellW * S.gw) / 2)) / cellW), gy = Math.floor((B.top - y) / cellH);
+    const gx = Math.floor((x - (this.focus.cx - (cellW * S.gw) / 2)) / cellW), gy = Math.floor((B.top - y) / cellH);
     return gx >= 0 && gx < S.gw && gy >= 0 && gy < S.gh ? gy * S.gw + gx : -1;
   }
 
@@ -1345,11 +1384,11 @@ export class TypeField {
     const S = this.shape, B = this.backdrop;
     let gx, gy;
     if (S.chars) {
-      gx = Math.floor((x - ((B.x0 + B.x1) / 2 - (S.gw * B.cw) / 2)) / B.cw);
+      gx = Math.floor((x - (this.focus.cx - (S.gw * B.cw) / 2)) / B.cw);
       gy = Math.floor((B.top - y) / B.rh - (B.rowsN - S.gh) / 2);
     } else {
       const cellH = (B.top - B.bottom) / S.gh, cellW = cellH / 2;
-      gx = Math.floor((x - ((B.x0 + B.x1) / 2 - (cellW * S.gw) / 2)) / cellW);
+      gx = Math.floor((x - (this.focus.cx - (cellW * S.gw) / 2)) / cellW);
       gy = Math.floor((B.top - y) / cellH);
     }
     return gx >= 0 && gy >= 0 && gy < S.gh ? S.grid[gy][gx] || null : null;
@@ -1407,7 +1446,7 @@ export class TypeField {
       B.ver = this.corpusChars;
     }
     if (B.next) {
-      for (let q = 0, qn = Math.max(70, Math.round(1000 * step)); q < qn && B.rw < B.cells.length; q++, B.rw++) {
+      for (let q = 0, qn = Math.max(70, Math.round(Math.max(1000, B.cells.length / 6) * step)); q < qn && B.rw < B.cells.length; q++, B.rw++) {
         const c = B.cells[B.rw];
         c.ch = B.next[B.rw] || ' ';
         if (c.i < 0 || this.shape?.chars) continue; // con arte de letras, la celda muestra la letra de la imagen
@@ -1433,7 +1472,7 @@ export class TypeField {
     // llenado progresivo: sólo se escribe la fracción del muro que corresponde al tiempo transcurrido
     const F = this.bdFill;
     const limit = F ? Math.floor(B.cells.length * clamp((t - F.t0) / F.dur, 0.04, 1)) : B.cells.length;
-    let budget = Math.max(60, Math.round(1400 * step)); // ~2 s para llenar el telón, a cualquier FPS
+    let budget = Math.max(60, Math.round(Math.max(1400, B.cells.length / 6) * step)); // ~6 s para llenar el telón (o menos), a cualquier FPS y con cualquier ancho
     for (let j = 0; j < B.cells.length; j++) {
       const c = B.cells[j];
       if (c.i >= 0 && this.state[c.i] !== BGW) {
@@ -1508,6 +1547,12 @@ export class TypeField {
     const chars = [...this._u(word + ' ')];
     let k = B.wc || 0;
     if (k % B.colsN + chars.length > B.colsN) k = (Math.floor(k / B.colsN) + 1) * B.colsN; // no partir palabras
+    // ni doblarlas en una esquina: salta a la pared siguiente
+    const c0 = k % B.colsN, sx = this.seams.find((x) => x > B.x0 + c0 * B.cw && x < B.x0 + (c0 + chars.length) * B.cw);
+    if (sx !== undefined) {
+      const c1 = Math.ceil((sx - B.x0) / B.cw) + 1;
+      k = c1 + chars.length > B.colsN ? (Math.floor(k / B.colsN) + 1) * B.colsN : Math.floor(k / B.colsN) * B.colsN + c1;
+    }
     for (const ch of chars) {
       k %= B.cells.length;
       const c = B.cells[k++];
@@ -1648,7 +1693,7 @@ export class TypeField {
     let S = clamp(this.H * maxSize, 40, 200);
     let rows = [];
     for (let attempt = 0; attempt < 12; attempt++) {
-      const maxW = this.W * 0.86, space = S * 0.3;
+      const maxW = this.focus.w * 0.86, space = S * 0.3; // en la pared de frente
       rows = [];
       let fits = true;
       for (const seg of segs) {
@@ -1679,7 +1724,7 @@ export class TypeField {
       const text2 = row.join(' ');
       const slots = [...text2].map((ch) => (ch === ' ' ? -1 : atlas.slot(ch, tk)));
       const total = slots.reduce((a, sl) => a + (sl < 0 ? S * 0.3 : atlas.adv(sl) * S), 0);
-      let x = -total / 2;
+      let x = this.focus.cx - total / 2; // en la pared de frente
       for (const sl of slots) {
         const adv = sl < 0 ? S * 0.3 : atlas.adv(sl) * S;
         if (sl >= 0) {
@@ -1707,7 +1752,7 @@ export class TypeField {
     });
     const half = Math.max(...rows.map((row) => widthOf(row.join(' '), S) + S * 0.3 * (row.length - 1))) / 2;
     const pad = S * 0.35;
-    this.title = { text, idx, rect: { x0: -half - pad, x1: half + pad, y0: y0 - (rows.length - 1) * lineH - S * 0.62 - pad, y1: y0 + S * 0.62 + pad } };
+    this.title = { text, idx, rect: { x0: this.focus.cx - half - pad, x1: this.focus.cx + half + pad, y0: y0 - (rows.length - 1) * lineH - S * 0.62 - pad, y1: y0 + S * 0.62 + pad } };
     this.metaDirty = true;
     this.onTransition?.(0.6);
   }
@@ -1779,6 +1824,7 @@ export class TypeField {
       words: new Map(), // id → {cells, idx}
       nextId: 0,
     };
+    this._markSeams(this.wall);
   }
 
   /**
@@ -1980,9 +2026,13 @@ export class TypeField {
     this.onTransition?.(k >= 5 ? 0.3 : 0.1);
     // saturación: si el muro pasa de ~45 % ocupado, se rompen las más viejas hasta bajar a ~30 %
     let used = 0;
-    for (let q = 0; q < W.occ.length; q++) if (W.occ[q] !== -1) used++;
-    if (used / W.occ.length > 0.45) {
-      while (W.order.length > 1 && used / W.occ.length > 0.3) {
+    let cap = 0;
+    for (let q = 0; q < W.occ.length; q++) {
+      if (W.occ[q] !== -2) cap++; // las columnas de las esquinas no cuentan
+      if (W.occ[q] >= 0) used++;
+    }
+    if (used / cap > 0.45) {
+      while (W.order.length > 1 && used / cap > 0.3) {
         const old = W.order.shift();
         used -= W.words.get(old)?.cells.length || 0;
         this._wallBreak(old);
@@ -2051,6 +2101,7 @@ export class TypeField {
     let best = 0, bestBase = Infinity;
     for (let n = 0; n < 48; n++) {
       const c0 = Math.floor(Math.random() * (W.colsN - wC + 1));
+      if (n < 44 && this._crossesSeam(W.x0 + c0 * W.cw, W.x0 + (c0 + wC) * W.cw, W.cw * 0.5)) continue; // ni en una esquina
       let base = 0;
       for (let c = c0; c < c0 + wC; c++) base = Math.max(base, W.sky[c]);
       const score = base + Math.random() * 1.5; // los valles primero, con algo de azar
@@ -2376,7 +2427,7 @@ export class TypeField {
     for (let tries = 0; tries < 24; tries++) {
       const r0 = Math.floor(Math.random() * (B.rowsN - k + 1)), c0 = Math.floor(Math.random() * (B.colsN - len * k + 1));
       const hit = this.bigWords.some((b) => c0 < b.c0 + b.len * b.k + 2 && c0 + len * k + 2 > b.c0 && r0 < b.r0 + b.k + 1 && r0 + k + 1 > b.r0);
-      if (hit || this._bigWordBlocked(r0 - 1, c0 - 1, k + 2, len * k + 2, holes)) continue;
+      if (hit || this._crossesSeam(B.x0 + c0 * B.cw, B.x0 + (c0 + len * k) * B.cw, B.cw) || this._bigWordBlocked(r0 - 1, c0 - 1, k + 2, len * k + 2, holes)) continue;
       const idx = [];
       const accent = this.keywords.has(normalizeWord(word)) || Math.random() < 0.18 ? 1 : 0;
       [...word].forEach((ch, j) => {
@@ -2556,7 +2607,16 @@ export class TypeField {
   _sparseFigure() {
     const kinds = ['circulo', 'espiral', 'diagonal', 'onda', 'columna', 'constelacion'];
     const kind = kinds[Math.floor(Math.random() * kinds.length)];
-    const F = { kind, n: 0, total: 7 + Math.floor(Math.random() * 4), cx: (Math.random() - 0.5) * this.W * 0.3, cy: (Math.random() - 0.5) * this.H * 0.2, rot: Math.random() * Math.PI * 2, last: null, sc: 1 };
+    // con varias paredes, cada figura va entera en una (la de frente, la mitad de las veces): no dobla en las esquinas
+    let wi = this.wallFront || 0;
+    if (this.walls.length > 1 && Math.random() >= 0.5) {
+      const others = this.walls.map((w, i) => i).filter((i) => i !== wi);
+      const tot = others.reduce((a, i) => a + (this.walls[i].x1 - this.walls[i].x0), 0);
+      let r = Math.random() * tot;
+      wi = others.find((i) => (r -= this.walls[i].x1 - this.walls[i].x0) <= 0) ?? others[others.length - 1];
+    }
+    const wall = this.walls[wi], ww = wall.x1 - wall.x0, wx = (wall.x0 + wall.x1) / 2;
+    const F = { kind, n: 0, total: 7 + Math.floor(Math.random() * 4), wx, ww, cx: wx + (Math.random() - 0.5) * ww * 0.3, cy: (Math.random() - 0.5) * this.H * 0.2, rot: Math.random() * Math.PI * 2, last: null, sc: 1 };
     if (this.sparseKeep) {
       // tecla 0 acumulando: cada párrafo en la zona más libre del cuadro, con una figura más compacta
       F.sc = 0.5;
@@ -2580,7 +2640,7 @@ export class TypeField {
   }
 
   _sparsePoint(F) {
-    const n = F.n, T = F.total, u = n / Math.max(1, T - 1), W = this.W * F.sc, H = this.H * F.sc;
+    const n = F.n, T = F.total, u = n / Math.max(1, T - 1), W = (F.ww ?? this.W) * F.sc, H = this.H * F.sc;
     switch (F.kind) {
       case 'circulo': {
         const a = F.rot + (n / T) * Math.PI * 2;
@@ -2601,7 +2661,7 @@ export class TypeField {
         const p = F.last || [F.cx, F.cy];
         F.rot += (Math.random() - 0.5) * 1.4;
         let x = p[0] + Math.cos(F.rot) * W * 0.11, y = p[1] + Math.sin(F.rot) * H * 0.17;
-        if (Math.abs(x - F.cx) > W * 0.34 || Math.abs(y - F.cy) > H * 0.32 || Math.abs(x) > this.W * 0.42 || Math.abs(y) > this.H * 0.4) {
+        if (Math.abs(x - F.cx) > W * 0.34 || Math.abs(y - F.cy) > H * 0.32 || Math.abs(x - (F.wx ?? 0)) > (F.ww ?? this.W) * 0.42 || Math.abs(y) > this.H * 0.4) {
           F.rot = Math.atan2(F.cy - p[1], F.cx - p[0]) + (Math.random() - 0.5) * 0.8;
           x = p[0] + Math.cos(F.rot) * W * 0.11;
           y = p[1] + Math.sin(F.rot) * H * 0.17;
@@ -2615,6 +2675,7 @@ export class TypeField {
     const t = this.time;
     if (!this.sparseFig || this.sparseFig.n >= this.sparseFig.total) {
       this.sparseFig = this._sparseFigure();
+      this.sparseFig.id = this.sparseFigN = (this.sparseFigN || 0) + 1; // las líneas unen sólo palabras de la misma figura
       if (this.sparseKeep) this.sparseFig.total = 14 + Math.floor(Math.random() * 8); // un párrafo, una figura
     }
     const F = this.sparseFig;
@@ -2633,7 +2694,9 @@ export class TypeField {
     const cw = this.atlas.adv(this.atlas.slot('M', this._k('mono'))) * base, rh = base * 1.1;
     const width = adv * slots.length;
     // alineada a la grilla del módulo mínimo y dentro del cuadro
-    const snapX = (xx) => Math.round((clamp(xx, -this.W / 2 + width / 2 + cw, this.W / 2 - width / 2 - cw) - width / 2) / cw) * cw + width / 2;
+    // dentro de la pared de su figura (sin tocar la esquina)
+    const bx0 = (F.wx ?? 0) - (F.ww ?? this.W) / 2, bx1 = (F.wx ?? 0) + (F.ww ?? this.W) / 2;
+    const snapX = (xx) => Math.round((clamp(xx, bx0 + width / 2 + cw, Math.max(bx0 + width / 2 + cw, bx1 - width / 2 - cw)) - width / 2) / cw) * cw + width / 2;
     const snapY = (yy) => Math.round(clamp(yy, -this.H / 2 + S, this.H / 2 - S) / rh) * rh;
     x = snapX(x);
     y = snapY(y);
@@ -2705,7 +2768,7 @@ export class TypeField {
       idx.push(i);
     });
     const keep = this.sparseKeep > 0;
-    this.sparse.push({ idx, x, y, k, w: width, para: this.sparsePara, until: keep ? Infinity : t + 10 + Math.random() * 6 });
+    this.sparse.push({ idx, x, y, k, w: width, para: this.sparsePara, fig: F.id, until: keep ? Infinity : t + 10 + Math.random() * 6 });
     this.metaDirty = true;
     this.onTransition?.(0.18);
     const cap = keep ? 160 : this.sparseMax;

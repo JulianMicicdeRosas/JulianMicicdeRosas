@@ -55,7 +55,7 @@ export const DEFAULT_SETTINGS = {
   curaduria: '', // texto curatorial en lenguaje normal (guía principal del director de arte)
   imagenes: 'grilla', // 'grilla' = el LLM devuelve la figura como texto · 'llm' = trazado SVG · 'biblioteca' = curadas
   polaridad: 'alternar', // grilla: positivo | negativo | alternar | llm
-  formato: '1024x768', // salida: 'ANCHOxALTO' (cuadro centrado) o 'pantalla'
+  formato: '8400x690/3175,1775,3450', // salida: 'ANCHOxALTO' (cuadro centrado), con '/A,B,C' paredes; o 'pantalla'
   inicio_por_voz: true, // placa del artista: arranca sola cuando la persona habla
   umbral_voz: 0.35,
   forma_grilla: 'llm', // ilustración: 'llm' (composición) · 'emoji' · 'letras'
@@ -134,8 +134,9 @@ export class Show {
   /** Logo de FLAT abajo a la derecha (tecla 0); las palabras sueltas no se ponen encima. */
   async _showCorner() {
     const f = this.field;
-    const W = 0.14, M = 0.03; // ancho y margen, como fracción del cuadro
-    const place = (ar) => (f.reservedFrac = [{ x0: 1 - M - W - 0.02, x1: 1, y0: 0, y1: M + (W * (f.W / f.H)) / Math.max(0.3, ar) + 0.02 }]);
+    const W = 0.14, M = 0.03; // ancho y margen, como fracción de la pared de frente
+    const fx0 = f.focus.x0 / f.W + 0.5, fw = f.focus.w / f.W; // la pared de frente, en fracción del cuadro
+    const place = (ar) => (f.reservedFrac = [{ x0: fx0 + fw * (1 - M - W - 0.02), x1: fx0 + fw, y0: 0, y1: M + (W * (f.focus.w / f.H)) / Math.max(0.3, ar) + 0.02 }]);
     place(2.5);
     if (!this.cornerSrc) {
       try {
@@ -404,7 +405,7 @@ export class Show {
       return;
     }
     // un título largo se parte en renglones según la proporción de la pantalla (que se lea grande)
-    const fig = kind === 'imagen' ? sampleImage(img, { interiorTarget: this.interiorTarget }) : sampleText(content, { interiorTarget: this.interiorTarget, aspect: f.W / f.H });
+    const fig = kind === 'imagen' ? sampleImage(img, { interiorTarget: this.interiorTarget }) : sampleText(content, { interiorTarget: this.interiorTarget, aspect: f.focus.w / f.H });
     if (fig) f.formFigure(fig, dir);
     else if (kind === 'imagen') this._showImage(img.src); // logo inutilizable como máscara: mostrarlo tal cual
     else f.showTitle(content);
@@ -455,11 +456,11 @@ export class Show {
     f.releaseFigure(true);
     if (step.fondo && page.length) {
       // logo chico al centro y un hueco negro en el muro a su medida (con aire alrededor)
-      const area = { w: 0.42, h: 0.4 };
+      const area = { w: 0.42, h: 0.4 }; // fracción de la pared de frente
       const a = page[0].width / page[0].height;
-      const w = Math.min(f.W * area.w, f.H * area.h * a), h = w / a;
-      const pad = f.H * 0.05;
-      f.setBackdropHoles([{ x0: -w / 2 - pad, x1: w / 2 + pad, y0: -h / 2 - pad, y1: h / 2 + pad }]);
+      const w = Math.min(f.focus.w * area.w, f.H * area.h * a), h = w / a;
+      const pad = f.H * 0.05, cx = f.focus.cx;
+      f.setBackdropHoles([{ x0: cx - w / 2 - pad, x1: cx + w / 2 + pad, y0: -h / 2 - pad, y1: h / 2 + pad }]);
       this.stage.show(page, { area });
       return;
     }

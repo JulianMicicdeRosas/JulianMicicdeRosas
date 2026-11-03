@@ -41,7 +41,8 @@ export class Overlay {
       g.strokeStyle = `rgba(220,220,220,${f.sparse.length > 40 ? 0.12 : 0.22})`; // con muchas palabras, líneas más tenues
       g.beginPath();
       // una línea por párrafo: las palabras de cada párrafo arman su figura
-      f.sparse.forEach((w, k) => (k && f.sparse[k - 1].para === w.para ? g.lineTo(this.sx(w.x), this.sy(w.y)) : g.moveTo(this.sx(w.x), this.sy(w.y))));
+      // una línea por figura (cada una entera en una pared: nunca cruzan una esquina)
+      f.sparse.forEach((w, k) => (k && f.sparse[k - 1].para === w.para && f.sparse[k - 1].fig === w.fig ? g.lineTo(this.sx(w.x), this.sy(w.y)) : g.moveTo(this.sx(w.x), this.sy(w.y))));
       g.stroke();
       g.fillStyle = 'rgba(255,152,152,0.9)'; // un punto de marca en cada nodo
       for (const w of f.sparse) g.fillRect(this.sx(w.x) - px * 1.5, this.sy(w.y) - px * 1.5, px * 3, px * 3);
