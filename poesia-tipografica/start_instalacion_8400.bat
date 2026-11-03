@@ -1,6 +1,6 @@
 @echo off
 REM ─────────────────────────────────────────────────────────────
-REM  Encuentro con Martel - Futuridades — tres paredes, 8400 x 690
+REM  UMBRAL — tres paredes, 8400 x 690
 REM  Oeste 3175 (izquierda) · norte 1775 (frente) · este 3450 (derecha).
 REM  Al abrir pregunta: P = pantalla completa (Windows tiene que ver una pantalla de
 REM  8400 x 690) · V = ventana de 8400 x 690 desde la esquina 0,0.

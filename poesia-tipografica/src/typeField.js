@@ -1682,7 +1682,7 @@ export class TypeField {
   /** Nombre de artista (o cualquier título) compuesto con letras que vuelan desde el campo. */
   showTitle(text, { cy = 0, maxSize = 0.13 } = {}) {
     this.clearTitle();
-    // un guion entre espacios parte el renglón ahí (título «Encuentro con Martel - Futuridades»)
+    // un guion entre espacios («Título - Subtítulo») parte el renglón ahí
     const segs = this._u(String(text || '')).split(/\s[-–—]\s|\n/).map((x) => x.trim().split(/\s+/).filter(Boolean)).filter((x) => x.length);
     const words = segs.flat();
     if (!words.length) return;

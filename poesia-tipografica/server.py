@@ -240,7 +240,7 @@ class SettingsStore:
             "marca", "muro", "formato", "canal", "canal2", "forma_grilla", "grilla_preset", "tratamiento",
             "inicio_por_voz", "umbral_voz",
             # marcas de migración: que una corrección automática se aplique una sola vez (y no pise lo elegido)
-            "imagenes_v4", "imagenes_v5", "loop_grupos_v2", "loop_flat_v3", "loop_flat_v4", "loop_titulo_v7", "titulo_flat_v8", "titulo_v9", "formato_v9", "imagenes_v7")
+            "imagenes_v4", "imagenes_v5", "loop_grupos_v2", "loop_flat_v3", "loop_flat_v4", "loop_titulo_v7", "titulo_flat_v8", "titulo_v9", "titulo_v11", "formato_v9", "formato_v10", "imagenes_v7")
 
     def __init__(self, path: str) -> None:
         self.path = path
@@ -319,7 +319,7 @@ def ensure_user_dir() -> None:
         readme = os.path.join(USER_DIR, "LEEME.txt")
         if not os.path.exists(readme):
             with open(readme, "w", encoding="utf-8") as fh:
-                fh.write("Encuentro con Martel - Futuridades (FLAT) · carpeta del show (no se borra al actualizar el programa)\n\n"
+                fh.write("UMBRAL (FLAT) · carpeta del show (no se borra al actualizar el programa)\n\n"
                          "logos/flat             → abre el loop: el logo de FLAT (centro del evento)\n"
                          "logos/organizadores    → primero\n"
                          "logos/socio-cultural   → segundo (más tiempo en pantalla)\n"
@@ -1452,7 +1452,7 @@ GRID_W, GRID_H = 48, 26          # grilla dibujada por el LLM (celda 1 × 2: el 
 LETTER_W, LETTER_H = 64, 30      # arte ASCII con las letras transcriptas (celda ≈ 1 × 1,5, como las letras del muro)
 
 # ── Prompt de la grilla (limpio: sólo lo que el programa usa) ─────────────────────────────────────────
-GRID_BASE = """Eres el director de arte de «Encuentro con Martel - Futuridades» (festival FLAT), una instalación de texto en
+GRID_BASE = """Eres el director de arte de «UMBRAL» (festival FLAT), una instalación de texto en
 vivo: una persona habla en voz alta y sus palabras forman un muro de texto proyectado. Por cada estrofa eliges UNA imagen que nazca de lo dicho; el programa la
 compone con esas mismas palabras (en positivo, la figura hecha de palabras sobre negro; en negativo, un hueco negro
 con la forma de la figura calado en el muro).

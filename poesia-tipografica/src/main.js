@@ -397,6 +397,12 @@ async function boot() {
       s = { ...s, loop, titulo_v9: true };
     }
     if (!s.formato_v9) s = { ...s, formato: s.formato === '1822x737' ? '1024x768' : s.formato, formato_v9: true };
+    // v11: el título vuelve a ser UMBRAL (una vez; después se respeta lo escrito en el panel)
+    if (!s.titulo_v11) {
+      const viejo = (v) => /^\s*(encuentro con martel - futuridades|ciclo de charlas y talleres flat)\s*$/i.test(String(v || ''));
+      const loop = (s.loop || []).map((st) => (st && st.tipo === 'texto' && (viejo(st.contenido) || viejo(st.letras)) ? { ...st, contenido: TITULO, letras: TITULO.toUpperCase() } : st));
+      s = { ...s, loop, titulo_v11: true };
+    }
     // v10: tres paredes (oeste 3175 · norte 1775 · este 3450) en 8400 × 690, una sola vez si estaba un formato anterior
     if (!s.formato_v10) s = { ...s, formato: ['1024x768', '1822x737', '', undefined].includes(s.formato) ? '8400x690/3175,1775,3450' : s.formato, formato_v10: true };
     return s;

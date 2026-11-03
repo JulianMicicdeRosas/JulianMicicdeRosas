@@ -33,7 +33,7 @@ export function resolveAnim(a, i) {
 }
 
 // título del evento: el loop lo escribe en letras después del logo de FLAT y queda fijo hasta T
-export const TITULO = 'Encuentro con Martel - Futuridades';
+export const TITULO = 'UMBRAL';
 
 export const DEFAULT_SETTINGS = {
   artists: [{ name: 'Nombre del artista 1' }, { name: 'Nombre del artista 2' }, { name: 'Nombre del artista 3' }, { name: 'Nombre del artista 4' }],

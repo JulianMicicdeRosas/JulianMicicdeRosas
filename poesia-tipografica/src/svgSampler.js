@@ -317,7 +317,7 @@ function maskCanvas() {
  * Se dibuja engrosado para que el halftone tenga cuerpo dentro de cada trazo.
  */
 export function sampleText(text, { interiorTarget = 4000, font = '"Cormorant Garamond", Georgia, serif', weight = 500, aspect = 0 } = {}) {
-  // un guion entre espacios («Encuentro con Martel - Futuridades») parte el renglón ahí
+  // un guion entre espacios («Título - Subtítulo») parte el renglón ahí
   let lines = String(text || '').split(/\n|\s[-–—]\s/).map((l) => l.trim()).filter(Boolean);
   if (!lines.length) return null;
   const ctx = maskCanvas();

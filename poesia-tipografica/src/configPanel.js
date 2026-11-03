@@ -56,7 +56,7 @@ export class ConfigPanel {
     const el = document.createElement('div');
     el.id = 'config';
     el.innerHTML = `
-      <header><h1>Encuentro con Martel - Futuridades · operación</h1><span class="saved" data-saved></span><button data-act="close">Cerrar (C)</button></header>
+      <header><h1>UMBRAL · operación</h1><span class="saved" data-saved></span><button data-act="close">Cerrar (C)</button></header>
       <section>
         <h2>Atajos</h2>
         <dl class="keys">${SHORTCUTS.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
@@ -368,7 +368,7 @@ export class ConfigPanel {
         return `<div class="item step" data-i="${i}">
           <span class="num">${i + 1}</span>
           ${this._tipoSelect(st)}
-          <input data-field="contenido" value="${isData ? '(archivo subido)' : esc(st.contenido)}" ${isData ? 'readonly' : ''} placeholder="${st.tipo === 'imagen' ? 'loop/logo.png' : 'Encuentro con Martel - Futuridades'}">
+          <input data-field="contenido" value="${isData ? '(archivo subido)' : esc(st.contenido)}" ${isData ? 'readonly' : ''} placeholder="${st.tipo === 'imagen' ? 'loop/logo.png' : 'UMBRAL'}">
           ${st.tipo === 'imagen' ? '<button data-act="upload">Subir…</button>' : ''}
           <select data-field="render">
             <option value="letras"${st.render === 'letras' ? ' selected' : ''}>letras</option>

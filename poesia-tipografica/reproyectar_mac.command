@@ -1,6 +1,6 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-#  Encuentro con Martel - Futuridades — re-proyección de una sesión grabada (Mac)
+#  UMBRAL — re-proyección de una sesión grabada (Mac)
 #  Elige la sesión en esta ventana: el audio sale por la salida de sonido de la Mac
 #  y el show se repite igual (mismas palabras, imágenes, teclas y tiempos).
 #  Uso avanzado:  ./reproyectar_mac.command        → elegir de la lista

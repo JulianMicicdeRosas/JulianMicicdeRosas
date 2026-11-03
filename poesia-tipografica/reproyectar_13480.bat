@@ -1,6 +1,6 @@
 @echo off
 REM ─────────────────────────────────────────────────────────────
-REM  Encuentro con Martel - Futuridades — re-proyección de una sesión grabada en 13480 x 1080
+REM  UMBRAL — re-proyección de una sesión grabada en 13480 x 1080
 REM  (los primeros 1920 px no se ven). Ver start_instalacion_13480.bat.
 REM ─────────────────────────────────────────────────────────────
 set FLAT_FORMATO=13480x1080@1920

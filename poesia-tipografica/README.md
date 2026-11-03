@@ -1,6 +1,6 @@
-# Encuentro con Martel - Futuridades
+# UMBRAL
 
-Programa de proyección en vivo para **«Encuentro con Martel - Futuridades»**, del festival FLAT (basado en *Poesía
+Programa de proyección en vivo para **UMBRAL**, del festival FLAT (basado en *Poesía
 Tipográfica*). Salida por defecto: **8400 × 690 en tres paredes** (oeste 3175 · norte 1775 · este 3450).
 
 Instalación interactiva para proyección mural. Una persona lee poemas frente a un micrófono; cada letra pronunciada
@@ -398,7 +398,7 @@ Para un video fijo, grabar la pantalla durante la re-proyección (OBS).
 
 | Tecla | Acción |
 | --- | --- |
-| `→` / `←` | loop: alterna el logo de FLAT y el título «Encuentro con Martel - Futuridades» (que queda fijo) |
+| `→` / `←` | loop: alterna el logo de FLAT y el título «UMBRAL» (que queda fijo) |
 | `T` | empieza a grabar en modo palabras (desde el título o cuando sea), hasta que se elige un artista |
 | tecla del artista | su placa (la tecla elegida en panel C → Artistas; por defecto 1 … 4, 6 … 9): deja de grabar; arranca cuando habla o con `S` |
 | `0` / `5` | sólo transcripción (pocas palabras) / cierre con el logo de FLAT |
@@ -475,7 +475,7 @@ todo a `Documentos/Ciclo FLAT/logos/`:
 | `embajadas` | 5º | 8 s |
 | `media-partner` | 6º | 6 s (vacía = se salta) |
 
-El título «Encuentro con Martel - Futuridades» se escribe en letras justo después del logo de FLAT (en uno a cuatro
+El título «UMBRAL» se escribe en letras justo después del logo de FLAT (en uno a cuatro
 renglones, según la proporción de la pantalla); el loop vuelve a empezar hasta que se aprieta la tecla de un artista. Cada carpeta se muestra en grilla
 adaptativa (o «de a uno»); entre logo y logo hay una transición de **glitch** (cortes, separación rojo/cian, bloques).
 Se muestran en orden alfabético: para forzar un orden, numerar los archivos (`01-flat.png`, `02-…`).
