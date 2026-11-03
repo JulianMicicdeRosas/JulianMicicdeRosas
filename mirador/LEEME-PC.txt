@@ -39,7 +39,7 @@ PRIMERA PRUEBA
   5. Audio: fuente "micrófono" + música en el parlante; o "canción" con un mp3 de la sesión (Espacio).
 
 TECLAS
-  H panel · F pantalla completa · C esquinas · K calibrar camara a las paredes · B negro · Shift+B aprender fondo · X limpiar ecos
+  H panel · F pantalla completa · C esquinas · K calibrar camara a las paredes · E ver esqueletos · B negro · Shift+B aprender fondo · X limpiar ecos
   V rotar cámaras · R grabar (.webm) · M micrófono · Espacio canción · flechas arriba/abajo cambiar canción
   1-9 y 0 plantillas · G / L exportar / importar sesión · Esc / Retroceso diapositivas
 
@@ -52,4 +52,7 @@ SI ALGO FALLA
   - Pantalla negra en kiosk: apretar H para ver el panel; en Proyección revisar formato y "mosaico".
   - La cámara no aparece: cerrar otros programas que la usen (OBS, Zoom, Teams) y "Buscar cámaras" en el panel.
   - Chrome dice que el sitio no es seguro para la cámara: la dirección debe ser http://127.0.0.1:8765 (el .bat lo hace).
+  - No aparecen los esqueletos: H (panel) > Camaras > Deteccion de cuerpos. La vista previa muestra lo que
+    ve el modelo (verde en uso, rojo ignorado, gris descartado). Probar sensibilidad "maxima", bajar la
+    confianza del cuerpo o subir el realce de luz. E muestra los esqueletos aunque la plantilla los oculte. Los bailarines tienen que estar iluminados.
   Más detalle: README.md (puesta en marcha, OBS, 7 proyectores) y REVISION.md.

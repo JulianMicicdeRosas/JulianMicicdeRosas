@@ -20,7 +20,7 @@ mirador/
 ├── css/mirador.css
 ├── js/
 │   ├── core.js                Parámetros (P), WebGL, shaders, formato de salida, resize
-│   ├── tracking.js            Zonas de cámara, MoveNet por cámara, cuerpos, simulador sin cámara
+│   ├── tracking.js            Zonas de cámara, detector MoveNet (imagen por partes, ids propias), cuerpos, simulador
 │   ├── modules.js             Módulos visuales y productores (máscara GPU / CPU)
 │   ├── render.js              Capa 2D → GL → ecos → bloom → salida · escalador · perfiles · grabación
 │   ├── audio.js               Micrófono / canción, bandas, golpe, multiplicadores AM · playlist
@@ -65,7 +65,7 @@ Sin internet en la sala el programa arranca igual: las librerías **y el modelo 
 | **Sesión** | Nombre, guardar/duplicar/exportar/importar, notas; lista de sesiones; **canciones de la sesión** (agregar archivos, carpeta `canciones/`, orden, reproducir). |
 | **Plantillas** | 12 estéticas con tecla rápida (1‑9, 0). Se aplican encima y después se ajustan. |
 | **Módulos** | Cada módulo con su interruptor, descripción y controles; esqueleto y enlaces; **fuente de la silueta** (esqueleto / brillo / fondo); ecos; posproceso. |
-| **Cámaras** | Zonas (hasta 4 cámaras), disposición (columnas / filas / a mano), espejo por zona, video en la imagen, detección (confianza, suavizado, cuerpos máx.). |
+| **Cámaras** | Zonas (hasta 4 cámaras), disposición (columnas / filas / a mano), espejo por zona, video en la imagen, **detección** (sensibilidad, partes de la imagen, resolución, confianza, realce de luz, vista previa con lo que ve el modelo). |
 | **Audio** | Fuente (apagado / micrófono / canción), micrófono, ganancia, suavizado, medidores en vivo, tempo estimado, y **qué mueve la música** (tamaño ← graves, bloom y destello ← golpe, color ← agudos, ecos ← nivel…). |
 | **Proyección** | Formato de salida, cantidad de proyectores y fundido de bordes, patrón de ajuste con franjas numeradas, negro, esquinas (keystone), pantalla completa, opción B por ventanas, **grabación**. |
 | **Sistema** | Perfil de rendimiento, fps mínimo, adaptación automática, resolución interna y de la capa 2D, densidad de puntos, inferencia, diagnóstico y teclas. |
@@ -74,7 +74,7 @@ Todo lo que tocás se autoguarda en la sesión actual. **Exportá la sesión** (
 
 ### Teclas
 
-`H` panel · `F` pantalla completa · `C` mover esquinas · `K` calibrar cámara · `B` negro · `Shift+B` aprender fondo · `X` limpiar ecos · `V` rotar cámaras · `R` grabar/parar · `M` micrófono sí/no · `Espacio` canción play/pausa · `↑/↓` canción anterior/siguiente · `1‑9, 0` plantillas · `G/L` exportar/importar sesión · `Esc`/`⌫` diapositivas.
+`H` panel · `F` pantalla completa · `C` mover esquinas · `K` calibrar cámara · `E` ver esqueletos encima de todo · `B` negro · `Shift+B` aprender fondo · `X` limpiar ecos · `V` rotar cámaras · `R` grabar/parar · `M` micrófono sí/no · `Espacio` canción play/pausa · `↑/↓` canción anterior/siguiente · `1‑9, 0` plantillas · `G/L` exportar/importar sesión · `Esc`/`⌫` diapositivas.
 
 ## Las dos versiones de audio
 
@@ -132,6 +132,11 @@ Es el formato predeterminado de la puerta ("Sala: 8400 × 690") y se edita en Pr
 Con calibración, el video de la cámara no se dibuja sobre las paredes y la silueta se arma desde el esqueleto, porque la imagen en perspectiva no coincide con el lienzo.
 
 **Cámaras y zonas.** Con una cámara, la zona es toda la pared (la cámara se ve "contenida": a 13440 × 1080 una cámara 16:9 ocupa el centro con bandas a los lados; para cubrir todo el ancho con una sola cámara, en Cámaras → disposición *a mano* podés estirar la zona, o aceptar las bandas y usar módulos que no dependan del video). Cuando sumes cámaras, cada una toma una columna: dos cámaras = dos mitades, tres = tres tercios, o rectángulos a mano. MoveNet pierde cuerpos chicos: conviene **una cámara cada 2–3 proyectores**.
+
+**Si no aparecen los esqueletos.** Cámaras → *Detección de cuerpos* muestra la imagen de la cámara con lo que encuentra el modelo: verde = cuerpo en uso, rojo = zona ignorada, gris = visto con poca confianza y descartado. Las líneas punteadas azules son las partes en que se corta la imagen.
+- *Sensibilidad* **sala** (la de fábrica): resolución 384 y la imagen en **2 mitades** con solapamiento, porque desde una cámara fija lejana los bailarines del fondo quedan chicos y MoveNet no los ve en la imagen entera. **Máxima**: 3 partes y umbrales más bajos (fondo de la sala, poca luz). **Rápida/normal**: imagen entera, para cuerpos grandes cerca de la cámara o una máquina lenta.
+- Si hay cuerpos en gris, bajá la *confianza del cuerpo*. Si no hay nada, subí la sensibilidad o el *realce de luz*.
+- En una prueba con la foto de la sala oscurecida y cuatro personas a distintas distancias: imagen entera → 1 bailarín; 2 mitades → 3; 3 partes → 4 (y el operador en la zona ignorada).
 
 **Luz.** La cámara tiene que ver a los bailarines, no a la proyección. En sala oscura la solución estándar es **luz infrarroja**: focos IR (850 nm) y una cámara sin filtro IR (o una cámara de seguridad USB "IR"); el público no la ve y el proyector no la contamina. La silueta por defecto se arma desde el esqueleto justamente para no depender del brillo de la imagen.
 

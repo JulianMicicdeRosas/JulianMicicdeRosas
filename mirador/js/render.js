@@ -21,7 +21,7 @@ function drawScene(dt){
   if (P.map.blackout) return;
   const list = [...bodies.values()];
   if (P.link.enabled && list.length > 1) drawLinks(list);
-  if (P.track.showSkeleton || P.track.showJoints || P.track.showId) drawSkeletons(list);
+  if (P.track.showSkeleton || verEsqueletos || P.track.showJoints || P.track.showId) drawSkeletons(list);
   for (const m of plan) if (m.draw2d && m.active) m.draw2d();
 }
 

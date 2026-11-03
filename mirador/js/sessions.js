@@ -29,6 +29,7 @@ const Sessions = {
   async apply(s, opts = {}){
     if (!s || !s.P) return false;
     for (const k in s.P) if (P[k] && typeof s.P[k] === 'object') { Object.assign(P[k], s.P[k]); if (k === 'audio' && s.P.audio.react) Object.assign(P.audio.react, s.P.audio.react); }
+    if (!s.P.det && P.track.minScore >= .3) P.track.minScore = .22;   // sesiones de antes de la detección por partes: umbral más permisivo
     if (Array.isArray(s.corners) && s.corners.length === 4) corners = deepClone(s.corners);
     if (s.layout?.orient) LAYOUT.orient = s.layout.orient;
     plantillaActual = s.plantilla || '';

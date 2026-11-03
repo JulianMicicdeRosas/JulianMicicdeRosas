@@ -1,8 +1,8 @@
 "use strict";
 /* =====================================================================
    MIRADOR — tracking
-   Zonas (cámaras) repartidas en la salida, un detector MoveNet por
-   cámara (el tracker guarda estado y no se comparte), cuerpos
+   Zonas (cámaras) repartidas en la salida, un detector MoveNet
+   compartido (la imagen se corta en partes para ver cuerpos chicos), cuerpos
    suavizados en coordenadas de salida, y un simulador sin cámara.
    ===================================================================== */
 const SKEL = [[5,6],[5,7],[7,9],[6,8],[8,10],[5,11],[6,12],[11,12],[11,13],[13,15],[12,14],[14,16],[0,5],[0,6]];
@@ -14,7 +14,8 @@ let running = false, simMode = false, inferBudgetMs = 33;
 const bodies = new Map(); const colorSlot = new Map(); let nextSlot = 0;
 let availableCameras = [], srcCounter = 0;
 const camLabel = (c, i) => c.label || `Cámara ${i + 1}`;
-let modelBase = null;   // URL local del modelo si está en vendor/movenet
+let modelBase = null;
+let verEsqueletos = false;   // E: esqueletos encima de todo, aunque la plantilla los oculte (para revisar la detección)   // URL local del modelo si está en vendor/movenet
 
 async function refreshCameraList(){
   try { availableCameras = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput'); }
@@ -31,19 +32,94 @@ async function probeLocalModel(){
   catch (e) { modelBase = ''; }
   return modelBase;
 }
-async function makeDetector(){
+/* ---------- detector ----------
+   Un solo MoveNet MultiPose para todas las cámaras (sin tracker interno: no guarda estado, se puede
+   compartir). La resolución de entrada (multiPoseMaxDimension) se fija al crearlo; si cambia en el
+   panel, se rehace. Las ids estables las pone trackPoses(), también entre mitades de la imagen. */
+const DET = { detector:null, key:'', single:false, building:null, error:'' };
+/* sensibilidad: cuántos píxeles le llegan al modelo (res), en cuántas partes se corta la imagen (tiles),
+   y desde qué puntaje se acepta un cuerpo (minPose) y un punto del esqueleto (P.track.minScore) */
+const DET_PRESETS = {
+  rapida: { label:'rápida: cuerpos grandes, cerca de la cámara', res:256, tiles:1, minPose:.2,  minScore:.3 },
+  normal: { label:'normal: una persona o dos a media distancia', res:320, tiles:1, minPose:.15, minScore:.25 },
+  sala:   { label:'sala: cámara lejos, cuerpos chicos (2 mitades)', res:384, tiles:2, minPose:.12, minScore:.22 },
+  maxima: { label:'máxima: fondo de la sala, poca luz (3 partes)', res:384, tiles:3, minPose:.1,  minScore:.18 },
+};
+function applyDetPreset(name){ const d = DET_PRESETS[name]; if (!d) return; P.det.preset = name; P.det.res = d.res; P.det.tiles = d.tiles; P.det.minPose = d.minPose; P.track.minScore = d.minScore; }
+async function makeDetector(res){
   const local = await probeLocalModel();
   const MN = poseDetection.SupportedModels.MoveNet;
   try {
-    const cfg = { modelType:poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING, enableTracking:true, trackerType:poseDetection.TrackerType.BoundingBox, minPoseScore:.2 };
+    const cfg = { modelType:poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING, enableTracking:false, minPoseScore:.05, multiPoseMaxDimension:res };
     if (local) cfg.modelUrl = local + '/multipose-lightning/model.json';
-    return await poseDetection.createDetector(MN, cfg);
+    DET.single = false; return await poseDetection.createDetector(MN, cfg);
   } catch (e) {
     console.warn('MultiPose no disponible, uso SinglePose:', e.message);
     const cfg = { modelType:poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING };
     if (local) cfg.modelUrl = local + '/singlepose-lightning/model.json';
-    return await poseDetection.createDetector(MN, cfg);
+    DET.single = true; return await poseDetection.createDetector(MN, cfg);
   }
+}
+async function ensureDetector(){
+  if (simMode) return null;
+  const res = clamp(Math.round((P.det?.res || 384) / 32) * 32, 160, 640), key = 'mp' + res;
+  if (DET.detector && DET.key === key) return DET.detector;
+  if (DET.building) return DET.building;
+  DET.building = (async () => {
+    try { const d = await makeDetector(res); const old = DET.detector; DET.detector = d; DET.key = key; DET.error = ''; try { old?.dispose(); } catch (e) {} return d; }
+    catch (e) { DET.error = e.message; console.error('No se pudo crear el detector:', e); return DET.detector; }
+    finally { DET.building = null; }
+  })();
+  return DET.building;
+}
+/* partes horizontales con solapamiento: 2 → [0–.6] [.4–1]; 3 → [0–.47] [.27–.73] [.53–1] */
+function detTiles(n, ov = .2){ n = Math.max(1, Math.min(4, n | 0)); if (n === 1) return [{ x0:0, x1:1 }]; const w = (1 + (n - 1) * ov) / n; return Array.from({ length:n }, (_, i) => ({ x0:i * (w - ov), x1:Math.min(1, i * (w - ov) + w) })); }
+function kpBox(p, ms = .2){ let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, n = 0;
+  for (const k of p.keypoints) if ((k.score ?? 0) > ms) { x0 = Math.min(x0, k.x); x1 = Math.max(x1, k.x); y0 = Math.min(y0, k.y); y1 = Math.max(y1, k.y); n++; }
+  if (n < 2) return ms > -1 ? kpBox(p, -2) : { x0:0, y0:0, x1:1, y1:1 };
+  return { x0, y0, x1, y1 }; }
+function detPrep(src, i, sx, sw, vh, light){
+  const cv = (src._tileCv ||= [])[i] ||= document.createElement('canvas'); if (cv.width !== sw || cv.height !== vh) { cv.width = sw; cv.height = vh; }
+  const cx = cv._ctx ||= cv.getContext('2d', { alpha:false, desynchronized:true });
+  cx.filter = light !== 1 ? `brightness(${light}) contrast(${(1 + (light - 1) * .12).toFixed(3)})` : 'none';
+  cx.drawImage(src.video, sx, 0, sw, vh, 0, 0, sw, vh); return cv;
+}
+/* detecta en una cámara: corta en partes, une los duplicados del solapamiento y pone ids estables */
+async function detectSource(src){
+  const det = DET.detector, v = src.video, vw = v.videoWidth, vh = v.videoHeight; if (!det || !vw || !vh) return src.poses || [];
+  const tiles = DET.single ? [{ x0:0, x1:1 }] : detTiles(P.det.tiles), light = +P.det.light || 1, raw = [];
+  const t0 = performance.now();
+  for (let i = 0; i < tiles.length; i++) {
+    const t = tiles[i], sx = Math.round(t.x0 * vw), sw = Math.round((t.x1 - t.x0) * vw);
+    const input = (tiles.length > 1 || light !== 1) ? detPrep(src, i, sx, sw, vh, light) : v;
+    let ps = []; try { ps = await det.estimatePoses(input, { maxPoses:Math.min(6, P.track.maxPoses + 1), flipHorizontal:false }); } catch (e) { DET.error = e.message; }
+    for (const p of ps) { if (sx) for (const k of p.keypoints) k.x += sx;
+      const b = kpBox(p), edge = (i > 0 && b.x0 < sx + sw * .03) || (i < tiles.length - 1 && b.x1 > sx + sw * .97);
+      p._tile = i; p._box = b; p._q = (p.score ?? .5) * (edge ? .6 : 1); raw.push(p); }
+  }
+  src._raw = raw; const diag = src._diag ||= {}; diag.raw = raw.length; diag.low = raw.filter(p => (p.score ?? 1) < P.det.minPose).length; diag.ms = performance.now() - t0; diag.tiles = tiles.length;
+  diag.best = raw.reduce((m, p) => Math.max(m, p.score ?? 0), 0);
+  let poses = raw.filter(p => (p.score ?? 1) >= P.det.minPose).sort((a, b) => b._q - a._q);
+  if (tiles.length > 1) { const kept = [];   // la misma persona vista en dos partes: queda la más completa
+    for (const p of poses) { const a = p._box, aA = Math.max(1, (a.x1 - a.x0) * (a.y1 - a.y0));
+      const dup = kept.some(q => { if (q._tile === p._tile) return false; const b = q._box, ix = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0), iy = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
+        if (ix <= 0 || iy <= 0) return false; const bA = Math.max(1, (b.x1 - b.x0) * (b.y1 - b.y0)); return ix * iy / Math.min(aA, bA) > .45; });
+      if (!dup) kept.push(p); }
+    poses = kept; }
+  poses = poses.slice(0, P.track.maxPoses);
+  diag.kept = poses.length;
+  return trackPoses(src, poses);
+}
+/* ids estables por cercanía al cuadro anterior (el color de cada bailarín no salta) */
+function trackPoses(src, poses){
+  const T = src._trk ||= { next:0, list:[] }, now = performance.now();
+  const items = poses.map(p => { const b = p._box || kpBox(p); return { p, cx:(b.x0 + b.x1) / 2, cy:(b.y0 + b.y1) / 2, s:Math.max(b.x1 - b.x0, b.y1 - b.y0, 12) }; });
+  const pairs = []; items.forEach((it, i) => T.list.forEach((tr, j) => { const d = Math.hypot(it.cx - tr.cx, it.cy - tr.cy) / Math.max(it.s, tr.s); if (d < .9) pairs.push([d, i, j]); }));
+  pairs.sort((a, b) => a[0] - b[0]); const ui = new Set(), uj = new Set();
+  for (const [, i, j] of pairs) { if (ui.has(i) || uj.has(j)) continue; ui.add(i); uj.add(j); const it = items[i], tr = T.list[j]; Object.assign(tr, { cx:it.cx, cy:it.cy, s:it.s, t:now }); it.p.id = tr.id; }
+  items.forEach((it, i) => { if (ui.has(i)) return; const tr = { id:T.next++, cx:it.cx, cy:it.cy, s:it.s, t:now }; T.list.push(tr); it.p.id = tr.id; });
+  T.list = T.list.filter(tr => now - tr.t < 800);
+  return poses;
 }
 async function initTF(){
   // El backend de TF exige una GPU "sin salvedades" (failIfMajorPerformanceCaveat). Si el navegador no la da
@@ -60,15 +136,13 @@ async function initTF(){
   }
   if (!(await tf.setBackend('webgl'))) throw new Error('el backend WebGL de TensorFlow no inicia'); await tf.ready();
 }
-async function ensureDetector(src){ if (!src.detector && !simMode) src.detector = await makeDetector(); }
 
 async function detectLoop(){
   while (running) {
     const t0 = performance.now();
-    if (!simMode) for (const src of sources) {
-      if (!src.detector || src.video.readyState < 2) continue;
-      try { src.poses = await src.detector.estimatePoses(src.video, { maxPoses:P.track.maxPoses, flipHorizontal:false }); } catch (e) {}
-    }
+    if (!simMode) { await ensureDetector();
+      for (const src of sources) { if (!DET.detector || src.video.readyState < 2) continue;
+        try { src.poses = await detectSource(src); } catch (e) { DET.error = e.message; } } }
     inferBudgetMs = inferBudgetMs * .9 + (performance.now() - t0) * .1;
     const period = 1000 / Math.max(15, prof.inferHz), wait = Math.max(0, period - (performance.now() - t0));
     await new Promise(r => setTimeout(r, wait));
@@ -158,7 +232,7 @@ async function setCameras(ids, rects){
   if (!next.length) return;
   sources.length = 0; sources.push(...next);
   if (rects) sources.forEach((s, i) => { if (rects[i]) { s.rect = rects[i].rect || s.rect; s.mirror = rects[i].mirror; if (rects[i].cal) s.cal = deepClone(rects[i].cal); } });
-  for (const src of sources) await ensureDetector(src);
+  await ensureDetector();
   layoutCells(); if (fbFeed[0]) clearFeedback();
   if (typeof Sessions !== 'undefined') Sessions.touch();
   if (typeof UI !== 'undefined') UI.refresh('camaras');

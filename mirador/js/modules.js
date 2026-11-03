@@ -343,7 +343,7 @@ function sampleEdges(){   // bordes de la máscara (muestra barata, sin marching
 function drawSkeletons(list){
   sctx.globalCompositeOperation = 'lighter'; sctx.lineCap = 'round'; sctx.lineJoin = 'round';
   for (const b of list) {
-    if (P.track.showSkeleton) { sctx.lineWidth = P.track.boneWidth * DPR * AM.size; sctx.strokeStyle = hsl(b.hue + AM.hue, 95, 66, .55 + .4 * P.track.glow * AM.glow); sctx.beginPath();
+    if (P.track.showSkeleton || verEsqueletos) { sctx.lineWidth = Math.max(P.track.boneWidth, verEsqueletos ? 4 : 0) * DPR * AM.size; sctx.strokeStyle = hsl(b.hue + AM.hue, 95, 66, .55 + .4 * P.track.glow * AM.glow); sctx.beginPath();
       for (const [a, c] of SKEL) { const ka = b.kp[a], kc = b.kp[c]; if (ka && kc && ka.s > P.track.minScore && kc.s > P.track.minScore) { sctx.moveTo(ka.x, ka.y); sctx.lineTo(kc.x, kc.y); } } sctx.stroke(); }
     if (P.track.showJoints) { sctx.fillStyle = hsl((b.hue + 30) % 360, 100, 78, .9);
       for (const k of b.kp) if (k && k.s > P.track.minScore) { sctx.beginPath(); sctx.arc(k.x, k.y, P.track.jointSize * DPR * .5, 0, 6.283); sctx.fill(); } }

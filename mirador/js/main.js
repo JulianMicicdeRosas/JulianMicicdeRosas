@@ -43,7 +43,7 @@ async function start(sim){
     if (!ids.length) ids = [availableCameras[0].deviceId];
     try { await setCameras(ids, sess?.zonas); }
     catch (e) { console.error(e); }
-    if (!sources.length || sources.some(s => !s.detector)) {
+    if (!sources.length || !DET.detector) {
       toast('No se pudo cargar el modelo de pose (¿sin internet y sin vendor/movenet?). Sigo en modo simulación.', 6000);
       simMode = true; sources.forEach(closeSource); sources.length = 0;
     }
@@ -99,6 +99,7 @@ addEventListener('keydown', e => {
   else if (k === 'h') UI.togglePanel();
   else if (k === 'c') { P.map.calibrate = !P.map.calibrate; uiCanvas.classList.toggle('calibrating', P.map.calibrate); UI.refresh('proyeccion'); }
   else if (k === 'k') Calib.toggle();
+  else if (k === 'e') { verEsqueletos = !verEsqueletos; toast(verEsqueletos ? 'esqueletos visibles encima de todo (E)' : 'esqueletos según la plantilla'); UI.refresh('camaras'); }
   else if (k === 'f') { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); }
   else if (k === 'b' && e.shiftKey) learnBackground();
   else if (k === 'b') { P.map.blackout = !P.map.blackout; UI.refresh('proyeccion'); }

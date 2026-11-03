@@ -134,7 +134,47 @@ const UI = {
   },
 
   /* =================== Cámaras =================== */
+  /* detección: sensibilidad, vista previa de lo que ve el modelo y diagnóstico en vivo */
+  detGroup(body){
+    const gt = this.group(body, 'Detección de cuerpos', { desc:'Si no aparecen esqueletos: subí la sensibilidad. "Sala" corta la imagen en dos mitades para que el modelo vea más grandes a los bailarines del fondo.' });
+    const pre = Object.fromEntries(Object.entries(DET_PRESETS).map(([k, d]) => [k, d.label])); pre.mano = 'a mano';
+    this.select(gt, P.det, 'preset', pre, 'sensibilidad', v => { if (v !== 'mano') applyDetPreset(v); this.refresh('camaras'); });
+    const manual = () => { P.det.preset = 'mano'; };
+    this.select(gt, P.det, 'tiles', [[1, 'imagen entera'], [2, '2 mitades (más alcance)'], [3, '3 partes (máximo alcance)']], 'partes de la imagen', manual);
+    this.range(gt, P.det, 'res', 192, 512, 32, 'resolución del modelo', manual);
+    this.range(gt, P.det, 'minPose', .03, .5, .01, 'confianza del cuerpo', manual);
+    this.range(gt, P.track, 'minScore', .05, .6, .01, 'confianza de los puntos', manual);
+    this.range(gt, P.det, 'light', 1, 3, .05, 'realce de luz (sala oscura)');
+    this.range(gt, P.track, 'smoothing', 0, .95, .01, 'suavizado'); this.range(gt, P.track, 'maxPoses', 1, 6, 1, 'cuerpos máx. por cámara');
+    this.buttons(gt, [[verEsqueletos ? 'Ocultar esqueletos (E)' : 'Ver esqueletos en la imagen (E)', () => { verEsqueletos = !verEsqueletos; this.refresh('camaras'); }, verEsqueletos ? 'on' : 'primary']]);
+    const cv = document.createElement('canvas'); cv.className = 'detprev'; cv.width = 480; cv.height = 270; cv.style.cssText = 'width:100%;aspect-ratio:16/9;background:#0b0d12;border-radius:6px;margin:6px 0;display:block;cursor:pointer'; cv.title = 'Lo que ve el detector. Clic: vista grande (K)'; cv.onclick = () => Calib.toggle(true); gt.appendChild(cv);
+    const st = document.createElement('div'); st.className = 'note'; gt.appendChild(st);
+    const draw = () => {
+      const s = sources[Calib.zone] || sources[0], c = cv.getContext('2d'); c.fillStyle = '#0b0d12'; c.fillRect(0, 0, cv.width, cv.height);
+      if (!s) { st.textContent = 'sin cámara'; return; }
+      const vw = s.video.videoWidth || 1280, vh = s.video.videoHeight || 720, sc = Math.min(cv.width / vw, cv.height / vh), ox = (cv.width - vw * sc) / 2, oy = (cv.height - vh * sc) / 2;
+      if (s.video.readyState >= 2) { c.filter = P.det.light !== 1 ? `brightness(${P.det.light})` : 'none'; c.drawImage(s.video, ox, oy, vw * sc, vh * sc); c.filter = 'none'; }
+      const tiles = DET.single ? [{ x0:0, x1:1 }] : detTiles(P.det.tiles); c.strokeStyle = 'rgba(120,180,255,.55)'; c.setLineDash([4, 4]); c.lineWidth = 1;
+      tiles.forEach(t => c.strokeRect(ox + t.x0 * vw * sc + .5, oy + .5, (t.x1 - t.x0) * vw * sc - 1, vh * sc - 1)); c.setLineDash([]);
+      (s.cal?.ignore || []).forEach(r => { c.fillStyle = 'rgba(255,80,80,.15)'; c.fillRect(ox + Math.min(r.x0, r.x1) * vw * sc, oy + Math.min(r.y0, r.y1) * vh * sc, Math.abs(r.x1 - r.x0) * vw * sc, Math.abs(r.y1 - r.y0) * vh * sc); });
+      const kept = new Set(s.poses || []); let nOk = 0, nIgn = 0;
+      for (const p of (s._raw || [])) { const low = (p.score ?? 1) < P.det.minPose, used = kept.has(p); if (!low && !used) continue;
+        const ign = used && s._calH && calIgnored(s, p); if (used && !ign) nOk++; if (ign) nIgn++;
+        c.strokeStyle = low ? 'rgba(160,160,160,.6)' : ign ? 'rgba(255,107,107,.9)' : 'rgba(105,240,176,.95)'; c.lineWidth = 2; c.setLineDash(low ? [3, 3] : []); c.beginPath();
+        for (const [a, b] of SKEL) { const ka = p.keypoints[a], kb = p.keypoints[b]; if ((ka.score ?? 0) < P.track.minScore * (low ? .7 : 1) || (kb.score ?? 0) < P.track.minScore * (low ? .7 : 1)) continue; c.moveTo(ox + ka.x * sc, oy + ka.y * sc); c.lineTo(ox + kb.x * sc, oy + kb.y * sc); }
+        c.stroke(); c.setLineDash([]);
+        const b = p._box; if (b) { c.fillStyle = c.strokeStyle; c.font = '10px ui-monospace,monospace'; c.fillText((p.score ?? 0).toFixed(2), ox + b.x0 * sc, oy + b.y0 * sc - 3); } }
+      const d = s._diag || {}, low = d.low || 0;
+      st.innerHTML = s.video.readyState < 2 ? 'la cámara todavía no da imagen…' : !DET.detector ? (DET.error ? 'modelo con error: ' + esc(DET.error) : 'cargando el modelo…')
+        : `<b style="color:#69f0b0">${nOk}</b> cuerpo${nOk === 1 ? '' : 's'} en uso` + (nIgn ? ` · <b style="color:#ff6b6b">${nIgn}</b> en zona ignorada` : '') + (low ? ` · <span style="color:#aaa">${low} con poca confianza (gris)</span>` : '')
+          + ` · ${d.tiles || 1} parte${(d.tiles || 1) > 1 ? 's' : ''} · ${Math.round(d.ms || 0)} ms` + (nOk === 0 && low ? '<br>Hay cuerpos en gris: bajá la "confianza del cuerpo" o subí la sensibilidad.' : nOk === 0 && !low ? '<br>El modelo no encuentra a nadie: probá sensibilidad "máxima", más luz sobre los bailarines o el realce de luz.' : '');
+    };
+    this.liveFns.push(draw); draw();
+    this.kv(gt, [['modelo', (modelBase ? 'local (vendor/movenet)' : 'descargado') + (DET.single ? ' · SinglePose (1 cuerpo)' : ' · MultiPose')]]);
+    this.note(gt, 'Verde: cuerpo en uso. Rojo: zona ignorada. Gris: el modelo lo vio con poca confianza y se descarta. Las líneas punteadas azules son las partes en que se corta la imagen. Lo más fiable en sala oscura: luz sobre los bailarines que no pegue en las paredes, o cámara con infrarrojo.');
+  },
   tab_camaras(body){
+    if (!simMode) this.detGroup(body);
     const g = this.group(body, simMode ? 'Simulación (sin cámara)' : 'Zonas de cámara', { desc: simMode ? 'Cuerpos sintéticos para probar estéticas y formato.' : 'Cada cámara ocupa una zona de la salida. Con 7 proyectores y una sola cámara, la zona es toda la pared; cuando sumes cámaras, repartilas en columnas o ubicalas a mano.' });
     if (simMode) { this.range(g, SIM, 'n', 1, 8, 1, 'cuerpos simulados'); }
     else {
@@ -167,10 +207,6 @@ const UI = {
       this.kv(gz, [['video', src.video.videoWidth ? `${src.video.videoWidth}×${src.video.videoHeight}` : '—'], ['cuerpos', [...bodies.values()].filter(b => b.src === src.id).length]]); });
     const gv = this.group(body, 'Video de cámara en la imagen', { closed:true });
     this.toggle(gv, P.cam, 'mirror', 'espejo (general)'); this.toggle(gv, P.cam, 'showVideo', 'mostrar video'); this.range(gv, P.cam, 'videoOpacity', 0, 1, .01, 'opacidad'); this.range(gv, P.cam, 'contrast', 0, 3, .01, 'contraste'); this.range(gv, P.cam, 'brightness', 0, 3, .01, 'brillo'); this.range(gv, P.cam, 'saturate', 0, 3, .01, 'saturación');
-    const gt = this.group(body, 'Detección de cuerpos', { closed:true });
-    this.range(gt, P.track, 'minScore', .05, .8, .01, 'confianza mínima'); this.range(gt, P.track, 'smoothing', 0, .95, .01, 'suavizado'); this.range(gt, P.track, 'maxPoses', 1, 6, 1, 'cuerpos máx. por cámara');
-    this.kv(gt, [['inferencia', `${inferBudgetMs.toFixed(0)} ms / ${prof.inferHz} Hz`], ['modelo', modelBase ? 'local (vendor/movenet)' : 'descargado (tfhub)']]);
-    this.note(gt, 'La cámara tiene que ver a los bailarines iluminados, no el proyector. Lo más fiable en sala oscura: una cámara con luz infrarroja (o cámara sin filtro IR + focos IR) apuntando al escenario. Ver <code>README.md</code>.');
   },
 
   /* =================== Audio =================== */
