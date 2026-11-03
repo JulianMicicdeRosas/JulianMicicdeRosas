@@ -146,15 +146,20 @@ const UI = {
       this.buttons(g, [['Buscar cámaras', async () => { await refreshCameraList(); this.refresh('camaras'); }], ['Rotar orden (V)', rotateCameras]]);
     }
     this.select(g, LAYOUT, 'orient', [['columnas', 'lado a lado (columnas)'], ['filas', 'apiladas (filas)'], ['libre', 'a mano (rectángulos)']], 'disposición', () => { layoutCells(); clearFeedback(); this.refresh('camaras'); });
-    const gc = this.group(body, 'Calibrar cámara por tramos (K)', { closed:!(sources[Calib.zone]?.cal?.enabled || Calib.on), desc:'Para paredes que doblan: marcá en la imagen de la cámara la línea de arriba (borde superior de la pared) y la de abajo (donde pisan los bailarines), con un vértice en cada esquina. Cada tramo se asigna a sus proyectores.' });
+    const gc = this.group(body, 'Calibrar cámara a las paredes (K)', { closed:!(sources[Calib.zone]?.cal?.enabled || Calib.on), desc:'La cámara fija ve la sala en perspectiva. Se marcan dos líneas como las celestes de la foto: arriba el borde superior de las paredes y abajo la base, con un vértice en cada esquina. Cada tramo es una pared del lienzo.' });
     if (sources.length > 1) { const zs = {}; sources.forEach((s, i) => zs[i] = `zona ${i + 1} · ${s.label}`); this.select(gc, Calib, 'zone', zs, 'zona', () => this.refresh('camaras')); }
     const cs = sources[Calib.zone] || sources[0];
-    if (cs) { if (!cs.cal) cs.cal = defaultCal(3);
-      this.toggle(gc, cs.cal, 'enabled', 'usar esta calibración', () => { calPrepare(cs); clearFeedback(); });
-      const nt = { n:cs.cal.top.length - 1 }; this.range(gc, nt, 'n', 1, 8, 1, 'tramos (paredes)', v => { Calib.setTramos(v); this.refresh('camaras'); });
-      cs.cal.shares.forEach((_, i) => this.range(gc, cs.cal.shares, i, 0, 7, .5, `tramo ${i + 1}: proyectores`, () => calPrepare(cs)));
-      this.buttons(gc, [[Calib.on ? 'Cerrar vista (K)' : 'Abrir vista de calibración (K)', () => Calib.toggle(), Calib.on ? 'on' : 'primary'], ['Reiniciar puntos', () => { Calib.reset(); this.refresh('camaras'); }]]);
-      this.note(gc, 'Ejemplo sala en U con 7 proyectores: 3 tramos con 2 · 3 · 2. Los proyectores se reparten en proporción; el total no tiene que sumar 7.'); }
+    if (cs) { if (!cs.cal) cs.cal = salaCal(); cs.cal = normCal(cs.cal); const cal = cs.cal, upd = () => { calPrepare(cs); clearFeedback(); };
+      this.toggle(gc, cal, 'enabled', 'usar calibración', upd);
+      this.select(gc, cal, 'mode', [['piso', 'piso: la figura se para en la pared que tiene detrás'], ['vista', 'vista: reproyecta lo que ve la cámara']], 'modo', () => { upd(); this.refresh('camaras'); });
+      if (cal.mode !== 'vista') { this.range(gc, cal, 'figH', .2, 1.2, .01, 'altura de la figura', upd); this.range(gc, cal, 'base', .5, 1.1, .005, 'altura del piso', upd); this.range(gc, cal, 'depth', 0, 1, .01, 'más chica lejos de la pared', upd); }
+      const nt = { n:cal.top.length - 1 }; this.range(gc, nt, 'n', 1, 8, 1, 'tramos (paredes)', v => { Calib.setTramos(v); this.refresh('camaras'); });
+      const nw = wallRanges().length; this.toggle(gc, cal, 'useWalls', nw ? `ancho según las paredes (${nw})` : 'ancho según las paredes', () => { upd(); this.refresh('camaras'); });
+      if (!(cal.useWalls && nw === cal.top.length - 1)) cal.shares.forEach((_, i) => this.range(gc, cal.shares, i, 0, 10, .1, `tramo ${i + 1}: peso`, upd));
+      this.buttons(gc, [[Calib.on ? 'Cerrar vista (K)' : 'Abrir vista de calibración (K)', () => Calib.toggle(), Calib.on ? 'on' : 'primary'], ['Valores de la foto', () => { Calib.reset(); this.refresh('camaras'); }]]);
+      this.buttons(gc, [['+ zona ignorada', () => { Calib.addIgnore(); this.refresh('camaras'); }], ['Quitar zonas ignoradas', () => { Calib.clearIgnore(); this.refresh('camaras'); }]]);
+      this.note(gc, `En la vista: arrastrá los puntos verdes (líneas), el amarillo (cámara en el piso, fuera de cuadro) y los rojos (zona ignorada: el operador sentado abajo a la izquierda). Cada bailarín muestra la recta que lo lleva a su pared. Zonas ignoradas: <b>${cal.ignore.length}</b>.`);
+      if (cal.enabled) this.note(gc, 'Con calibración, el video de cámara no se dibuja sobre las paredes y la silueta sale del esqueleto.'); }
     sources.forEach((src, i) => { const gz = this.group(body, `Zona ${i + 1} · ${src.label}`, { closed:LAYOUT.orient !== 'libre' });
       const mir = { v:zoneMirror(src) }; this.toggle(gz, mir, 'v', 'espejo', v => { src.mirror = v; Sessions.touch(); });
       if (LAYOUT.orient === 'libre') { if (!src.rect) src.rect = defaultRect(i, sources.length); const r = src.rect; const upd = () => { layoutCells(); clearFeedback(); };
@@ -190,23 +195,33 @@ const UI = {
     const g = this.group(body, 'Formato de salida', { desc:'Tamaño de la imagen que se proyecta. Con formato fijo, en esta ventana se ve a escala (previsualización); a tamaño real cuando la ventana mide eso (lanzadores).' });
     const fmt_ = { mode:OUT.mode === 'ventana' ? 'ventana' : (/^\d+x\d+$/.test(OUT.mode) ? OUT.mode : 'custom') };
     const applyFmt = () => { if (fmt_.mode === 'custom') setOutputFormat('custom', +cw.value, +ch.value); else setOutputFormat(fmt_.mode); resize(); buildRefBuffer(); Sessions.touch(); this.refresh(); };
-    this.select(g, fmt_, 'mode', [['ventana', 'esta ventana'], ['1920x1080', '1920 × 1080'], ['3840x1080', '3840 × 1080 (2 proyectores)'], ['5760x1080', '5760 × 1080 (3)'], ['13440x1080', '13440 × 1080 (7 proyectores)'], ['13480x1080', '13480 × 1080 (7 + 40 px)'], ['custom', 'otro…']], 'formato', applyFmt);
+    this.select(g, fmt_, 'mode', [['ventana', 'esta ventana'], ['8400x690', 'Sala: 8400 × 690 (Oeste · Norte · Este)'], ['1920x1080', '1920 × 1080'], ['3840x1080', '3840 × 1080 (2 proyectores)'], ['5760x1080', '5760 × 1080 (3)'], ['13440x1080', '13440 × 1080 (7 proyectores)'], ['13480x1080', '13480 × 1080 (7 + 40 px)'], ['custom', 'otro…']], 'formato', applyFmt);
     const r = this.row(g, 'medidas'); const cw = document.createElement('input'); cw.type = 'number'; cw.value = OUT.w; const ch = document.createElement('input'); ch.type = 'number'; ch.value = OUT.h; cw.disabled = ch.disabled = fmt_.mode !== 'custom'; cw.onchange = ch.onchange = applyFmt; r.appendChild(cw); r.appendChild(ch);
     this.kv(g, [['salida', `${outputSize().w} × ${outputSize().h}`], ['render interno', `${W} × ${H} (×${DPR.toFixed(2)})`], ['tope GPU', `${MAX_TEX} px`]]);
     if (outputSize().w * 1 > MAX_TEX) { const w = document.createElement('div'); w.className = 'warnbox'; w.textContent = `La GPU no puede renderizar más de ${MAX_TEX} px de ancho: la imagen se escala internamente.`; g.appendChild(w); }
     const gp = this.group(body, 'Proyectores', { desc:'Franjas numeradas en el patrón de ajuste para alinear cada proyector. El fundido suaviza los bordes entre franjas si hay solape.' });
     this.range(gp, P.map, 'slices', 1, 12, 1, 'cantidad'); this.range(gp, P.map, 'blend', 0, .5, .005, 'fundido de bordes'); this.toggle(gp, P.map, 'testGrid', 'patrón de ajuste'); this.toggle(gp, P.map, 'blackout', 'negro (B)');
+    const gw_ = this.group(body, 'Paredes de la sala (lienzo)', { desc:'El lienzo es la suma de las paredes, de izquierda a derecha (Oeste = izquierda, Este = derecha). El patrón de ajuste muestra cada pared con su nombre.' });
+    const reW = () => { calPrepare && sources.forEach(calPrepare); Sessions.touch(); this.refresh(); };
+    this.toggle(gw_, P.map, 'useWalls', 'usar paredes', reW);
+    (P.map.walls || []).forEach((w, i) => { const r = this.row(gw_, `pared ${i + 1}`); const nm = document.createElement('input'); nm.type = 'text'; nm.value = w.nombre; const wd = document.createElement('input'); wd.type = 'number'; wd.value = w.w;
+      nm.onchange = () => { w.nombre = nm.value; reW(); }; wd.onchange = () => { w.w = Math.max(1, +wd.value | 0); reW(); }; r.appendChild(nm); r.appendChild(wd); });
+    this.range(gw_, P.map, 'wallH', 100, 2160, 1, 'alto de las paredes', reW);
+    this.buttons(gw_, [['+ pared', () => { P.map.walls.push({ nombre:'Pared ' + (P.map.walls.length + 1), w:1920 }); reW(); }], ['− pared', () => { P.map.walls.pop(); reW(); }],
+      [`Lienzo = ${wallsTotal()} × ${P.map.wallH}`, () => { setOutputFormat(`${wallsTotal()}x${P.map.wallH}`); resize(); buildRefBuffer(); Sessions.touch(); this.refresh(); }, 'primary']]);
+    this.buttons(gw_, [['Sala Mirador (3175 · 1775 · 3450 × 690)', () => { aplicarSala(); this.refresh(); }]]);
     const gm = this.group(body, 'Salida 8K a splitter (mosaico)', { closed:!P.map.mosaic, desc:'Para una sola salida de video (p. ej. 7680×4320) que un splitter reparte en proyectores Full HD: el panorama se corta en franjas (una por proyector) y cada una va a su baldosa del cuadro grande.' });
     const reM = () => { resize(); buildRefBuffer(); Sessions.touch(); this.refresh(); };
     this.toggle(gm, P.map, 'mosaic', 'activar mosaico', reM);
+    this.select(gm, P.map, 'mosMode', [['paredes', 'una baldosa por pared'], ['franjas', 'franjas iguales (proyectores)']], 'baldosas', reM);
     const szM = { v:`${P.map.mosW}x${P.map.mosH}` }; this.select(gm, szM, 'v', [['7680x4320', '7680 × 4320 (8K)'], ['7680x2160', '7680 × 2160 (8K ancho, 2 filas)'], ['3840x2160', '3840 × 2160 (4K: 2×2 Full HD)'], ['custom', 'otro (editar abajo)']], 'cuadro de salida', v => { const m = v.match(/^(\d+)x(\d+)$/); if (m) { P.map.mosW = +m[1]; P.map.mosH = +m[2]; } reM(); });
     this.range(gm, P.map, 'mosW', 1920, 16384, 1, 'ancho del cuadro', reM); this.range(gm, P.map, 'mosH', 1080, 16384, 1, 'alto del cuadro', reM);
     this.range(gm, P.map, 'tileW', 320, 3840, 1, 'ancho de baldosa', reM); this.range(gm, P.map, 'tileH', 180, 2160, 1, 'alto de baldosa', reM);
     this.range(gm, P.map, 'mosCols', 1, 8, 1, 'baldosas por fila', reM);
     this.select(gm, P.map, 'mosOrder', [['filas', 'de izquierda a derecha, fila por fila'], ['columnas', 'de arriba a abajo, columna por columna']], 'orden', reM);
-    const mp = this.text(gm, P.map, 'mosMap', 'mapa a mano', true); mp.placeholder = 'una baldosa por línea: x,y  (en px del cuadro)\n0,0\n1920,0\n…  (vacío = automático)'; mp.onchange = () => { P.map.mosMap = mp.value; reM(); };
+    const mp = this.text(gm, P.map, 'mosMap', 'mapa a mano', true); mp.placeholder = 'una baldosa por línea (vacío = automático):\nx,y   ó   sx,sy,sw,sh > x,y[,w,h]\n(sx,sy,sw,sh en px del lienzo; x,y,w,h en px del cuadro)'; mp.onchange = () => { P.map.mosMap = mp.value; reM(); };
     this.toggle(gm, P.map, 'mosPreview', 'ver panorama (no el mosaico)', reM);
-    const tl = mosaicTiles(); this.kv(gm, [['franjas', `${tl.length} de ${Math.round(outputSize().w / tl.length)} × ${outputSize().h} px`], ['baldosas', tl.map(t => `${t.i + 1}:(${t.x},${t.y})`).join(' ')], ['cuadro', `${P.map.mosW} × ${P.map.mosH}` + (P.map.mosW > MAX_TEX || P.map.mosH > MAX_TEX ? ' · supera el tope de la GPU' : '')]]);
+    const tl = mosaicTiles(); this.kv(gm, [['baldosas', tl.map(t => `${t.nombre || t.i + 1} ${t.w}×${t.h} en (${t.x},${t.y})`).join(' · ')], ['cuadro', `${P.map.mosW} × ${P.map.mosH}` + (P.map.mosW > MAX_TEX || P.map.mosH > MAX_TEX ? ' · supera el tope de la GPU' : '')]]);
     this.note(gm, 'El splitter tiene que recortar cada ventana Full HD exactamente en esas coordenadas. En Windows: pantalla a 7680 × 4320 (60 Hz con DSC o 30 Hz), escala 100 %, y <code>start_8k.bat</code>. Con <b>patrón de ajuste</b> cada baldosa muestra su número.');
     const gk = this.group(body, 'Esquinas (keystone global)', { closed:true });
     this.toggle(gk, P.map, 'calibrate', 'mover esquinas (C)', v => uiCanvas.classList.toggle('calibrating', v)); this.range(gk, P.map, 'scale', .5, 1.2, .005, 'escala'); this.buttons(gk, [['Reiniciar esquinas', () => { resetCorners(); Sessions.touch(); }]]);

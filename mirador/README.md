@@ -89,9 +89,10 @@ Con la tecla `M` alternás el micrófono en cualquier momento. Si una plantilla 
 
 El montaje previsto: **una sola salida de video 8K (7680 × 4320) de la RTX 3070 Ti a un splitter** que recorta 7 ventanas Full HD, una por proyector. Para eso Mirador tiene el modo **mosaico** (Proyección → *Salida 8K a splitter*, o `start_8k.bat`):
 
-1. El programa compone el panorama de la sala, **13440 × 1080** (7 franjas de 1920 × 1080).
-2. En la salida, cada franja se coloca en una **baldosa** del cuadro 8K. Por defecto: franjas 1‑4 en la fila de arriba (y = 0) y 5‑7 en la segunda (y = 1080), de izquierda a derecha. El resto del cuadro queda negro.
-3. El splitter recorta sus 7 salidas exactamente en esas coordenadas. Si tu splitter usa otra disposición (otro orden, otra fila, centrado), se escribe en *mapa a mano* (una línea `x,y` por franja) y queda guardada en la sesión. Con el **patrón de ajuste** cada baldosa muestra su número y un círculo para comprobar que llega al proyector correcto y sin deformación.
+1. El programa compone el lienzo de la sala, **8400 × 690**.
+2. En la salida, cada pared es una **baldosa** del cuadro 8K: Oeste (3175 × 690) en (0, 0), Norte (1775 × 690) en (3175, 0) y Este (3450 × 690) en (0, 690). El resto del cuadro queda negro.
+3. El splitter, o el software de mapeo que reparte a los 7 proyectores, toma cada pared de esas coordenadas. Si necesita otra disposición, se escribe en *mapa a mano*, una línea por baldosa: `x,y` para mover una pared, o `sx,sy,sw,sh > x,y` para mandar cualquier recorte del lienzo a cualquier lugar del cuadro (por ejemplo, un recorte por proyector con solape). Queda guardado en la sesión.
+4. Con el modo *franjas iguales* se vuelve al reparto anterior en 7 franjas de 1920 × 1080.
 
 Windows: la pantalla 8K a **7680 × 4320, escala 100 %**, 60 Hz con DSC (HDMI 2.1 o DisplayPort 1.4a de la 3070 Ti) o 30 Hz si el splitter no acepta DSC. Chrome se abre en kiosk sobre esa pantalla y el canvas del programa es exactamente 7680 × 4320. Alternativas que también resuelve el mismo modo: cuadro 7680 × 2160 (si el splitter trabaja en "8K ancho"), o 3840 × 2160 con 2×2 baldosas para un splitter 4K → 4 Full HD.
 
@@ -105,7 +106,30 @@ Si en algún momento no hay splitter: `start_13440.bat` abre una ventana de 1344
 
 **Alineación.** Las esquinas (tecla C) corrigen un keystone global del panorama antes de cortarlo; para keystone por proyector usá el ajuste del propio proyector o del splitter. *Fundido de bordes* suaviza solapes entre franjas.
 
-**Calibrar la cámara a las paredes (tecla K).** Si la proyección dobla por varias paredes (sala en U), la cámara ve esas paredes en perspectiva y un rectángulo plano no alcanza. En Cámaras → *Calibrar cámara por tramos* se abre la imagen de la cámara con dos líneas arrastrables: la de **arriba** sobre el borde superior de la pared y la de **abajo** donde pisan los bailarines, con un **vértice en cada esquina** de pared. Cada tramo (pared) se asigna a una cantidad de proyectores (por ejemplo 2 · 3 · 2 para izquierda, fondo y derecha) y los cuerpos detectados dentro de ese tramo salen en esos proyectores. La vista muestra los esqueletos detectados en amarillo para comprobar que caen dentro. Queda guardado en la sesión.
+## La sala: tres paredes, una cámara fija
+
+El lienzo es **8400 × 690**: las tres paredes una al lado de la otra, de izquierda a derecha como las ve la cámara.
+
+| Pared | Lado | Resolución | Lugar en el lienzo |
+|---|---|---|---|
+| Oeste | izquierda | 3175 × 690 | 0 – 3175 |
+| Norte | fondo | 1775 × 690 | 3175 – 4950 |
+| Este | derecha | 3450 × 690 | 4950 – 8400 |
+
+Es el formato predeterminado de la puerta ("Sala: 8400 × 690") y se edita en Proyección → *Paredes de la sala*. El patrón de ajuste muestra cada pared con su nombre y su tamaño.
+
+**Calibración de la cámara (tecla K).** La cámara está fija en lo alto, del lado abierto de la sala, como en `referencia/camara-sala.jpg`. La calibración ya viene con las líneas celestes de esa foto: **arriba** el borde superior de las paredes, **abajo** la base, con un vértice en cada esquina. Si la cámara se mueve aunque sea un poco, abrí la vista con K y arrastrá los puntos verdes hasta que las líneas vuelvan a coincidir con las paredes; queda guardado en la sesión.
+
+**Cómo llega un bailarín a la pared (modo piso).** La cámara ve a los bailarines parados en el piso, debajo de la línea de abajo. Mirador toma sus pies y traza una recta desde el punto de la cámara en el piso (el punto amarillo, fuera de cuadro abajo), pasando por los pies, hasta la base de las paredes. En ese punto se para la figura, de pie, sobre la pared que el bailarín tiene detrás visto desde la cámara. Si camina hacia la izquierda pasa a la pared Oeste; si va al fondo, a la Norte. La vista de calibración dibuja esa recta para cada bailarín.
+
+- *altura de la figura*: alto de la figura respecto de la pared (0,82 = 566 px de 690).
+- *altura del piso*: dónde apoya los pies en la pared.
+- *más chica lejos de la pared*: con 0 todas las figuras tienen el mismo alto; con más, los que están lejos de la pared se ven más chicos.
+- *modo vista*: reproyecta lo que la cámara ve encima de cada pared, como una sombra. Solo sirve para cuerpos pegados a la pared.
+
+**Zona ignorada.** El rectángulo rojo de abajo a la izquierda saca de la imagen al operador sentado en la computadora, que la cámara también ve. Se pueden agregar más (público, técnicos) desde el panel.
+
+Con calibración, el video de la cámara no se dibuja sobre las paredes y la silueta se arma desde el esqueleto, porque la imagen en perspectiva no coincide con el lienzo.
 
 **Cámaras y zonas.** Con una cámara, la zona es toda la pared (la cámara se ve "contenida": a 13440 × 1080 una cámara 16:9 ocupa el centro con bandas a los lados; para cubrir todo el ancho con una sola cámara, en Cámaras → disposición *a mano* podés estirar la zona, o aceptar las bandas y usar módulos que no dependan del video). Cuando sumes cámaras, cada una toma una columna: dos cámaras = dos mitades, tres = tres tercios, o rectángulos a mano. MoveNet pierde cuerpos chicos: conviene **una cámara cada 2–3 proyectores**.
 

@@ -50,7 +50,9 @@ const P_DEFAULT = {
   echo: { mode:'screen', decay:.9, zoom:1.004, rotate:0, drift:0 },
   fx:   { bloom:1, threshold:.42, radius:1.6, chroma:.9, glitch:0, glitchBlocks:38, vignette:.35, gamma:1 },
   map:  { blackout:false, testGrid:false, calibrate:false, scale:1, slices:1, blend:0,
-          mosaic:false, mosW:7680, mosH:4320, tileW:1920, tileH:1080, mosCols:4, mosOrder:'filas', mosMap:'', mosPreview:false },
+          mosaic:false, mosW:7680, mosH:4320, tileW:1920, tileH:1080, mosCols:4, mosOrder:'filas', mosMap:'', mosPreview:false,
+          // paredes de la sala (lienzo). Oeste = izquierda, Este = derecha. Ancho en px de cada pared; alto común.
+          useWalls:true, wallH:690, walls:[{ nombre:'Oeste', w:3175 }, { nombre:'Norte', w:1775 }, { nombre:'Este', w:3450 }], mosMode:'paredes' },
   perf: { targetFps:30, autoScale:true, scene2d:1 },
   // audio
   audio:{ source:'off', gain:1, smooth:.6, react:{ size:.8, glow:.6, bloom:.8, scatter:.5, hue:.3, echo:.4, flash:.3, speed:.5 } },
@@ -89,13 +91,33 @@ function outputSize(){
 /* Mosaico 8K: la salida (panorama) se recorta en franjas y se acomoda en un cuadro grande
    (p. ej. 7680×4320) que un splitter vuelve a repartir en proyectores Full HD. */
 function mosaicActive(){ return !!(P.map.mosaic && !P.map.mosPreview && !(typeof multiMode !== 'undefined' && multiMode)); }
+/* paredes como fracciones del panorama: [{nombre, w, u0, u1}] */
+function wallRanges(){
+  const ws = (P.map.useWalls && Array.isArray(P.map.walls)) ? P.map.walls.filter(w => w && +w.w > 0) : [];
+  const tot = ws.reduce((a, w) => a + +w.w, 0); if (!tot) return [];
+  let acc = 0; return ws.map(w => { const u0 = acc / tot; acc += +w.w; return { nombre:w.nombre || '', w:+w.w, u0, u1:acc / tot }; });
+}
+function wallsTotal(){ return wallRanges().reduce((a, w) => a + w.w, 0); }
+/* Baldosas del mosaico: qué parte del panorama (sx,sy,sw,sh en fracciones) va a qué rectángulo del cuadro (x,y,w,h en px).
+   Modo "paredes": una baldosa por pared, del ancho de la pared, acomodadas en filas dentro del cuadro.
+   Modo "franjas": P.map.slices franjas iguales de tileW×tileH.
+   Mapa a mano (una línea por baldosa):  x,y   ó   sx,sy,sw,sh > x,y[,w,h]   (sx… en px del panorama). */
 function mosaicTiles(){
-  const n = Math.max(1, Math.round(P.map.slices)), tw = P.map.tileW | 0 || 1920, th = P.map.tileH | 0 || 1080, cols = Math.max(1, P.map.mosCols | 0 || 1);
-  const out = [];
-  const custom = String(P.map.mosMap || '').trim();
-  if (custom) { custom.split(/[;\n]+/).forEach((pair, i) => { const m = pair.trim().match(/^(-?\d+)\s*[, ]\s*(-?\d+)$/); if (m && i < n) out.push({ i, x:+m[1], y:+m[2], w:tw, h:th }); }); }
-  for (let i = out.length; i < n; i++) { const c = P.map.mosOrder === 'columnas' ? Math.floor(i / Math.max(1, Math.round(P.map.mosH / th))) : i % cols, r = P.map.mosOrder === 'columnas' ? i % Math.max(1, Math.round(P.map.mosH / th)) : Math.floor(i / cols); out.push({ i, x:c * tw, y:r * th, w:tw, h:th }); }
-  return out;
+  const out = [], o = outputSize(), walls = wallRanges(), byWalls = P.map.mosMode === 'paredes' && walls.length;
+  const tw = P.map.tileW | 0 || 1920, th = P.map.tileH | 0 || 1080, cols = Math.max(1, P.map.mosCols | 0 || 1), FW = P.map.mosW | 0 || 7680;
+  const base = [];
+  if (byWalls) { const hh = P.map.wallH | 0 || 690; let x = 0, y = 0;
+    walls.forEach((w, i) => { if (x > 0 && x + w.w > FW) { x = 0; y += hh; } base.push({ i, nombre:w.nombre, sx:w.u0, sy:0, sw:w.u1 - w.u0, sh:1, x, y, w:w.w, h:hh }); x += w.w; }); }
+  else { const n = Math.max(1, Math.round(P.map.slices)), rows = Math.max(1, Math.round((P.map.mosH | 0 || 4320) / th));
+    for (let i = 0; i < n; i++) { const c = P.map.mosOrder === 'columnas' ? Math.floor(i / rows) : i % cols, r = P.map.mosOrder === 'columnas' ? i % rows : Math.floor(i / cols);
+      base.push({ i, nombre:String(i + 1), sx:i / n, sy:0, sw:1 / n, sh:1, x:c * tw, y:r * th, w:tw, h:th }); } }
+  const lines = String(P.map.mosMap || '').split(/[;\n]+/).map(l => l.trim()).filter(Boolean);
+  lines.forEach((ln, i) => { let m;
+    if ((m = ln.match(/^(-?\d+)\s*[, ]\s*(-?\d+)$/)) && base[i]) { base[i].x = +m[1]; base[i].y = +m[2]; }
+    else if ((m = ln.match(/^(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*>\s*(-?\d+)\s*,\s*(-?\d+)(?:\s*,\s*(\d+)\s*,\s*(\d+))?$/))) {
+      const t = { i, nombre:String(i + 1), sx:+m[1] / o.w, sy:+m[2] / o.h, sw:+m[3] / o.w, sh:+m[4] / o.h, x:+m[5], y:+m[6], w:+(m[7] || m[3]), h:+(m[8] || m[4]) };
+      if (base[i]) base[i] = t; else base.push(t); } });
+  return base;
 }
 function canvasSize(){ return mosaicActive() ? { w:P.map.mosW | 0 || 7680, h:P.map.mosH | 0 || 4320 } : outputSize(); }
 function layoutStage(){

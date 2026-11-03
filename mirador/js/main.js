@@ -13,7 +13,7 @@ function fillGate(){
   for (const n of Sessions.names()) { const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); }
   const lastS = sesionParam || Sessions.lastName(); if (lastS && Sessions.get(lastS)) sel.value = lastS;
   const go = $('gateOut'), ow = $('gateOutW'), oh = $('gateOutH');
-  const s = Sessions.get(sel.value); const outMode = salidaParam || s?.out?.mode || 'ventana';
+  const s = Sessions.get(sel.value); const outMode = salidaParam || s?.out?.mode || '8400x690';
   if ([...go.options].some(o => o.value === outMode)) go.value = outMode; else { go.value = 'custom'; ow.value = s?.out?.w || 1920; oh.value = s?.out?.h || 1080; }
   const custom = () => { const c = go.value === 'custom'; ow.hidden = oh.hidden = !c; }; go.onchange = custom; custom();
   sel.onchange = () => { const s2 = Sessions.get(sel.value); if (s2?.out?.mode) { go.value = [...go.options].some(o => o.value === s2.out.mode) ? s2.out.mode : 'custom'; ow.value = s2.out.w; oh.value = s2.out.h; custom(); } if (s2?.P?.audio?.source) $('gateAudio').value = s2.P.audio.source; };
@@ -49,6 +49,9 @@ async function start(sim){
     }
   }
   if (simMode) { sources.length = 0; sources.push(makeSimSource()); }
+  // formato de la sala: la primera cámara arranca con la calibración de la foto (si la sesión no trae otra)
+  if (OUT.mode === '8400x690' && sources[0] && !sources[0].cal && !sess?.zonas?.[0]?.cal) { sources[0].cal = salaCal(); sources[0].mirror = false; }
+  sources.forEach(calPrepare);
   // perfil + medición
   const tier = presetParam && PROFILES[presetParam] ? presetParam : guessTier(); applyProfile(PROFILES[tier]); buildRefBuffer(); resize();
   if (!presetParam) { const b = await benchmark(); const fps = 1000 / Math.max(b.p95, .1); let rec = tier;
@@ -59,7 +62,7 @@ async function start(sim){
   else { applyPlantilla('enjambre', { silent:true }); if (newName) Sessions.create(newName); else Sessions.updateName(); }
   if (escenaParam) applyPlantilla(ESCENA_ALIAS[escenaParam] || escenaParam, { silent:true });
   if (mosaicoParam && mosaicoParam !== '0') { P.map.mosaic = true; P.map.mosPreview = false; const m = mosaicoParam.match(/^(\d+)x(\d+)$/); if (m) { P.map.mosW = +m[1]; P.map.mosH = +m[2]; }
-    if (P.map.slices < 2 && /^\d+x\d+$/.test(OUT.mode)) P.map.slices = Math.max(1, Math.round(OUT.w / (P.map.tileW || 1920))); resize(); }
+    if (!P.map.useWalls && P.map.slices < 2 && /^\d+x\d+$/.test(OUT.mode)) P.map.slices = Math.max(1, Math.round(OUT.w / (P.map.tileW || 1920))); resize(); }
   const audioSel = $('gateAudio').value; if (audioSel !== 'off' || P.audio.source !== 'off') { await Audio_.setSource(audioSel !== 'off' ? audioSel : P.audio.source); }
   await Playlist.autoFolder('canciones');
   if (audioParam && audioParam !== 'mic') { Playlist.fromUrlParam(audioParam); Playlist.play(); }
@@ -129,6 +132,13 @@ function closeEmbedOrReturn(){
   if (inIframe) { try { window.parent.postMessage({ type:'flat-embed-close' }, '*'); } catch (e) {} return; }
   if (returnUrl) { location.href = returnUrl; return; }
   if (inPerformance) { inPerformance = false; showSlidesOverlay(true); } else showSlidesOverlay(false);
+}
+
+/* ---------- sala Mirador: paredes + lienzo + calibración de la foto ---------- */
+function aplicarSala(){
+  P.map.useWalls = true; P.map.wallH = 690; P.map.walls = [{ nombre:'Oeste', w:3175 }, { nombre:'Norte', w:1775 }, { nombre:'Este', w:3450 }]; P.map.mosMode = 'paredes'; P.map.slices = 1;
+  setOutputFormat('8400x690'); const s = sources[0]; if (s) { s.cal = salaCal(); s.mirror = false; }
+  resize(); buildRefBuffer(); sources.forEach(calPrepare); clearFeedback(); Sessions.touch(); toast('sala: Oeste 3175 · Norte 1775 · Este 3450 × 690, calibración de la foto');
 }
 
 /* ---------- inicio ---------- */

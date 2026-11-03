@@ -98,15 +98,17 @@ function syncBodies(){
     const { vscale, vox, voy } = src.fit, c = src.cell, mir = zoneMirror(src);
     const mapX = x => { const px = x * vscale + vox; return mir ? (c.x + c.w - (px - c.x)) : px; };
     const mapY = y => y * vscale + voy;
-    const useCal = !!src._calH;   // calibración por tramos (calib.js)
+    const useCal = !!src._calH, piso = useCal && src.cal.mode !== 'vista';   // calibración por tramos (calib.js)
     (src.poses || []).forEach((pose, idx) => {
       const id = src.id + ':' + (pose.id !== undefined ? pose.id : idx);
+      if (useCal && calIgnored(src, pose)) return;                        // zona ignorada (operador, público…)
+      const fig = piso ? calMapPose(src, pose, id) : null; if (piso && !fig) return;
       if (!colorSlot.has(id)) colorSlot.set(id, (nextSlot++) % PALETTES.length);
       let b = bodies.get(id); if (!b) { b = { kp:[], hue:PALETTES[colorSlot.get(id)], seen:now, id, src:src.id }; bodies.set(id, b); }
       b.seen = now;
       for (let i = 0; i < pose.keypoints.length; i++) {
         const k = pose.keypoints[i], S = k.score ?? 0, old = b.kp[i]; let X, Y;
-        if (useCal) { const m = calMap(src, k.x, k.y); X = mir ? (c.x + c.w - (m.x - c.x)) : m.x; Y = m.y; } else { X = mapX(k.x); Y = mapY(k.y); }
+        if (fig) { X = fig[i].x; Y = fig[i].y; } else if (useCal) { const m = calMap(src, k.x, k.y); X = m.x; Y = m.y; } else { X = mapX(k.x); Y = mapY(k.y); }
         if (!old || S < P.track.minScore * .5) b.kp[i] = { x:X, y:Y, s:S, vx:0, vy:0 };
         else { const nx = old.x + (X - old.x) * (1 - sm), ny = old.y + (Y - old.y) * (1 - sm); old.vx = nx - old.x; old.vy = ny - old.y; old.x = nx; old.y = ny; old.s = S; }
       }
@@ -174,25 +176,34 @@ function makeSimSource(){
   Object.defineProperty(v, 'readyState', { value:0 });   // nunca se dibuja como video
   return { id:'sim' + (srcCounter++), deviceId:'sim', label:'Simulación', video:v, stream:null, detector:null, poses:[], videoTex:makeTex(2, 2), bgTex:makeTex(2, 2), cell:null, fit:null, rect:null, mirror:false };
 }
-const SIM = { n:3, t:0 };
+const SIM = { n:3, t:0, operador:true };
+/* bailarines simulados que caminan por el piso de la sala, con perspectiva (más chicos al fondo) */
 function simPoses(time, n, vw, vh){
   const out = [];
   for (let p = 0; p < n; p++) {
-    const cx = (p + .5) / n, ph = p * 1.7, sway = Math.sin(time * .6 + ph) * .06, bob = Math.sin(time * 2.1 + ph) * .02;
-    const sc = vh * .22, hx = (cx + sway) * vw, hy = (.26 + bob) * vh;
+    const ph = p * 1.7;
+    const fy = .47 + .34 * (.5 + .5 * Math.sin(time * .21 + ph * 1.3));          // profundidad (pies) en la imagen
+    const fx = .14 + .72 * ((p + .5) / n) + .1 * Math.sin(time * .29 + ph * 2);    // lado
+    const hImg = vh * (.2 + .34 * (fy - .35) / .6), sc = hImg / 3.6;
+    const bob = Math.sin(time * 2.1 + ph) * sc * .08;
+    const hx = fx * vw, hy = fy * vh - sc * 3.3 + bob;
     const arm = Math.sin(time * 1.3 + ph), arm2 = Math.cos(time * 1.1 + ph * 2), leg = Math.sin(time * 1.8 + ph) * .3;
     const K = (x, y) => ({ x, y, score:.9 });
     const kp = new Array(17).fill(null).map(() => K(hx, hy));
-    kp[0] = K(hx, hy);                                                  // nariz
-    kp[5] = K(hx - sc * .45, hy + sc * .55); kp[6] = K(hx + sc * .45, hy + sc * .55);   // hombros
-    kp[7] = K(hx - sc * .75, hy + sc * .55 + sc * .7 * (.4 + arm * .6)); kp[8] = K(hx + sc * .75, hy + sc * .55 + sc * .7 * (.4 - arm * .6)); // codos
-    kp[9] = K(kp[7].x - sc * .35 * arm2, kp[7].y + sc * .6 * (.3 + arm * .7)); kp[10] = K(kp[8].x + sc * .35 * arm2, kp[8].y + sc * .6 * (.3 - arm * .7)); // muñecas
-    kp[11] = K(hx - sc * .3, hy + sc * 1.7); kp[12] = K(hx + sc * .3, hy + sc * 1.7);     // caderas
-    kp[13] = K(hx - sc * .32 - leg * sc, hy + sc * 2.5); kp[14] = K(hx + sc * .32 + leg * sc, hy + sc * 2.5);   // rodillas
-    kp[15] = K(kp[13].x - leg * sc * .5, hy + sc * 3.3); kp[16] = K(kp[14].x + leg * sc * .5, hy + sc * 3.3);  // tobillos
+    kp[0] = K(hx, hy);
+    kp[5] = K(hx - sc * .45, hy + sc * .55); kp[6] = K(hx + sc * .45, hy + sc * .55);
+    kp[7] = K(hx - sc * .75, hy + sc * .55 + sc * .7 * (.4 + arm * .6)); kp[8] = K(hx + sc * .75, hy + sc * .55 + sc * .7 * (.4 - arm * .6));
+    kp[9] = K(kp[7].x - sc * .35 * arm2, kp[7].y + sc * .6 * (.3 + arm * .7)); kp[10] = K(kp[8].x + sc * .35 * arm2, kp[8].y + sc * .6 * (.3 - arm * .7));
+    kp[11] = K(hx - sc * .3, hy + sc * 1.7); kp[12] = K(hx + sc * .3, hy + sc * 1.7);
+    kp[13] = K(hx - sc * .32 - leg * sc, hy + sc * 2.5); kp[14] = K(hx + sc * .32 + leg * sc, hy + sc * 2.5);
+    kp[15] = K(kp[13].x - leg * sc * .5, hy + sc * 3.3); kp[16] = K(kp[14].x + leg * sc * .5, hy + sc * 3.3);
     for (let i = 1; i <= 4; i++) kp[i] = K(hx + (i % 2 ? -1 : 1) * sc * .12 * (i > 2 ? 2 : 1), hy - sc * .05);
     out.push({ id:p, keypoints:kp });
   }
+  // operador sentado abajo a la izquierda (como en la foto de la sala): sirve para probar la zona ignorada
+  if (SIM.operador) { const sc = vh * .09, hx = vw * .05, hy = vh * .75, K = (x, y) => ({ x, y, score:.8 }); const kp = new Array(17).fill(null).map(() => K(hx, hy));
+    kp[5] = K(hx - sc * .5, hy + sc * .7); kp[6] = K(hx + sc * .5, hy + sc * .7); kp[11] = K(hx - sc * .3, hy + sc * 2); kp[12] = K(hx + sc * .3, hy + sc * 2); kp[9] = K(hx + sc, hy + sc * 2.2); kp[10] = K(hx + sc * 1.2, hy + sc * 2.1);
+    out.push({ id:99, keypoints:kp }); }
   return out;
 }
 function simTick(dt){

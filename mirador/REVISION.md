@@ -15,6 +15,8 @@ Ordenado por gravedad para la sala inmersiva (7 proyectores Full HD, OBS, 3070 T
 | 6 | **Nada avisaba si el proyector 1 se apagaba o si había 40 px de más** (en el proyecto anterior usaste 13480). | Había que adivinar la alineación. | Formato `13480×1080` disponible, **patrón de ajuste con franjas numeradas** (1…7) y fundido de bordes opcional (Proyección → Proyectores). |
 | 6b | **No había forma de entregar la imagen a un splitter 8K**: el programa solo sabía pintar una ventana del tamaño del panorama. | Con una salida 8K → splitter de 7 Full HD, el panorama de 13440 px no entra en 7680 px. | Modo **mosaico** (`core.js: mosaicTiles()`, `render.js`): el panorama se corta en franjas y cada una va a su baldosa del cuadro 7680×4320 (4 + 3 por defecto, mapa editable). `start_8k.bat`. |
 
+| 6c | **La cámara veía la sala en perspectiva y el programa la estiraba como un rectángulo plano.** Con la cámara en lo alto del lado abierto, las tres paredes aparecen como trapecios y los bailarines, parados en el piso, debajo de la base de las paredes. | Un bailarín en el centro de la sala habría caído fuera del lienzo o en la pared equivocada. | Calibración por paredes (`calib.js`) con los valores de la foto, modo **piso** (recta desde la cámara por los pies hasta la base de la pared; exacto sin medir la sala) y zona ignorada para el operador. |
+
 ## 2. Rendimiento (importa en la Mac y también en la 3070 Ti a 13440 px)
 
 | # | Problema | En Mirador |

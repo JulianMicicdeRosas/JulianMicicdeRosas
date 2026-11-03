@@ -53,7 +53,8 @@ function drawSkeletonMask(){
 registerModule('mask', { producer:true, res:'mask', needs:[],
   produce(){
     const mode = MASK_MODE[P.mask.source] ?? 2;
-    if (mode >= 2) { drawSkeletonMask(); uploadCanvas(skelTex, maskCv); }
+    const anyCal = sources.some(s => s._calH);
+    if (mode >= 2 || anyCal) { drawSkeletonMask(); uploadCanvas(skelTex, maskCv); }
     bindFBO(fbMask); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); gl.disable(gl.BLEND); gl.useProgram(pMask);
     gl.uniform2f(U(pMask, 'uMaskRes'), MASK_W, MASK_H); gl.uniform1i(U(pMask, 'uMode'), mode);
     gl.uniform1f(U(pMask, 'uThr'), P.mask.threshold); gl.uniform1f(U(pMask, 'uSoft'), Math.max(.01, P.mask.softness));
@@ -63,7 +64,8 @@ registerModule('mask', { producer:true, res:'mask', needs:[],
     for (const src of list) {
       const c = src?.cell || { x:0, y:0, w:W, h:H };
       gl.viewport(Math.round(c.x * kx), Math.round((H - c.y - c.h) * ky), Math.max(1, Math.round(c.w * kx)), Math.max(1, Math.round(c.h * ky)));
-      const hasVid = src && src.video.readyState >= 2;
+      const calZ = !!(src && src._calH); gl.uniform1i(U(pMask, 'uMode'), calZ ? 2 : mode);   // zona calibrada: silueta por esqueleto
+      const hasVid = src && !calZ && src.video.readyState >= 2;
       useTex(0, hasVid ? src.videoTex : skelTex, pMask, 'uVid'); useTex(1, src ? src.bgTex : skelTex, pMask, 'uBg');
       if (hasVid) { const vw = src.video.videoWidth || 640, vh = src.video.videoHeight || 480, sc = Math.min(c.w / vw, c.h / vh);
         gl.uniform2f(U(pMask, 'uScale'), c.w / (vw * sc), c.h / (vh * sc)); gl.uniform1f(U(pMask, 'uMir'), zoneMirror(src) ? 1 : 0); }
@@ -368,6 +370,12 @@ function drawGrid(){
   for (let x = 0; x <= W; x += step) { sctx.moveTo(x, 0); sctx.lineTo(x, H); } for (let y = 0; y <= H; y += step) { sctx.moveTo(0, y); sctx.lineTo(W, y); } sctx.stroke();
   sctx.strokeStyle = 'rgba(255,255,255,.9)'; sctx.lineWidth = 3 * DPR; sctx.strokeRect(1.5 * DPR, 1.5 * DPR, W - 3 * DPR, H - 3 * DPR);
   sctx.beginPath(); sctx.moveTo(0, 0); sctx.lineTo(W, H); sctx.moveTo(W, 0); sctx.lineTo(0, H); sctx.stroke();
+  // paredes de la sala
+  const walls = wallRanges(); if (walls.length) { sctx.textAlign = 'center'; sctx.textBaseline = 'middle';
+    walls.forEach((w, i) => { const x0 = w.u0 * W, x1 = w.u1 * W, ww = x1 - x0; sctx.fillStyle = `hsla(${(i * 67) % 360},80%,55%,.18)`; sctx.fillRect(x0, 0, ww, H);
+      sctx.strokeStyle = 'rgba(80,170,255,.95)'; sctx.lineWidth = 4 * DPR; sctx.strokeRect(x0 + 2 * DPR, 2 * DPR, ww - 4 * DPR, H - 4 * DPR);
+      sctx.fillStyle = 'rgba(255,255,255,.9)'; sctx.font = `${Math.round(Math.min(H * .22, ww * .12))}px ui-monospace,monospace`; sctx.fillText(w.nombre.toUpperCase(), x0 + ww / 2, H * .42);
+      sctx.font = `${Math.round(Math.min(H * .09, ww * .06))}px ui-monospace,monospace`; sctx.fillText(`${w.w} × ${P.map.wallH} px`, x0 + ww / 2, H * .62); }); }
   // proyectores: una franja numerada por cada uno, para alinear y ver solapes
   const n = Math.max(1, Math.round(P.map.slices)); if (n > 1) { const sw = W / n; sctx.font = `${Math.round(Math.min(H * .3, sw * .3))}px ui-monospace,monospace`; sctx.textAlign = 'center'; sctx.textBaseline = 'middle';
     for (let i = 0; i < n; i++) { sctx.strokeStyle = 'rgba(255,180,80,.9)'; sctx.lineWidth = 2 * DPR; sctx.strokeRect(i * sw + DPR, DPR, sw - 2 * DPR, H - 2 * DPR); sctx.fillStyle = 'rgba(255,255,255,.75)'; sctx.fillText(String(i + 1), i * sw + sw / 2, H / 2);

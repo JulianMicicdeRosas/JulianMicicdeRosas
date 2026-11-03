@@ -8,7 +8,7 @@
 function drawScene(dt){
   sctx.setTransform(S2, 0, 0, S2, 0, 0); sctx.globalAlpha = 1; sctx.globalCompositeOperation = 'source-over'; sctx.clearRect(0, 0, W, H);
   if (P.cam.showVideo && !P.map.blackout) {
-    for (const src of sources) { if (src.video.readyState < 2 || !src.cell) continue;
+    for (const src of sources) { if (src.video.readyState < 2 || !src.cell || src._calH) continue;
       const c = src.cell, { vscale, vox, voy } = src.fit;
       sctx.save(); sctx.beginPath(); sctx.rect(c.x, c.y, c.w, c.h); sctx.clip(); sctx.globalAlpha = P.cam.videoOpacity;
       sctx.filter = `contrast(${P.cam.contrast}) brightness(${P.cam.brightness}) saturate(${P.cam.saturate})`;
@@ -56,8 +56,8 @@ function render(t){
     useTex(0, fbComp.t, pFinal, 'uTex'); gl.uniformMatrix3fv(U(pFinal, 'uH'), false, homography()); drawQuad(pFinal);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, glCanvas.width, glCanvas.height); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
     gl.useProgram(pTile); useTex(0, fbKey.t, pTile, 'uTex');
-    const tiles = mosaicTiles(), n = tiles.length, CH = glCanvas.height;
-    for (const t of tiles) { gl.viewport(t.x, CH - t.y - t.h, t.w, t.h); gl.uniform2f(U(pTile, 'uOff'), t.i / n, 0); gl.uniform2f(U(pTile, 'uScale'), 1 / n, 1); drawQuad(pTile); }
+    const tiles = mosaicTiles(), CH = glCanvas.height;
+    for (const t of tiles) { gl.viewport(t.x, CH - t.y - t.h, t.w, t.h); gl.uniform2f(U(pTile, 'uOff'), t.sx, 1 - t.sy - t.sh); gl.uniform2f(U(pTile, 'uScale'), t.sw, t.sh); drawQuad(pTile); }
   } else {
     gl.useProgram(pFinal); bindFBO(null); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
     useTex(0, fbComp.t, pFinal, 'uTex'); gl.uniformMatrix3fv(U(pFinal, 'uH'), false, homography()); drawQuad(pFinal);
