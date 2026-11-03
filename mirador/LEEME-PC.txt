@@ -1,0 +1,52 @@
+MIRADOR — versión para PC (Windows 10/11)
+=========================================
+
+QUÉ HACE FALTA
+  - Windows 10 u 11 de 64 bits.
+  - Google Chrome (o Microsoft Edge, que ya viene con Windows).
+  - Python 3. Si no está, abrir PowerShell y escribir:  winget install Python.Python.3.12
+    (o bajarlo de python.org marcando "Add python.exe to PATH").
+  - Una cámara (USB o la de la notebook). El micrófono es opcional.
+  No hace falta internet: las librerías y el modelo de pose vienen incluidos (carpeta vendor\).
+
+INSTALAR
+  1. Descomprimir este ZIP en una carpeta simple, por ejemplo  C:\Mirador
+     (no dentro de "Archivos de programa" ni en OneDrive).
+  2. Copiar las canciones (mp3 / wav) a  C:\Mirador\canciones\   -> aparecen solas en la sesión.
+
+ARRANCAR
+  Pruebas / un proyector:      doble clic en  start_windows.bat
+  Sala con salida 8K + splitter: doble clic en  start_8k.bat
+      (pantalla de Windows a 7680 x 4320, escala 100 %; el panorama de 7 franjas
+       se entrega en mosaico 4 + 3 dentro del cuadro 8K; ver README.md)
+  Escritorio extendido de 7 pantallas sin splitter: start_13440.bat
+
+  La primera vez Windows pregunta por el cortafuegos de Python: "Permitir" (solo escucha en 127.0.0.1).
+  Chrome pide permiso de cámara y micrófono: Permitir. Si Windows bloquea la cámara:
+  Configuración > Privacidad y seguridad > Cámara > permitir a las aplicaciones de escritorio.
+  Cerrar la ventana negra del lanzador apaga el servidor.
+
+PRIMERA PRUEBA
+  1. En la puerta: nombre de sesión nuevo, formato "esta ventana", audio apagado -> "Probar sin cámara".
+     Teclas 1 a 9 y 0 cambian de plantilla. H abre el panel.
+  2. Recargar (F5) y "Encender": tiene que seguir el cuerpo. Plantilla 1 (Videoplace) muestra la silueta.
+  3. Panel > Sistema > Diagnóstico: debe decir modelo "local" y backend "webgl".
+     Abajo a la izquierda, los fps: en la 3070 Ti deberían estar en 60 con perfil Completo.
+  4. Proyección: formato 13440 x 1080, "mosaico" y "patrón de ajuste" para ver las 7 franjas numeradas.
+  5. Audio: fuente "micrófono" + música en el parlante; o "canción" con un mp3 de la sesión (Espacio).
+
+TECLAS
+  H panel · F pantalla completa · C esquinas · K calibrar camara a las paredes · B negro · Shift+B aprender fondo · X limpiar ecos
+  V rotar cámaras · R grabar (.webm) · M micrófono · Espacio canción · flechas arriba/abajo cambiar canción
+  1-9 y 0 plantillas · G / L exportar / importar sesión · Esc / Retroceso diapositivas
+
+TRAER LO AJUSTADO EN LA MAC
+  En la Mac: panel > Sesión > "Exportar .json". En la PC: Sesión > "Importar .json" (o tecla L).
+  Las canciones no viajan dentro del .json: copiarlas a canciones\ y se enlazan por nombre.
+
+SI ALGO FALLA
+  - "Falta Python": instalarlo (arriba) y volver a abrir el .bat.
+  - Pantalla negra en kiosk: apretar H para ver el panel; en Proyección revisar formato y "mosaico".
+  - La cámara no aparece: cerrar otros programas que la usen (OBS, Zoom, Teams) y "Buscar cámaras" en el panel.
+  - Chrome dice que el sitio no es seguro para la cámara: la dirección debe ser http://127.0.0.1:8765 (el .bat lo hace).
+  Más detalle: README.md (puesta en marcha, OBS, 7 proyectores) y REVISION.md.

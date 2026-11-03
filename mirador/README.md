@@ -26,6 +26,7 @@ mirador/
 │   ├── audio.js               Micrófono / canción, bandas, golpe, multiplicadores AM · playlist
 │   ├── plantillas.js          Estéticas (ver PLANTILLAS.md)
 │   ├── sessions.js            Sesiones con nombre (parámetros + canciones + cámaras + formato)
+│   ├── calib.js               Calibración de cámara por tramos (paredes que doblan)
 │   ├── screens.js             Opción B: una ventana por pantalla (Window Management API)
 │   ├── ui.js                  Panel lateral con pestañas
 │   └── main.js                Arranque, bucle, teclado, integración con las diapositivas
@@ -73,7 +74,7 @@ Todo lo que tocás se autoguarda en la sesión actual. **Exportá la sesión** (
 
 ### Teclas
 
-`H` panel · `F` pantalla completa · `C` mover esquinas · `B` negro · `Shift+B` aprender fondo · `X` limpiar ecos · `V` rotar cámaras · `R` grabar/parar · `M` micrófono sí/no · `Espacio` canción play/pausa · `↑/↓` canción anterior/siguiente · `1‑9, 0` plantillas · `G/L` exportar/importar sesión · `Esc`/`⌫` diapositivas.
+`H` panel · `F` pantalla completa · `C` mover esquinas · `K` calibrar cámara · `B` negro · `Shift+B` aprender fondo · `X` limpiar ecos · `V` rotar cámaras · `R` grabar/parar · `M` micrófono sí/no · `Espacio` canción play/pausa · `↑/↓` canción anterior/siguiente · `1‑9, 0` plantillas · `G/L` exportar/importar sesión · `Esc`/`⌫` diapositivas.
 
 ## Las dos versiones de audio
 
@@ -103,6 +104,8 @@ A tener en cuenta con el splitter:
 Si en algún momento no hay splitter: `start_13440.bat` abre una ventana de 13440 × 1080 que cruza un escritorio extendido (recordá que la 3070 Ti sola saca 4 pantallas), y la opción B de Proyección reparte por ventanas.
 
 **Alineación.** Las esquinas (tecla C) corrigen un keystone global del panorama antes de cortarlo; para keystone por proyector usá el ajuste del propio proyector o del splitter. *Fundido de bordes* suaviza solapes entre franjas.
+
+**Calibrar la cámara a las paredes (tecla K).** Si la proyección dobla por varias paredes (sala en U), la cámara ve esas paredes en perspectiva y un rectángulo plano no alcanza. En Cámaras → *Calibrar cámara por tramos* se abre la imagen de la cámara con dos líneas arrastrables: la de **arriba** sobre el borde superior de la pared y la de **abajo** donde pisan los bailarines, con un **vértice en cada esquina** de pared. Cada tramo (pared) se asigna a una cantidad de proyectores (por ejemplo 2 · 3 · 2 para izquierda, fondo y derecha) y los cuerpos detectados dentro de ese tramo salen en esos proyectores. La vista muestra los esqueletos detectados en amarillo para comprobar que caen dentro. Queda guardado en la sesión.
 
 **Cámaras y zonas.** Con una cámara, la zona es toda la pared (la cámara se ve "contenida": a 13440 × 1080 una cámara 16:9 ocupa el centro con bandas a los lados; para cubrir todo el ancho con una sola cámara, en Cámaras → disposición *a mano* podés estirar la zona, o aceptar las bandas y usar módulos que no dependan del video). Cuando sumes cámaras, cada una toma una columna: dos cámaras = dos mitades, tres = tres tercios, o rectángulos a mano. MoveNet pierde cuerpos chicos: conviene **una cámara cada 2–3 proyectores**.
 

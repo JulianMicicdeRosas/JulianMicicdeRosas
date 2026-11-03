@@ -146,6 +146,15 @@ const UI = {
       this.buttons(g, [['Buscar cámaras', async () => { await refreshCameraList(); this.refresh('camaras'); }], ['Rotar orden (V)', rotateCameras]]);
     }
     this.select(g, LAYOUT, 'orient', [['columnas', 'lado a lado (columnas)'], ['filas', 'apiladas (filas)'], ['libre', 'a mano (rectángulos)']], 'disposición', () => { layoutCells(); clearFeedback(); this.refresh('camaras'); });
+    const gc = this.group(body, 'Calibrar cámara por tramos (K)', { closed:!(sources[Calib.zone]?.cal?.enabled || Calib.on), desc:'Para paredes que doblan: marcá en la imagen de la cámara la línea de arriba (borde superior de la pared) y la de abajo (donde pisan los bailarines), con un vértice en cada esquina. Cada tramo se asigna a sus proyectores.' });
+    if (sources.length > 1) { const zs = {}; sources.forEach((s, i) => zs[i] = `zona ${i + 1} · ${s.label}`); this.select(gc, Calib, 'zone', zs, 'zona', () => this.refresh('camaras')); }
+    const cs = sources[Calib.zone] || sources[0];
+    if (cs) { if (!cs.cal) cs.cal = defaultCal(3);
+      this.toggle(gc, cs.cal, 'enabled', 'usar esta calibración', () => { calPrepare(cs); clearFeedback(); });
+      const nt = { n:cs.cal.top.length - 1 }; this.range(gc, nt, 'n', 1, 8, 1, 'tramos (paredes)', v => { Calib.setTramos(v); this.refresh('camaras'); });
+      cs.cal.shares.forEach((_, i) => this.range(gc, cs.cal.shares, i, 0, 7, .5, `tramo ${i + 1}: proyectores`, () => calPrepare(cs)));
+      this.buttons(gc, [[Calib.on ? 'Cerrar vista (K)' : 'Abrir vista de calibración (K)', () => Calib.toggle(), Calib.on ? 'on' : 'primary'], ['Reiniciar puntos', () => { Calib.reset(); this.refresh('camaras'); }]]);
+      this.note(gc, 'Ejemplo sala en U con 7 proyectores: 3 tramos con 2 · 3 · 2. Los proyectores se reparten en proporción; el total no tiene que sumar 7.'); }
     sources.forEach((src, i) => { const gz = this.group(body, `Zona ${i + 1} · ${src.label}`, { closed:LAYOUT.orient !== 'libre' });
       const mir = { v:zoneMirror(src) }; this.toggle(gz, mir, 'v', 'espejo', v => { src.mirror = v; Sessions.touch(); });
       if (LAYOUT.orient === 'libre') { if (!src.rect) src.rect = defaultRect(i, sources.length); const r = src.rect; const upd = () => { layoutCells(); clearFeedback(); };
@@ -226,7 +235,7 @@ const UI = {
     this.buttons(g, [['Volver a medir', async () => { const r = await benchmark(); toast(`medido · p95 ${r.p95.toFixed(1)} ms (~${Math.round(1000 / r.p95)} fps a tope)`); }]]);
     const info = this.kv(g, []); this.liveFns.push(() => { info.innerHTML = `GPU: <b>${esc(gpuName())}</b><br>render: <b>${W}×${H}</b> · capa 2D <b>${scene.width}×${scene.height}</b> · máscara <b>${MASK_W}×${MASK_H}</b><br>inferencia: <b>${inferBudgetMs.toFixed(0)} ms</b> · cuerpos: <b>${bodies.size}</b> · modelo: <b>${simMode ? 'simulación' : (modelBase ? 'local' : 'tfhub')}</b>`; });
     const gk = this.group(body, 'Teclas', { closed:true });
-    this.kv(gk, [['H', 'panel'], ['F', 'pantalla completa'], ['C', 'mover esquinas'], ['B', 'negro'], ['Shift+B', 'aprender fondo'], ['X', 'limpiar ecos'], ['V', 'rotar cámaras'], ['R', 'grabar / parar'], ['M', 'micrófono sí/no'], ['Espacio', 'canción play/pausa'], ['↑ / ↓', 'canción anterior / siguiente'], ['1‑9, 0', 'plantillas'], ['G / L', 'exportar / importar sesión'], ['Esc / ⌫', 'diapositivas']]);
+    this.kv(gk, [['H', 'panel'], ['F', 'pantalla completa'], ['C', 'mover esquinas'], ['K', 'calibrar cámara por tramos'], ['B', 'negro'], ['Shift+B', 'aprender fondo'], ['X', 'limpiar ecos'], ['V', 'rotar cámaras'], ['R', 'grabar / parar'], ['M', 'micrófono sí/no'], ['Espacio', 'canción play/pausa'], ['↑ / ↓', 'canción anterior / siguiente'], ['1‑9, 0', 'plantillas'], ['G / L', 'exportar / importar sesión'], ['Esc / ⌫', 'diapositivas']]);
     const gd = this.group(body, 'Diagnóstico', { closed:true });
     this.kv(gd, [['WebGL VTF', EXT_VTF ? 'sí' : 'no (sin niebla/líneas/empuje)'], ['MAX_TEXTURE_SIZE', MAX_TEX], ['TF.js', typeof tf !== 'undefined' ? tf.version_core || 'ok' : 'no cargado'], ['backend', typeof tf !== 'undefined' && tf.getBackend ? (tf.getBackend() || '—') : '—'], ['memoria', (navigator.deviceMemory || '?') + ' GB'], ['hilos', navigator.hardwareConcurrency || '?']]);
     this.buttons(gd, [['Limpiar ecos y pintura', () => { clearFeedback(); if (paint.ctx) paint.ctx.clearRect(0, 0, paint.cv.width, paint.cv.height); }], ['Recargar programa', () => location.reload(), 'danger']]);

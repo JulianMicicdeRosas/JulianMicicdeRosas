@@ -87,6 +87,7 @@ function layoutCells(){
     const vw = src.video.videoWidth || 640, vh = src.video.videoHeight || 480;
     const sc = Math.min(c.w / vw, c.h / vh);     // "contain": no recorta la cámara, deja bandas si hace falta
     src.fit = { vscale:sc, vox:c.x + (c.w - vw * sc) / 2, voy:c.y + (c.h - vh * sc) / 2 };
+    if (typeof calPrepare === 'function') calPrepare(src);
   });
 }
 function zoneMirror(src){ return src.mirror === undefined ? P.cam.mirror : src.mirror; }
@@ -97,13 +98,15 @@ function syncBodies(){
     const { vscale, vox, voy } = src.fit, c = src.cell, mir = zoneMirror(src);
     const mapX = x => { const px = x * vscale + vox; return mir ? (c.x + c.w - (px - c.x)) : px; };
     const mapY = y => y * vscale + voy;
+    const useCal = !!src._calH;   // calibración por tramos (calib.js)
     (src.poses || []).forEach((pose, idx) => {
       const id = src.id + ':' + (pose.id !== undefined ? pose.id : idx);
       if (!colorSlot.has(id)) colorSlot.set(id, (nextSlot++) % PALETTES.length);
       let b = bodies.get(id); if (!b) { b = { kp:[], hue:PALETTES[colorSlot.get(id)], seen:now, id, src:src.id }; bodies.set(id, b); }
       b.seen = now;
       for (let i = 0; i < pose.keypoints.length; i++) {
-        const k = pose.keypoints[i], X = mapX(k.x), Y = mapY(k.y), S = k.score ?? 0, old = b.kp[i];
+        const k = pose.keypoints[i], S = k.score ?? 0, old = b.kp[i]; let X, Y;
+        if (useCal) { const m = calMap(src, k.x, k.y); X = mir ? (c.x + c.w - (m.x - c.x)) : m.x; Y = m.y; } else { X = mapX(k.x); Y = mapY(k.y); }
         if (!old || S < P.track.minScore * .5) b.kp[i] = { x:X, y:Y, s:S, vx:0, vy:0 };
         else { const nx = old.x + (X - old.x) * (1 - sm), ny = old.y + (Y - old.y) * (1 - sm); old.vx = nx - old.x; old.vy = ny - old.y; old.x = nx; old.y = ny; old.s = S; }
       }
@@ -132,7 +135,7 @@ async function addSource(deviceId){
   const v = document.createElement('video'); v.autoplay = v.playsInline = v.muted = true; v.srcObject = stream; await v.play();
   const idx = availableCameras.findIndex(c => c.deviceId === deviceId);
   return { id:'c' + (srcCounter++), deviceId, label:idx >= 0 ? camLabel(availableCameras[idx], idx) : 'Cámara', video:v, stream,
-    detector:null, poses:[], videoTex:makeTex(2, 2), bgTex:makeTex(2, 2), cell:null, fit:null, rect:null, mirror:undefined };
+    detector:null, poses:[], videoTex:makeTex(2, 2), bgTex:makeTex(2, 2), cell:null, fit:null, rect:null, mirror:undefined, cal:null };
 }
 function closeSource(src){
   try { src.stream?.getTracks().forEach(t => t.stop()); } catch (e) {}
@@ -152,7 +155,7 @@ async function setCameras(ids, rects){
   }
   if (!next.length) return;
   sources.length = 0; sources.push(...next);
-  if (rects) sources.forEach((s, i) => { if (rects[i]) { s.rect = rects[i].rect || s.rect; s.mirror = rects[i].mirror; } });
+  if (rects) sources.forEach((s, i) => { if (rects[i]) { s.rect = rects[i].rect || s.rect; s.mirror = rects[i].mirror; if (rects[i].cal) s.cal = deepClone(rects[i].cal); } });
   for (const src of sources) await ensureDetector(src);
   layoutCells(); if (fbFeed[0]) clearFeedback();
   if (typeof Sessions !== 'undefined') Sessions.touch();

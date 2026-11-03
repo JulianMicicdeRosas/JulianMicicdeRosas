@@ -1,8 +1,8 @@
 @echo off
-REM ─────────────────────────────────────────────────────────────
-REM  Mirador — baja el modelo MoveNet a vendor\movenet\ (una vez, con internet)
-REM  Después el programa funciona sin conexión.
-REM ─────────────────────────────────────────────────────────────
+REM -------------------------------------------------------------
+REM  Mirador ? baja el modelo MoveNet a vendor\movenet\ (una vez, con internet)
+REM  Despues el programa funciona sin conexion.
+REM -------------------------------------------------------------
 cd /d "%~dp0"
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$ErrorActionPreference='Stop';" ^

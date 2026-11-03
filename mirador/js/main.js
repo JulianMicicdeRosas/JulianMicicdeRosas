@@ -63,7 +63,7 @@ async function start(sim){
   const audioSel = $('gateAudio').value; if (audioSel !== 'off' || P.audio.source !== 'off') { await Audio_.setSource(audioSel !== 'off' ? audioSel : P.audio.source); }
   await Playlist.autoFolder('canciones');
   if (audioParam && audioParam !== 'mic') { Playlist.fromUrlParam(audioParam); Playlist.play(); }
-  syncModulesFromP(); UI.init(); $('gate').remove(); document.body.classList.add('show-hint');
+  syncModulesFromP(); UI.init(); Calib.init(); $('gate').remove(); document.body.classList.add('show-hint');
   if (urlParams.get('panel') === '1') UI.togglePanel(true);
   started = true; running = true; Sessions.dirty = false; Sessions.updateName(); Playlist.updateCue();
   detectLoop(); requestAnimationFrame(loop);
@@ -77,7 +77,7 @@ function loop(now){
   const dt = Math.min((now - last) / 1000, .05); last = now; const t = (now - t0) / 1000;
   simTick(dt); syncBodies(); Audio_.tick(dt);
   for (const m of plan) if (!m.producer && m.update) m.update(dt);
-  drawScene(dt); render(t); drawCalib(); scalerTick(dt);
+  drawScene(dt); render(t); drawCalib(); Calib.draw(); scalerTick(dt);
   fpsAcc += 1 / Math.max(dt, 1e-4); fpsN++;
   if (fpsN >= 20) { $('fFps').textContent = Math.round(fpsAcc / fpsN) + ' fps'; fpsAcc = 0; fpsN = 0; const n = bodies.size; $('fBodies').textContent = n === 0 ? 'sin cuerpos' : `${n} ${n === 1 ? 'cuerpo' : 'cuerpos'}`; }
   if ((uiTick++ % 6) === 0) { $('fAudio').firstElementChild.style.width = (clamp(AM.level, 0, 1) * 100).toFixed(0) + '%'; if (!document.body.classList.contains('panel-hidden')) UI.tick(); }
@@ -95,6 +95,7 @@ addEventListener('keydown', e => {
   else if (k === 'arrowup' || k === 'arrowdown') { e.preventDefault(); Playlist.select(Playlist.selected + (k === 'arrowup' ? -1 : 1)); }
   else if (k === 'h') UI.togglePanel();
   else if (k === 'c') { P.map.calibrate = !P.map.calibrate; uiCanvas.classList.toggle('calibrating', P.map.calibrate); UI.refresh('proyeccion'); }
+  else if (k === 'k') Calib.toggle();
   else if (k === 'f') { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); }
   else if (k === 'b' && e.shiftKey) learnBackground();
   else if (k === 'b') { P.map.blackout = !P.map.blackout; UI.refresh('proyeccion'); }
