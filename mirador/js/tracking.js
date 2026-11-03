@@ -78,25 +78,76 @@ function kpBox(p, ms = .2){ let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, n = 0;
   for (const k of p.keypoints) if ((k.score ?? 0) > ms) { x0 = Math.min(x0, k.x); x1 = Math.max(x1, k.x); y0 = Math.min(y0, k.y); y1 = Math.max(y1, k.y); n++; }
   if (n < 2) return ms > -1 ? kpBox(p, -2) : { x0:0, y0:0, x1:1, y1:1 };
   return { x0, y0, x1, y1 }; }
-function detPrep(src, i, sx, sw, vh, light){
-  const cv = (src._tileCv ||= [])[i] ||= document.createElement('canvas'); if (cv.width !== sw || cv.height !== vh) { cv.width = sw; cv.height = vh; }
-  const cx = cv._ctx ||= cv.getContext('2d', { alpha:false, desynchronized:true });
-  cx.filter = light !== 1 ? `brightness(${light}) contrast(${(1 + (light - 1) * .12).toFixed(3)})` : 'none';
-  cx.drawImage(src.video, sx, 0, sw, vh, 0, 0, sw, vh); return cv;
+/* ---------- imagen para la detección: exposición, negros, blancos, medios tonos ----------
+   Todo en la GPU con tensores (no cambia lo que se proyecta, solo lo que ve el modelo):
+   salida = ((entrada × exposición − negros) / (blancos − negros)) ^ (1 / medios), recortado a 0–1.
+   Dinámico: cada ~200 ms se mide el histograma donde están los cuerpos (o el piso, o todo) y se
+   ajustan negros, blancos y medios para que los cuerpos queden en un gris medio, suavizado en el tiempo. */
+function detLevels(src){
+  const d = P.det;
+  if (d.expo === 'auto') { const lv = src._lv || { black:0, white:1, gamma:1 }; return { gain:1, black:lv.black, white:lv.white, gamma:lv.gamma, gray:!!d.gray }; }
+  return { gain:+d.light || 1, black:+d.black || 0, white:+d.white || 1, gamma:+d.gamma || 1, gray:!!d.gray };
 }
+function levelsIdentity(L){ return Math.abs(L.gain - 1) < .01 && L.black < .005 && L.white > .995 && Math.abs(L.gamma - 1) < .01 && !L.gray; }
+function detProcess(t, L){   // t: [h,w,3] 0–255 → float 0–255
+  return tf.tidy(() => {
+    let f = tf.div(tf.cast(t, 'float32'), 255 / L.gain);
+    if (L.gray) f = tf.tile(tf.sum(tf.mul(f, tf.tensor1d([.299, .587, .114])), 2, true), [1, 1, 3]);
+    f = tf.clipByValue(tf.div(tf.sub(f, L.black), Math.max(.04, L.white - L.black)), 0, 1);
+    if (Math.abs(L.gamma - 1) > .01) f = tf.pow(f, 1 / L.gamma);
+    return tf.mul(f, 255);
+  });
+}
+const METER_W = 160;
+async function meterExposure(src, frame, vw, vh){
+  const now = performance.now(); if (now - (src._meterT || 0) < 200) return; const dt = Math.min(1, (now - (src._meterT || now)) / 1000); src._meterT = now;
+  const mw = METER_W, mh = Math.max(9, Math.round(METER_W * vh / vw));
+  const sm = tf.tidy(() => tf.cast(tf.image.resizeBilinear(frame, [mh, mw]), 'int32')); const px = await sm.data(); sm.dispose();
+  const sx = vw / mw, sy = vh / mh, ig = src.cal?.ignore || [], B = src._calB;
+  const boxes = (src.poses || []).filter(p => p._box && !(src._calH && calIgnored(src, p))).map(p => { const b = p._box, pw = (b.x1 - b.x0) * .15, ph = (b.y1 - b.y0) * .1; return { x0:b.x0 - pw, x1:b.x1 + pw, y0:b.y0 - ph, y1:b.y1 + ph }; });
+  const ybAt = x => { if (!B || B.length < 2) return 0; if (x <= B[0].x) return B[0].y; for (let i = 0; i < B.length - 1; i++) { const a = B[i], c = B[i + 1]; if (x <= c.x) return a.y + (c.y - a.y) * (x - a.x) / Math.max(1e-6, c.x - a.x); } return B[B.length - 1].y; };
+  let mode = P.det.meter || 'auto'; if (mode === 'auto') mode = boxes.length ? 'cuerpos' : (B ? 'piso' : 'todo'); if (mode === 'cuerpos' && !boxes.length) mode = B ? 'piso' : 'todo'; if (mode === 'piso' && !B) mode = 'todo';
+  const count = m => { const h = new Uint32Array(256); let n = 0;
+    for (let y = 0; y < mh; y++) for (let x = 0; x < mw; x++) { const X = (x + .5) * sx, Y = (y + .5) * sy, nx = X / vw, ny = Y / vh;
+      if (ig.some(r => nx >= Math.min(r.x0, r.x1) && nx <= Math.max(r.x0, r.x1) && ny >= Math.min(r.y0, r.y1) && ny <= Math.max(r.y0, r.y1))) continue;
+      if (m === 'cuerpos' && !boxes.some(b => X >= b.x0 && X <= b.x1 && Y >= b.y0 && Y <= b.y1)) continue;
+      if (m === 'piso' && Y < ybAt(X)) continue;
+      const i = (y * mw + x) * 3; h[Math.min(255, (px[i] * .299 + px[i + 1] * .587 + px[i + 2] * .114) | 0)]++; n++; }
+    return { h, n }; };
+  let { h, n } = count(mode); if (n < 40) { mode = 'todo'; ({ h, n } = count(mode)); } if (!n) return;
+  const pct = q => { let acc = 0; const tgt = q * n; for (let i = 0; i < 256; i++) { acc += h[i]; if (acc >= tgt) return i / 255; } return 1; };
+  const lo = pct(.01), hi = pct(.995), med = pct(.5);
+  let black = Math.min(lo, .45), white = Math.max(hi, black + .2); white = Math.min(1, white);
+  const mid = clamp((med - black) / (white - black), .02, .98), target = clamp(P.det.target || .45, .15, .8);
+  const gamma = clamp(Math.log(mid) / Math.log(target), .5, 2.8);
+  const k = 1 - Math.exp(-dt / clamp(P.det.speed || .8, .05, 5)), lv = src._lv ||= { black, white, gamma };
+  lv.black += (black - lv.black) * k; lv.white += (white - lv.white) * k; lv.gamma += (gamma - lv.gamma) * k;
+  src._meter = { mode, n, lo, hi, med };
+}
+const DETPREV = { src:null };   // cámara que muestra la vista previa del panel (pide la imagen procesada)
 /* detecta en una cámara: corta en partes, une los duplicados del solapamiento y pone ids estables */
 async function detectSource(src){
   const det = DET.detector, v = src.video, vw = v.videoWidth, vh = v.videoHeight; if (!det || !vw || !vh) return src.poses || [];
-  const tiles = DET.single ? [{ x0:0, x1:1 }] : detTiles(P.det.tiles), light = +P.det.light || 1, raw = [];
-  const t0 = performance.now();
-  for (let i = 0; i < tiles.length; i++) {
-    const t = tiles[i], sx = Math.round(t.x0 * vw), sw = Math.round((t.x1 - t.x0) * vw);
-    const input = (tiles.length > 1 || light !== 1) ? detPrep(src, i, sx, sw, vh, light) : v;
-    let ps = []; try { ps = await det.estimatePoses(input, { maxPoses:Math.min(6, P.track.maxPoses + 1), flipHorizontal:false }); } catch (e) { DET.error = e.message; }
-    for (const p of ps) { if (sx) for (const k of p.keypoints) k.x += sx;
-      const b = kpBox(p), edge = (i > 0 && b.x0 < sx + sw * .03) || (i < tiles.length - 1 && b.x1 > sx + sw * .97);
-      p._tile = i; p._box = b; p._q = (p.score ?? .5) * (edge ? .6 : 1); raw.push(p); }
-  }
+  const tiles = DET.single ? [{ x0:0, x1:1 }] : detTiles(P.det.tiles), raw = [];
+  const t0 = performance.now(), frame = tf.browser.fromPixels(v);
+  try {
+    if (P.det.expo === 'auto') await meterExposure(src, frame, vw, vh);
+    const L = detLevels(src), same = levelsIdentity(L);
+    for (let i = 0; i < tiles.length; i++) {
+      const t = tiles[i], sx = Math.round(t.x0 * vw), sw = Math.round((t.x1 - t.x0) * vw);
+      const input = tf.tidy(() => { const c = tiles.length > 1 ? tf.slice(frame, [0, sx, 0], [vh, sw, 3]) : tf.clone(frame); return same ? c : detProcess(c, L); });
+      let ps = []; try { ps = await det.estimatePoses(input, { maxPoses:Math.min(6, P.track.maxPoses + 1), flipHorizontal:false }); } catch (e) { DET.error = e.message; } finally { input.dispose(); }
+      for (const p of ps) { if (sx) for (const k of p.keypoints) k.x += sx;
+        const b = kpBox(p), edge = (i > 0 && b.x0 < sx + sw * .03) || (i < tiles.length - 1 && b.x1 > sx + sw * .97);
+        p._tile = i; p._box = b; p._q = (p.score ?? .5) * (edge ? .6 : 1); raw.push(p); }
+    }
+    // vista previa del panel: la imagen tal como la recibe el modelo
+    const now = performance.now();
+    if (DETPREV.src === src && typeof UI !== 'undefined' && UI.tab === 'camaras' && !document.body.classList.contains('panel-hidden') && now - (src._prevT || 0) > 150) { src._prevT = now;
+      const pw = 320, ph = Math.max(18, Math.round(pw * vh / vw));
+      const sm = tf.tidy(() => { const r = tf.image.resizeBilinear(frame, [ph, pw]); return tf.cast(tf.clipByValue(same ? r : detProcess(r, L), 0, 255), 'int32'); });
+      try { const px = await tf.browser.toPixels(sm); src._prevImg = new ImageData(px, pw, ph); } finally { sm.dispose(); } }
+  } finally { frame.dispose(); }
   src._raw = raw; const diag = src._diag ||= {}; diag.raw = raw.length; diag.low = raw.filter(p => (p.score ?? 1) < P.det.minPose).length; diag.ms = performance.now() - t0; diag.tiles = tiles.length;
   diag.best = raw.reduce((m, p) => Math.max(m, p.score ?? 0), 0);
   let poses = raw.filter(p => (p.score ?? 1) >= P.det.minPose).sort((a, b) => b._q - a._q);
@@ -219,6 +270,35 @@ function closeSource(src){
   gl.deleteTexture(src.videoTex); gl.deleteTexture(src.bgTex);
   for (const id of [...bodies.keys()]) if (id.startsWith(src.id + ':')) { bodies.delete(id); colorSlot.delete(id); }
 }
+/* ---------- ajustes de la cámara física (exposición, balance de blancos…) ----------
+   Lo que la cámara exponga al navegador (track.getCapabilities). Webcams UVC en Windows y Linux
+   suelen dar exposición y balance de blancos; en Mac muchas veces no hay nada. Se guardan por zona. */
+const CAM_HW = [
+  ['exposureMode', 'exposición de la cámara'], ['exposureTime', 'tiempo de exposición'], ['exposureCompensation', 'compensación de exposición'], ['iso', 'ISO / ganancia'],
+  ['whiteBalanceMode', 'balance de blancos'], ['colorTemperature', 'temperatura de color (K)'],
+  ['brightness', 'brillo (cámara)'], ['contrast', 'contraste (cámara)'], ['saturation', 'saturación (cámara)'], ['sharpness', 'nitidez (cámara)'],
+  ['focusMode', 'foco'], ['focusDistance', 'distancia de foco'],
+];
+const CAM_HW_DEP = { exposureTime:['exposureMode', 'manual'], exposureCompensation:null, iso:['exposureMode', 'manual'], colorTemperature:['whiteBalanceMode', 'manual'], focusDistance:['focusMode', 'manual'] };
+function camTrack(src){ return src?.stream?.getVideoTracks?.()[0] || null; }
+function camCaps(src){ const t = camTrack(src); try { return (t && t.getCapabilities) ? t.getCapabilities() : {}; } catch (e) { return {}; } }
+function camSettings(src){ const t = camTrack(src); try { return t ? t.getSettings() : {}; } catch (e) { return {}; } }
+async function setCamHW(src, key, val){
+  const t = camTrack(src); if (!t) return false; const caps = camCaps(src), c = { [key]:val }, dep = CAM_HW_DEP[key];
+  if (dep && Array.isArray(caps[dep[0]]) && caps[dep[0]].includes(dep[1])) c[dep[0]] = dep[1];
+  try { await t.applyConstraints({ advanced:[c] }); src.hw = Object.assign(src.hw || {}, c); if (typeof Sessions !== 'undefined') Sessions.touch(); return true; }
+  catch (e) { toast('La cámara no aceptó ' + key + ' (' + (e.message || e.name) + ')'); return false; }
+}
+async function camHWAuto(src){
+  const t = camTrack(src); if (!t) return; const caps = camCaps(src), c = {};
+  for (const k of ['exposureMode', 'whiteBalanceMode', 'focusMode']) if (Array.isArray(caps[k]) && caps[k].includes('continuous')) c[k] = 'continuous';
+  try { await t.applyConstraints({ advanced:[c] }); } catch (e) {} src.hw = null; if (typeof Sessions !== 'undefined') Sessions.touch();
+}
+async function applyCamHW(src){
+  if (!src.hw) return; const t = camTrack(src); if (!t) return; const caps = camCaps(src), c = {};
+  for (const k in src.hw) if (k in caps) c[k] = src.hw[k];
+  if (Object.keys(c).length) try { await t.applyConstraints({ advanced:[c] }); } catch (e) { console.warn('ajustes de cámara:', e); }
+}
 /* ids = deviceIds en el orden de las zonas */
 async function setCameras(ids, rects){
   ids = [...new Set(ids.filter(Boolean))].slice(0, MAX_CAMS); if (!ids.length) return;
@@ -231,7 +311,7 @@ async function setCameras(ids, rects){
   }
   if (!next.length) return;
   sources.length = 0; sources.push(...next);
-  if (rects) sources.forEach((s, i) => { if (rects[i]) { s.rect = rects[i].rect || s.rect; s.mirror = rects[i].mirror; if (rects[i].cal) s.cal = deepClone(rects[i].cal); } });
+  if (rects) sources.forEach((s, i) => { if (rects[i]) { s.rect = rects[i].rect || s.rect; s.mirror = rects[i].mirror; if (rects[i].cal) s.cal = deepClone(rects[i].cal); if (rects[i].hw) { s.hw = deepClone(rects[i].hw); applyCamHW(s); } } });
   await ensureDetector();
   layoutCells(); if (fbFeed[0]) clearFeedback();
   if (typeof Sessions !== 'undefined') Sessions.touch();

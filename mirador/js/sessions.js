@@ -16,7 +16,7 @@ const Sessions = {
       plantilla:plantillaActual, P:deepClone(P), corners:deepClone(corners),
       out:{ mode:OUT.mode, w:OUT.w, h:OUT.h },
       layout:{ orient:LAYOUT.orient },
-      zonas:sources.map(s => ({ deviceId:s.deviceId, label:s.label, rect:s.rect, mirror:s.mirror, cal:s.cal || null })),
+      zonas:sources.map(s => ({ deviceId:s.deviceId, label:s.label, rect:s.rect, mirror:s.mirror, cal:s.cal || null, hw:s.hw || null })),
       canciones:Playlist.serialize(), cancionActual:Playlist.selected,
       notas:this.notes || '' };
   },
@@ -39,7 +39,7 @@ const Sessions = {
     if (!opts.keepCams && Array.isArray(s.zonas) && s.zonas.length && typeof running !== 'undefined' && running && !simMode) {
       const ids = s.zonas.map(z => z.deviceId).filter(id => availableCameras.some(c => c.deviceId === id));
       if (ids.length) await setCameras(ids, s.zonas.filter(z => ids.includes(z.deviceId)));
-    } else if (Array.isArray(s.zonas)) sources.forEach((src, i) => { if (s.zonas[i]) { src.rect = s.zonas[i].rect || src.rect; src.mirror = s.zonas[i].mirror; if (s.zonas[i].cal) src.cal = deepClone(s.zonas[i].cal); calPrepare(src); } });
+    } else if (Array.isArray(s.zonas)) sources.forEach((src, i) => { if (s.zonas[i]) { src.rect = s.zonas[i].rect || src.rect; src.mirror = s.zonas[i].mirror; if (s.zonas[i].cal) src.cal = deepClone(s.zonas[i].cal); if (s.zonas[i].hw && src.stream) { src.hw = deepClone(s.zonas[i].hw); applyCamHW(src); } calPrepare(src); } });
     syncModulesFromP(); if (fbFeed[0]) { resize(); buildRefBuffer(); clearFeedback(); }
     if (typeof Audio_ !== 'undefined' && Audio_.ready && P.audio.source !== Audio_.source) Audio_.setSource(P.audio.source);
     this.updateName(); if (typeof UI !== 'undefined') UI.refresh(); Playlist.updateCue();

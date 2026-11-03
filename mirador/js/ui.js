@@ -144,16 +144,17 @@ const UI = {
     this.range(gt, P.det, 'res', 192, 512, 32, 'resolución del modelo', manual);
     this.range(gt, P.det, 'minPose', .03, .5, .01, 'confianza del cuerpo', manual);
     this.range(gt, P.track, 'minScore', .05, .6, .01, 'confianza de los puntos', manual);
-    this.range(gt, P.det, 'light', 1, 3, .05, 'realce de luz (sala oscura)');
     this.range(gt, P.track, 'smoothing', 0, .95, .01, 'suavizado'); this.range(gt, P.track, 'maxPoses', 1, 6, 1, 'cuerpos máx. por cámara');
     this.buttons(gt, [[verEsqueletos ? 'Ocultar esqueletos (E)' : 'Ver esqueletos en la imagen (E)', () => { verEsqueletos = !verEsqueletos; this.refresh('camaras'); }, verEsqueletos ? 'on' : 'primary']]);
-    const cv = document.createElement('canvas'); cv.className = 'detprev'; cv.width = 480; cv.height = 270; cv.style.cssText = 'width:100%;aspect-ratio:16/9;background:#0b0d12;border-radius:6px;margin:6px 0;display:block;cursor:pointer'; cv.title = 'Lo que ve el detector. Clic: vista grande (K)'; cv.onclick = () => Calib.toggle(true); gt.appendChild(cv);
+    const cv = document.createElement('canvas'); cv.className = 'detprev'; cv.width = 480; cv.height = 270; cv.style.cssText = 'width:100%;aspect-ratio:16/9;background:#0b0d12;border-radius:6px;margin:6px 0;display:block;cursor:pointer'; cv.title = 'La imagen tal como la recibe el detector (con exposición, negros y blancos). Clic: vista grande (K)'; cv.onclick = () => Calib.toggle(true); gt.appendChild(cv);
     const st = document.createElement('div'); st.className = 'note'; gt.appendChild(st);
     const draw = () => {
       const s = sources[Calib.zone] || sources[0], c = cv.getContext('2d'); c.fillStyle = '#0b0d12'; c.fillRect(0, 0, cv.width, cv.height);
       if (!s) { st.textContent = 'sin cámara'; return; }
       const vw = s.video.videoWidth || 1280, vh = s.video.videoHeight || 720, sc = Math.min(cv.width / vw, cv.height / vh), ox = (cv.width - vw * sc) / 2, oy = (cv.height - vh * sc) / 2;
-      if (s.video.readyState >= 2) { c.filter = P.det.light !== 1 ? `brightness(${P.det.light})` : 'none'; c.drawImage(s.video, ox, oy, vw * sc, vh * sc); c.filter = 'none'; }
+      DETPREV.src = s;
+      if (s._prevImg) { const o = this._prevCv ||= document.createElement('canvas'); if (o.width !== s._prevImg.width || o.height !== s._prevImg.height) { o.width = s._prevImg.width; o.height = s._prevImg.height; } o.getContext('2d').putImageData(s._prevImg, 0, 0); c.drawImage(o, ox, oy, vw * sc, vh * sc); }
+      else if (s.video.readyState >= 2) c.drawImage(s.video, ox, oy, vw * sc, vh * sc);
       const tiles = DET.single ? [{ x0:0, x1:1 }] : detTiles(P.det.tiles); c.strokeStyle = 'rgba(120,180,255,.55)'; c.setLineDash([4, 4]); c.lineWidth = 1;
       tiles.forEach(t => c.strokeRect(ox + t.x0 * vw * sc + .5, oy + .5, (t.x1 - t.x0) * vw * sc - 1, vh * sc - 1)); c.setLineDash([]);
       (s.cal?.ignore || []).forEach(r => { c.fillStyle = 'rgba(255,80,80,.15)'; c.fillRect(ox + Math.min(r.x0, r.x1) * vw * sc, oy + Math.min(r.y0, r.y1) * vh * sc, Math.abs(r.x1 - r.x0) * vw * sc, Math.abs(r.y1 - r.y0) * vh * sc); });
@@ -167,14 +168,50 @@ const UI = {
       const d = s._diag || {}, low = d.low || 0;
       st.innerHTML = s.video.readyState < 2 ? 'la cámara todavía no da imagen…' : !DET.detector ? (DET.error ? 'modelo con error: ' + esc(DET.error) : 'cargando el modelo…')
         : `<b style="color:#69f0b0">${nOk}</b> cuerpo${nOk === 1 ? '' : 's'} en uso` + (nIgn ? ` · <b style="color:#ff6b6b">${nIgn}</b> en zona ignorada` : '') + (low ? ` · <span style="color:#aaa">${low} con poca confianza (gris)</span>` : '')
-          + ` · ${d.tiles || 1} parte${(d.tiles || 1) > 1 ? 's' : ''} · ${Math.round(d.ms || 0)} ms` + (nOk === 0 && low ? '<br>Hay cuerpos en gris: bajá la "confianza del cuerpo" o subí la sensibilidad.' : nOk === 0 && !low ? '<br>El modelo no encuentra a nadie: probá sensibilidad "máxima", más luz sobre los bailarines o el realce de luz.' : '');
+          + ` · ${d.tiles || 1} parte${(d.tiles || 1) > 1 ? 's' : ''} · ${Math.round(d.ms || 0)} ms` + (nOk === 0 && low ? '<br>Hay cuerpos en gris: bajá la "confianza del cuerpo" o subí la sensibilidad.' : nOk === 0 && !low ? '<br>El modelo no encuentra a nadie: probá sensibilidad "máxima", más luz sobre los bailarines o la exposición dinámica (abajo).' : '');
     };
     this.liveFns.push(draw); draw();
     this.kv(gt, [['modelo', (modelBase ? 'local (vendor/movenet)' : 'descargado') + (DET.single ? ' · SinglePose (1 cuerpo)' : ' · MultiPose')]]);
-    this.note(gt, 'Verde: cuerpo en uso. Rojo: zona ignorada. Gris: el modelo lo vio con poca confianza y se descarta. Las líneas punteadas azules son las partes en que se corta la imagen. Lo más fiable en sala oscura: luz sobre los bailarines que no pegue en las paredes, o cámara con infrarrojo.');
+    this.note(gt, 'Verde: cuerpo en uso. Rojo: zona ignorada. Gris: el modelo lo vio con poca confianza y se descarta. La imagen es la que recibe el modelo, ya con la exposición y los niveles de abajo. Las líneas punteadas azules son las partes en que se corta la imagen. Lo más fiable en sala oscura: luz sobre los bailarines que no pegue en las paredes, o cámara con infrarrojo.');
+  },
+  /* imagen que recibe el detector: exposición dinámica, negros, blancos, medios tonos */
+  imgGroup(body){
+    const s = sources[Calib.zone] || sources[0], d = P.det;
+    const g = this.group(body, 'Imagen para la detección: exposición, blancos y negros', { desc:'Corrige solo la imagen que analiza el modelo (no lo que se proyecta). Dinámica: mide dónde están los cuerpos y ajusta negros, blancos y medios tonos solos, para que el cuerpo quede en un gris medio aunque cambie la luz de la proyección.' });
+    this.select(g, d, 'expo', [['auto', 'dinámica (automática)'], ['manual', 'manual (fija)']], 'exposición', () => this.refresh('camaras'));
+    if (d.expo === 'auto') {
+      this.range(g, d, 'target', .2, .7, .01, 'brillo buscado del cuerpo');
+      this.range(g, d, 'speed', .1, 4, .05, 'reacción (s, más = más lenta)');
+      this.select(g, d, 'meter', [['auto', 'cuerpos (o el piso si no hay nadie)'], ['cuerpos', 'solo cuerpos'], ['piso', 'piso de la sala (calibración)'], ['todo', 'toda la imagen']], 'medir en');
+      const st = document.createElement('div'); st.className = 'kv'; g.appendChild(st);
+      this.liveFns.push(() => { const lv = s?._lv, m = s?._meter; st.innerHTML = lv ? `negros <b>${lv.black.toFixed(2)}</b> · blancos <b>${lv.white.toFixed(2)}</b> · medios <b>${lv.gamma.toFixed(2)}</b>` + (m ? `<br>medido en: <b>${m.mode}</b> · mediana ${m.med.toFixed(2)}` : '') : 'midiendo…'; });
+      this.buttons(g, [['Fijar estos valores (pasar a manual)', () => { const lv = s?._lv; if (lv) Object.assign(d, { black:+lv.black.toFixed(3), white:+lv.white.toFixed(3), gamma:+lv.gamma.toFixed(3), light:1 }); d.expo = 'manual'; Sessions.touch(); this.refresh('camaras'); }]]);
+    } else {
+      this.range(g, d, 'light', .5, 4, .05, 'exposición (ganancia)');
+      this.range(g, d, 'black', 0, .6, .005, 'negros (punto negro)', v => { if (d.white < v + .05) d.white = Math.min(1, v + .05); });
+      this.range(g, d, 'white', .1, 1, .005, 'blancos (punto blanco)', v => { if (d.black > v - .05) d.black = Math.max(0, v - .05); });
+      this.range(g, d, 'gamma', .4, 3, .01, 'medios tonos (más = más claro)');
+      this.buttons(g, [['Neutro', () => { Object.assign(d, { light:1, black:0, white:1, gamma:1 }); Sessions.touch(); this.refresh('camaras'); }], ['Sala oscura', () => { Object.assign(d, { light:1, black:.02, white:.45, gamma:1.5 }); Sessions.touch(); this.refresh('camaras'); }]]);
+    }
+    this.toggle(g, d, 'gray', 'quitar color (luz de proyección teñida)');
+    this.note(g, 'Negros: lo que esté por debajo pasa a negro puro (saca el gris de la sala). Blancos: lo que esté por encima pasa a blanco (con poca luz, bajalo para estirar la imagen). Medios tonos aclara u oscurece el cuerpo sin tocar los extremos. Mirá el resultado en la vista previa de arriba.');
+  },
+  /* la cámara física: lo que el navegador deje tocar */
+  hwGroup(body){
+    const s = sources[Calib.zone] || sources[0]; if (!s || !s.stream) return;
+    const g = this.group(body, `Cámara física · ${s.label}`, { closed:!s.hw, desc:'Ajustes del propio dispositivo. Para detectar en sala con proyección conviene exposición manual fija (la automática de la cámara "respira" con cada cambio de imagen) y corregir el resto con la exposición dinámica de arriba.' });
+    const caps = camCaps(s), set = camSettings(s); let n = 0;
+    for (const [key, label] of CAM_HW) { const cp = caps[key]; if (cp === undefined) continue; n++;
+      if (Array.isArray(cp)) { if (!cp.length) { n--; continue; } const o = { v:set[key] ?? cp[0] }; const names = { manual:'manual (fija)', continuous:'automática continua', 'single-shot':'automática una vez', none:'ninguno' };
+        this.select(g, o, 'v', cp.map(x => [x, names[x] || x]), label, v => setCamHW(s, key, v).then(() => this.refresh('camaras'))); }
+      else if (typeof cp === 'object' && cp.max !== undefined) { const st = cp.step || (cp.max - cp.min) / 100 || 1, o = { v:set[key] ?? cp.min };
+        this.range(g, o, 'v', cp.min, cp.max, st, label, v => { clearTimeout(this._hwT); this._hwT = setTimeout(() => setCamHW(s, key, v), 120); }); } }
+    if (!n) { this.note(g, 'Esta cámara no le da ajustes al navegador (pasa seguido en Mac). Fijá la exposición y el balance de blancos con el programa del fabricante (Logi Tune / G HUB, etc.) o desde OBS: Propiedades del dispositivo → Configurar video. Lo que fijes ahí queda en el driver y Mirador lo respeta.'); return; }
+    this.buttons(g, [['Todo automático', async () => { await camHWAuto(s); this.refresh('camaras'); }]]);
+    this.note(g, 'Tiempo de exposición largo = más luz pero más estela en el movimiento. Si los bailarines se ven borrosos, bajalo y subí ganancia/ISO o la exposición dinámica. Se guarda en la sesión.');
   },
   tab_camaras(body){
-    if (!simMode) this.detGroup(body);
+    if (!simMode) { this.detGroup(body); this.imgGroup(body); this.hwGroup(body); }
     const g = this.group(body, simMode ? 'Simulación (sin cámara)' : 'Zonas de cámara', { desc: simMode ? 'Cuerpos sintéticos para probar estéticas y formato.' : 'Cada cámara ocupa una zona de la salida. Con 7 proyectores y una sola cámara, la zona es toda la pared; cuando sumes cámaras, repartilas en columnas o ubicalas a mano.' });
     if (simMode) { this.range(g, SIM, 'n', 1, 8, 1, 'cuerpos simulados'); }
     else {
