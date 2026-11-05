@@ -522,6 +522,7 @@ async function boot() {
         logUi({ action: 'arranque' }); // la escena empieza de cero (al re-proyectar se reinicia aquí)
       }
       config.setRecInfo(m.grabacion, m.replay);
+      noteRecording(m.grabacion);
       debug.setStatus({ backend: 'connected', ...(m.status || {}) });
       config.setMicStatus(m.status || {});
       config.setDefaultPrompt(m.default_prompt);
@@ -549,7 +550,10 @@ async function boot() {
       }
     },
     key_status: (m) => config.setKeyStatus(m),
-    grabacion: (m) => config.setRecInfo(m),
+    grabacion: (m) => {
+      config.setRecInfo(m);
+      noteRecording(m);
+    },
     // ── re-proyección: el backend repite lo que pasó, en su segundo exacto ──
     replay_ui: (m) => {
       if (m.action === 'arranque') {
@@ -558,6 +562,13 @@ async function boot() {
       } else if (m.action === 'grabar') show.start(...show.nextRecording());
       else if (m.action === 'voz') show.start(...show.nextRecording());
       else if (m.action === 'detener') show.stop();
+      else if (m.action === 'reanudar' && m.escena) {
+        // la página se había recargado por la GPU, o la grabación empezó con el show ya andando
+        if (!m.escena.state || m.escena.state === 'loop') {
+          field.clearScene();
+          show.goLoop();
+        } else resumeAfterReload(m.escena);
+      }
       else if (m.key) doKey(m.key);
       config.setState(show.label());
     },
@@ -617,6 +628,7 @@ async function boot() {
     requestDevices: () => socket.send({ type: 'list_devices' }),
     onSaveKey: (key) => socket.send({ type: 'set_api_key', key }),
     onOpenFolder: (que) => socket.send({ type: 'open_folder', que }),
+    onSetRec: (activa, carpeta) => socket.send({ type: 'set_rec', activa, carpeta }),
     onTestGrid: (text) => {
       socket.send({ type: 'save_settings', settings }); // primero lo último elegido en el panel
       if (!socket.send({ type: 'test_grid', text })) config.setGridTest({ ok: false, error: 'sin conexión con el backend' });
@@ -944,15 +956,34 @@ async function boot() {
     later(() => location.reload(), 1200);
   });
 
-  function resumeAfterReload() {
-    let r = null;
-    try {
-      r = JSON.parse(sessionStorage.getItem(RESUME_KEY) || 'null');
-      sessionStorage.removeItem(RESUME_KEY);
-    } catch {
-      return;
+  const sceneNow = () => ({ state: show.state, mode: show.mode, variant: show.variant, artist: show.artistIdx, recording: show.recording });
+  // Una grabación nueva con el show ya andando (se cambió de carpeta, se volvió a prender, o el backend se
+  // reinició con esta página abierta): anotar la escena del momento, para que la re-proyección arranque desde ahí.
+  let recDir, recSeen = false;
+  function noteRecording(g) {
+    if (replayMode) return;
+    const dir = g && g.activa !== false && g.carpeta ? g.carpeta : null;
+    if (dir && dir !== recDir && recSeen) logUi({ action: 'reanudar', escena: sceneNow() });
+    recDir = dir;
+    recSeen = true;
+  }
+
+  function resumeAfterReload(rep = null) {
+    let r = rep;
+    if (!r) {
+      try {
+        r = JSON.parse(sessionStorage.getItem(RESUME_KEY) || 'null');
+        sessionStorage.removeItem(RESUME_KEY);
+      } catch {
+        return;
+      }
+      if (!r || Date.now() - r.at > 120000 || replayMode) return;
+      // la re-proyección repite esto (se avisa apenas el backend vuelve a estar conectado)
+      const ev = { action: 'reanudar', escena: { state: r.state, mode: r.mode, variant: r.variant, artist: r.artist, recording: r.recording } };
+      let tries = 0;
+      const send = () => (socket?.open ? logUi(ev) : ++tries < 40 && later(send, 250));
+      send();
     }
-    if (!r || Date.now() - r.at > 120000 || replayMode) return;
     const named = (i) => i >= 0 && show.artists[i]?.name?.trim();
     if (r.state === 'artist' && named(r.artist)) show.goArtist(r.artist + 1);
     else if (r.state === 'title') show.goTitle();

@@ -366,8 +366,22 @@ regula con `OPENAI_COMMIT_S` en `.env` (más chico = más rápido pero con más 
 | `ajustes.json`, `logos/` | copia de los ajustes y los logos del arranque (la re-proyección no depende de lo que se cambie después) |
 | `sesion.json` | fecha y hora de inicio |
 
-Se escribe a disco en el momento: un corte de luz no pierde la sesión. El panel C (sección Micrófono) muestra la
-carpeta, los minutos grabados y la cantidad de eventos; el diagnóstico verifica que se pueda escribir y el espacio libre.
+Se escribe a disco en el momento: un corte de luz no pierde la sesión. El diagnóstico verifica que se pueda escribir y
+el espacio libre.
+
+**Dónde y si se graba — panel C, sección «Grabación de la sesión»:**
+
+- **Grabar la sesión** (tilde, prendido de fábrica): sacarlo cierra la sesión en curso y deja de grabar; volver a
+  ponerlo empieza una sesión nueva. Queda guardado para la próxima vez que se abra el programa.
+- **Carpeta**: escribir la ruta (por ejemplo un disco externo, `E:\FLAT\grabaciones`) y **Usar esta carpeta**. Se
+  prueba que se pueda escribir antes de cambiar; si no se puede, sigue grabando donde estaba y avisa en rojo. Vacía =
+  la carpeta de fábrica. También se puede fijar en `.env` con `GRABACIONES_DIR=` (el panel tiene prioridad).
+- **Abrir carpeta** la abre en el Explorador / Finder. Debajo se ve la sesión en curso, los minutos y los eventos.
+
+Al cambiar de carpeta o volver a prender la grabación con el show andando, la sesión nueva anota en qué escena estaba
+(loop, tecla 0, artista, …) para que la re-proyección arranque desde ahí; lo mismo si la página se recargó sola por la
+placa de video. Si el disco se llena o se desconecta en plena noche, la grabación se apaga y avisa en el panel C, pero el
+show sigue. `reproyectar` busca las sesiones en la carpeta elegida.
 
 **Re-proyectar otro día:** doble clic en **`reproyectar.bat`** (Windows) o **`reproyectar_mac.command`** (Mac).
 Muestra la lista de sesiones, se elige una y el show se repite solo: el audio sale por la salida de sonido

@@ -32,7 +32,7 @@ const ANIM_NAMES = { clasica: 'clásica', muro: 'muro', cruce: 'cruce', constela
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 export class ConfigPanel {
-  constructor({ getSettings, onChange, onDevice, onChannel, onChannel2, onShowPrompt, requestDevices, onScanLogos, onSaveKey, onRecord, onStop, onPreviewStyle, defaultPrompt }) {
+  constructor({ getSettings, onChange, onDevice, onChannel, onChannel2, onSetRec, onShowPrompt, requestDevices, onScanLogos, onSaveKey, onRecord, onStop, onPreviewStyle, defaultPrompt }) {
     this.onPreviewStyle = onPreviewStyle;
     this.onOpenFolder = arguments[0].onOpenFolder;
     this.onTestGrid = arguments[0].onTestGrid;
@@ -44,6 +44,7 @@ export class ConfigPanel {
     this.onChange = onChange;
     this.onDevice = onDevice;
     this.onChannel = onChannel;
+    this.onSetRec = onSetRec;
     this.onShowPrompt = onShowPrompt;
     this.requestDevices = requestDevices;
     this.defaultPrompt = defaultPrompt || '';
@@ -198,7 +199,20 @@ export class ConfigPanel {
           <span data-umbral-val></span>
         </div>
         <p class="hint">Más alto = hace falta hablar más fuerte para que arranque (evita que lo dispare el ruido de la sala). Compará con la barra del micrófono.</p>
+        <h2>Grabación de la sesión</h2>
+        <div class="row"><label><input type="checkbox" data-rec-on checked> Grabar la sesión: el audio y todo lo que pasa en
+        pantalla (teclas, palabras, dibujos, ajustes), para re-proyectarla igual otro día</label></div>
+        <div class="row">
+          <span>Carpeta:</span>
+          <input data-rec-dir type="text" style="flex:1;min-width:220px" placeholder="(la de fábrica: Documentos/Ciclo FLAT/grabaciones)">
+          <button data-act="rec-dir">Usar esta carpeta</button>
+          <button data-act="open-rec">Abrir carpeta</button>
+        </div>
         <p class="hint" data-recinfo>Grabación de la sesión: —</p>
+        <p class="hint">Cada arranque del programa es una sesión nueva: una subcarpeta con fecha y hora (audio.wav,
+        eventos.jsonl, ajustes.json y los logos). Para re-proyectar: <code>reproyectar.bat</code> (o
+        <code>reproyectar_8400.bat</code> / <code>reproyectar_mac.command</code>). Cambiar de carpeta empieza una
+        grabación nueva ahí, sin cortar el show. ~170 MB por hora de audio.</p>
         <p class="hint">Habla al micrófono: la barra debe moverse. Verde = señal, rojo = saturación. El micrófono lo abre el
         backend (server.py); si aparece «backend desconectado», arráncalo.</p>
       </section>
@@ -686,10 +700,21 @@ export class ConfigPanel {
     if (replay) this.recText = `RE-PROYECTANDO ${replay.carpeta} (${Math.round(replay.duracion / 60)} min). Nada se graba.`;
     else if (info && info.carpeta) {
       const s = Math.round(info.segundos || 0);
-      this.recText = `● Grabando la sesión desde que arrancó: ${info.carpeta} · ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} de audio · ${info.eventos || 0} eventos`;
+      const desde = /(\d\d)-(\d\d)-\d\d$/.exec(info.carpeta);
+      this.recText = `● Grabando la sesión${desde ? ` desde las ${desde[1]}:${desde[2]}` : ''}: ${info.carpeta} · ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} de audio · ${info.eventos || 0} eventos`;
     } else if (info === null) this.recText = 'La sesión no se está grabando (backend con --no-record o sin permiso de escritura).';
+    if (info && !replay) {
+      if (!info.carpeta) this.recText = info.pedida === false ? `○ Grabación apagada (carpeta: ${info.raiz}).` : `✗ No se está grabando${info.error ? `: ${info.error}` : ''}.`;
+      else if (info.error) this.recText += ` · ${info.error}`;
+      const on = this.$('[data-rec-on]'), dir = this.$('[data-rec-dir]');
+      if (on) on.checked = info.pedida !== false;
+      if (dir && document.activeElement !== dir && info.raiz) dir.value = info.raiz;
+    }
     const el = this.$('[data-recinfo]');
-    if (el && this.recText) el.textContent = this.recText;
+    if (el && this.recText) {
+      el.textContent = this.recText;
+      el.classList.toggle('warn', !!(info && (info.error || (!info.carpeta && info.pedida !== false))));
+    }
   }
 
   setUserDir(dir) {
@@ -791,6 +816,8 @@ export class ConfigPanel {
     else if (act === 'reset-prompt') this._commit((s) => (s.prompt_estetica = ''));
     else if (act === 'swatch') this._commit((s) => (s.marca = { ...(s.marca || {}), acento: ev.target.dataset.color.toUpperCase() }));
     else if (act === 'open-logos') this.onOpenFolder?.('logos');
+    else if (act === 'open-rec') this.onOpenFolder?.('grabaciones');
+    else if (act === 'rec-dir') this.onSetRec?.(this.$('[data-rec-on]').checked, this.$('[data-rec-dir]').value.trim());
     else if (act === 'reset-prompt-grilla') this._commit((s) => (s.prompt_grilla = ''));
     else if (act === 'test-grid') {
       this.$('[data-grid-preview]').textContent = 'Pidiendo la grilla…';
@@ -964,6 +991,11 @@ export class ConfigPanel {
       if (k === 'forma_grilla' || k === 'grilla_preset') this._renderPresets(this.getSettings());
       return;
     }
+    if (t.matches('[data-rec-on]')) {
+      if (ev.type === 'change') this.onSetRec?.(t.checked, this.$('[data-rec-dir]').value.trim());
+      return;
+    }
+    if (t.matches('[data-rec-dir]')) return; // se aplica con «Usar esta carpeta»
     if (t.matches('[data-presentacion]')) {
       if (ev.type !== 'change') return;
       // cambia el título del loop: el paso de texto que tenía una presentación (o el primero de texto)

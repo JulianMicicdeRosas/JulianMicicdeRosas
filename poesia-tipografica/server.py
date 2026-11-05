@@ -238,7 +238,7 @@ class SettingsStore:
     KEYS = ("device", "artists", "loop", "prompt_estetica", "avisos", "pointcloud", "profundidad", "nube", "orbita",
             "curaduria", "imagenes", "prompt_grilla", "polaridad", "director", "cadencia", "estilos", "glitch_ambiente", "ascii_filas",
             "marca", "muro", "formato", "canal", "canal2", "forma_grilla", "grilla_preset", "tratamiento",
-            "inicio_por_voz", "umbral_voz", "presentacion",
+            "inicio_por_voz", "umbral_voz", "presentacion", "grabar", "carpeta_grabaciones",
             # marcas de migración: que una corrección automática se aplique una sola vez (y no pise lo elegido)
             "imagenes_v4", "imagenes_v5", "loop_grupos_v2", "loop_flat_v3", "loop_flat_v4", "loop_titulo_v7", "titulo_flat_v8", "titulo_v9", "titulo_v11", "formato_v9", "formato_v10", "imagenes_v7")
 
@@ -444,7 +444,28 @@ def read_logo_folder(folder: str) -> list[dict[str, str]]:
 #  Grabación de la sesión: audio continuo + todo lo que pasa, para re-proyectar otro día
 # ════════════════════════════════════════════════════════════════════════════
 
-RECORDINGS_DIR = os.path.join(USER_DIR, "grabaciones")
+DEFAULT_RECORDINGS_DIR = os.path.join(USER_DIR, "grabaciones")
+RECORDINGS_DIR = DEFAULT_RECORDINGS_DIR  # al arrancar: la del panel C (carpeta_grabaciones), GRABACIONES_DIR o ésta
+
+
+def resolve_recordings_dir(carpeta: str | None = None, settings: "SettingsStore | None" = None) -> str:
+    """Carpeta de las grabaciones: la elegida en el panel C, si no GRABACIONES_DIR (.env), si no la de la muestra."""
+    d = carpeta if carpeta is not None else (settings.get("carpeta_grabaciones") if settings else "")
+    d = str(d or "").strip() or os.environ.get("GRABACIONES_DIR", "").strip() or DEFAULT_RECORDINGS_DIR
+    return os.path.realpath(os.path.expanduser(d))
+
+
+def check_writable(folder: str) -> str | None:
+    """None si se puede grabar en la carpeta (la crea si no existe); si no, el motivo."""
+    try:
+        os.makedirs(folder, exist_ok=True)
+        probe = os.path.join(folder, ".prueba")
+        with open(probe, "w") as fh:
+            fh.write("ok")
+        os.remove(probe)
+        return None
+    except OSError as exc:
+        return str(exc)
 # mensajes al frontend que no se guardan: el análisis del audio se recalcula desde audio.wav al re-proyectar
 _NO_RECORD = {"audio_reactive", "inputs", "pong", "hello", "devices", "logos", "grabacion"}
 
@@ -462,9 +483,9 @@ class SessionRecorder:
     desde el mismo instante. El audio se alinea al reloj: si el micrófono se corta se rellena con silencio, así cada
     evento cae siempre en su lugar del audio. Todo se escribe a disco de inmediato (un corte de luz no pierde nada)."""
 
-    def __init__(self, sr: int) -> None:
+    def __init__(self, sr: int, root: str | None = None) -> None:
         self.sr = sr
-        self.dir = os.path.join(RECORDINGS_DIR, time.strftime("%Y-%m-%d_%H-%M-%S"))
+        self.dir = os.path.join(root or RECORDINGS_DIR, time.strftime("%Y-%m-%d_%H-%M-%S"))
         os.makedirs(self.dir, exist_ok=True)
         self.t0 = time.monotonic()
         self.samples = 0
@@ -980,7 +1001,16 @@ class AudioEngine:
         else:
             pcm = data
         if self.hub.recorder is not None:
-            self.hub.recorder.audio(pcm)
+            try:
+                self.hub.recorder.audio(pcm)
+            except Exception as exc:  # noqa: BLE001  (disco lleno, archivo bloqueado): se avisa, el micrófono sigue
+                log.error("La grabación falló y se detiene: %s", exc)
+                rec, self.hub.recorder = self.hub.recorder, None
+                try:
+                    rec.close()
+                except Exception:  # noqa: BLE001
+                    pass
+                self.hub.emit("grabacion", raiz=RECORDINGS_DIR, activa=False, pedida=True, error=f"La grabación se detuvo: {exc}")
 
         n = x.size
         if n >= self.fft_size:
@@ -2504,12 +2534,6 @@ async def main_async(args: argparse.Namespace) -> None:
     ensure_user_dir()
     await asyncio.to_thread(ensure_flat_logo)
     settings_path = args.settings or os.path.join(USER_DIR, "ajustes.json")
-    recorder = None
-    if not args.no_record:
-        try:
-            recorder = SessionRecorder(cfg.sample_rate)
-        except Exception as exc:  # noqa: BLE001
-            log.error("No pude crear la grabación de la sesión: %s", exc)
     legacy = os.path.join(BASE_DIR, "settings.local.json")
     if not args.settings and not os.path.exists(settings_path) and os.path.exists(legacy):
         try:  # migrar ajustes que quedaron dentro del proyecto
@@ -2521,9 +2545,41 @@ async def main_async(args: argparse.Namespace) -> None:
     settings = SettingsStore(settings_path)
     log.info("Carpeta de la muestra: %s", USER_DIR)
     hub = FrontendHub(cfg)
-    if recorder is not None:
-        recorder.snapshot(settings_path)
-        hub.recorder = recorder
+
+    # ── grabación de la sesión (audio + todo lo que pasa): activa de fábrica; carpeta y on/off en el panel C ──
+    global RECORDINGS_DIR
+    RECORDINGS_DIR = resolve_recordings_dir(settings=settings)
+
+    def start_recording() -> str | None:
+        err = check_writable(RECORDINGS_DIR)
+        if err:
+            log.error("No puedo grabar en %s: %s", RECORDINGS_DIR, err)
+            return err
+        try:
+            rec = SessionRecorder(cfg.sample_rate, RECORDINGS_DIR)
+            rec.snapshot(settings_path)
+            hub.recorder = rec
+            return None
+        except Exception as exc:  # noqa: BLE001
+            log.error("No pude crear la grabación de la sesión: %s", exc)
+            return str(exc)
+
+    def stop_recording() -> None:
+        rec, hub.recorder = hub.recorder, None
+        if rec is not None:
+            try:
+                rec.close()
+                log.info("Sesión guardada en %s (%.0f s de audio)", rec.dir, rec.samples / rec.sr)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("No pude cerrar la grabación: %s", exc)
+
+    def rec_info(error: str | None = None) -> dict[str, Any]:
+        base = {"raiz": RECORDINGS_DIR, "activa": hub.recorder is not None, "pedida": settings.get("grabar") is not False}
+        if error:
+            base["error"] = error
+        return {**hub.recorder.info(), **base} if hub.recorder is not None else base
+
+    rec_error = None if args.no_record or settings.get("grabar") is False else start_recording()
     director = ArtDirector(cfg, hub, settings)
     use_openai = not args.no_openai
     oa_queue: asyncio.Queue[bytes] | None = asyncio.Queue(maxsize=300) if use_openai else None
@@ -2551,7 +2607,7 @@ async def main_async(args: argparse.Namespace) -> None:
                                "grid_presets": [{"id": k, "nombre": v["nombre"], "desc": v["desc"]}
                                                 for k, v in GRID_PRESETS.items()],
                                "user_dir": USER_DIR,
-                               "grabacion": recorder.info() if recorder else None,
+                               "grabacion": rec_info(rec_error),
                                "session": hub.session}
 
     def on_verse(text: str, item_id: str, source: str) -> None:
@@ -2567,8 +2623,27 @@ async def main_async(args: argparse.Namespace) -> None:
             if audio is not None:
                 audio.preroll.clear()
         elif kind == "ui":  # tecla o botón del show: se guarda para re-proyectar
-            if recorder is not None:
-                recorder.event("ui", **{k: v for k, v in msg.items() if k != "type"})
+            if hub.recorder is not None:
+                hub.recorder.event("ui", **{k: v for k, v in msg.items() if k != "type"})
+        elif kind == "set_rec":  # panel C: grabar o no, y en qué carpeta
+            global RECORDINGS_DIR
+            activa = msg.get("activa") is not False
+            carpeta = str(msg.get("carpeta") or "").strip()
+            nueva = resolve_recordings_dir(carpeta)
+            err = check_writable(nueva) if activa else None
+            if err:
+                hub.emit("grabacion", **rec_info(f"No puedo grabar en {nueva}: {err}"))
+                return
+            settings.update({"grabar": activa, "carpeta_grabaciones": carpeta})
+            otra = nueva != RECORDINGS_DIR
+            RECORDINGS_DIR = nueva
+            if not activa:
+                stop_recording()
+            elif hub.recorder is None or otra:
+                stop_recording()  # la sesión sigue en una grabación nueva, en la carpeta nueva
+                start_recording()
+            log.info("Grabación %s · carpeta %s", "activa" if hub.recorder else "apagada", RECORDINGS_DIR)
+            hub.emit("grabacion", **rec_info())
         elif kind == "inject_verse":  # modo debug del navegador
             director.add_verse(str(msg.get("text", ""))[:600], str(msg.get("item_id", "")), "debug")
         elif kind == "session":
@@ -2630,7 +2705,10 @@ async def main_async(args: argparse.Namespace) -> None:
                 transcriber.set_key(key)
             hub.emit("key_status", ok=True, **key_status())
         elif kind == "open_folder":
-            target = os.path.join(USER_DIR, "logos") if msg.get("que") == "logos" else USER_DIR
+            que = msg.get("que")
+            target = os.path.join(USER_DIR, "logos") if que == "logos" else RECORDINGS_DIR if que == "grabaciones" else USER_DIR
+            if que == "grabaciones":
+                os.makedirs(target, exist_ok=True)
             ensure_user_dir()
             try:
                 if sys.platform == "darwin":
@@ -2670,15 +2748,23 @@ async def main_async(args: argparse.Namespace) -> None:
 
     async def recorder_tick() -> None:
         n = 0
-        while recorder is not None:
+        while True:
             await asyncio.sleep(1.0)
-            recorder.tick()
+            rec = hub.recorder
+            if rec is None:
+                continue
+            try:
+                rec.tick()
+            except Exception as exc:  # noqa: BLE001  (disco lleno, OneDrive…): se avisa, el show sigue
+                log.error("La grabación falló y se detiene: %s", exc)
+                stop_recording()
+                hub.emit("grabacion", **rec_info(f"La grabación se detuvo: {exc}"))
+                continue
             n += 1
             if n % 5 == 0:
-                hub.emit("grabacion", **recorder.info())
+                hub.emit("grabacion", **rec_info())
 
-    if recorder is not None:
-        tasks.append(recorder_tick())
+    tasks.append(recorder_tick())
     if audio is not None:
         tasks.append(audio.run())
     else:
@@ -2696,9 +2782,7 @@ async def main_async(args: argparse.Namespace) -> None:
             await asyncio.gather(*tasks)
             await asyncio.Future()  # si todas las tareas terminan (p. ej. sin audio ni OpenAI), seguir sirviendo
         finally:
-            if recorder is not None:
-                recorder.close()
-                log.info("Sesión guardada en %s (%.0f s de audio)", recorder.dir, recorder.samples / recorder.sr)
+            stop_recording()
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -2806,10 +2890,20 @@ class PlaybackClock:
                 pass
 
 
+def _use_configured_recordings_dir() -> None:
+    """Re-proyección y diagnóstico: buscan las grabaciones en la carpeta elegida en el panel C (o GRABACIONES_DIR)."""
+    global RECORDINGS_DIR
+    try:
+        RECORDINGS_DIR = resolve_recordings_dir(settings=SettingsStore(os.path.join(USER_DIR, "ajustes.json")))
+    except Exception:  # noqa: BLE001
+        RECORDINGS_DIR = resolve_recordings_dir("")
+
+
 async def run_replay(args: argparse.Namespace) -> None:
     import dataclasses
     import shutil
     import tempfile
+    _use_configured_recordings_dir()
     folder = pick_session(args.replay)
     if not folder:
         return
@@ -2923,6 +3017,7 @@ async def run_replay(args: argparse.Namespace) -> None:
 async def run_check() -> None:
     """Diagnóstico: clave y API de OpenAI, micrófono. No guarda nada."""
     cfg = Config.from_env()
+    _use_configured_recordings_dir()
     ok = True
     print("\n== Poesía Tipográfica · diagnóstico ==\n")
     ensure_user_dir()
