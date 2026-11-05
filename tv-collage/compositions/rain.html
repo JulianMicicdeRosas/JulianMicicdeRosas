@@ -1,0 +1,298 @@
+<template>
+  <style>
+    #rain { position: absolute; inset: 0; overflow: hidden; pointer-events: none; opacity: 0.42; }
+    #rain .col { position: absolute; top: 0; width: 36px; display: flex; flex-direction: column;
+      align-items: center; font-family: "Noto Sans JP", "Space Mono", monospace; font-size: 30px;
+      line-height: 1.05; color: #00ff41; text-shadow: 0 0 6px #00ff41;
+      -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 85%);
+      mask-image: linear-gradient(180deg, transparent 0%, #000 85%); }
+    #rain .col span:last-child { color: #e6ffe9; text-shadow: 0 0 12px #9dffb4; }
+  </style>
+  <div id="rain" data-composition-id="rain" data-width="1080" data-height="1920" data-layout-allow-overflow data-layout-ignore>
+    <div id="rain-c0" class="col" style="left:0px"><span>ｹ</span><span>ﾋ</span><span>ｻ</span><span>.</span><span>2</span><span>ﾗ</span><span>ﾃ</span><span>5</span><span>2</span><span>ｾ</span><span>ｼ</span><span>4</span><span>-</span><span>ｿ</span><span>7</span><span>ｴ</span><span>ﾐ</span><span>ﾐ</span><span>ｶ</span><span>5</span><span>ｴ</span><span>ｻ</span><span>=</span><span>ﾅ</span><span>ｴ</span><span>:</span><span>ｽ</span><span>ﾎ</span><span>ﾘ</span><span>ﾜ</span><span>ｻ</span><span>ｳ</span><span>ｵ</span><span>0</span></div>
+    <div id="rain-c1" class="col" style="left:36px"><span>2</span><span>></span><span>ﾅ</span><span>ｱ</span><span>ﾜ</span><span>ﾒ</span><span>ﾇ</span><span>=</span><span>ｳ</span><span>ｼ</span><span>ﾇ</span><span>ｴ</span><span>ｹ</span><span>*</span><span>ﾕ</span><span>ﾕ</span><span>4</span><span>:</span><span>3</span><span>ｹ</span><span>ﾋ</span><span>.</span><span>ｦ</span><span>ﾎ</span><span>ﾘ</span><span>=</span><span>1</span><span>></span><span>ｺ</span><span>></span><span>ﾓ</span><span><</span><span>ﾃ</span><span>ﾇ</span></div>
+    <div id="rain-c2" class="col" style="left:72px"><span>:</span><span>ｿ</span><span>></span><span>ﾅ</span><span>5</span><span>5</span><span>ｿ</span><span>8</span><span>ﾔ</span><span>ｿ</span><span>ｵ</span><span>ﾗ</span><span>ﾇ</span><span>1</span><span>ﾆ</span><span>></span><span>3</span><span>ｺ</span><span>3</span><span>ﾊ</span><span>ﾆ</span><span>ﾀ</span><span>></span><span>*</span><span>ﾋ</span><span>1</span><span>ｴ</span><span>8</span><span>ｳ</span><span>+</span><span>ﾆ</span><span>ﾅ</span><span>ﾏ</span><span>ｻ</span></div>
+    <div id="rain-c3" class="col" style="left:108px"><span>:</span><span>ﾗ</span><span>ｺ</span><span>ﾎ</span><span>ﾘ</span><span>ｿ</span><span>ﾓ</span><span>ｱ</span><span>ﾗ</span><span>*</span><span>8</span><span>ｷ</span><span>ｶ</span><span>ｱ</span><span>:</span><span>ﾂ</span><span>ｼ</span><span>ﾏ</span><span>ﾂ</span><span>0</span><span>ﾊ</span><span>ｺ</span><span>ｷ</span><span>7</span><span>ｳ</span><span>:</span><span>ｾ</span><span>ｿ</span><span>ﾘ</span><span>*</span><span>ﾋ</span><span>ﾋ</span><span>ﾃ</span><span>ｳ</span></div>
+    <div id="rain-c4" class="col" style="left:144px"><span>6</span><span>+</span><span>ﾔ</span><span>ｦ</span><span>ﾘ</span><span>+</span><span>ｼ</span><span><</span><span>6</span><span>0</span><span>ﾂ</span><span>ｦ</span><span>></span><span>ﾕ</span><span>ﾕ</span><span>ｽ</span><span>ﾅ</span><span>ﾎ</span><span>ﾅ</span><span>ﾐ</span><span>ﾑ</span><span>3</span><span>ﾈ</span><span>ｵ</span><span>ｹ</span><span>ｶ</span><span>ﾘ</span><span>ﾗ</span><span>=</span><span>7</span><span>ﾃ</span><span>ｷ</span><span>ﾔ</span><span>ﾔ</span></div>
+    <div id="rain-c5" class="col" style="left:180px"><span>=</span><span>ﾅ</span><span>ｦ</span><span>8</span><span>ﾐ</span><span>ｱ</span><span>ｱ</span><span>ｺ</span><span>9</span><span><</span><span>ｾ</span><span>ﾓ</span><span>ｿ</span><span>ｴ</span><span>2</span><span>ﾗ</span><span>:</span><span>ﾕ</span><span>5</span><span>ﾃ</span><span>ｺ</span><span>8</span><span>ｳ</span><span>ﾆ</span><span>ﾗ</span><span>ﾊ</span><span>ｽ</span><span>3</span><span><</span><span>ﾜ</span><span>ﾆ</span><span>ﾂ</span><span>ﾎ</span><span>ｾ</span></div>
+    <div id="rain-c6" class="col" style="left:216px"><span>ﾔ</span><span>ﾇ</span><span>ｿ</span><span>ﾂ</span><span>ﾑ</span><span>ﾜ</span><span>3</span><span>ﾋ</span><span>.</span><span>+</span><span>ﾓ</span><span>ﾊ</span><span>:</span><span>ﾗ</span><span>ﾕ</span><span>7</span><span>9</span><span>5</span><span>ｿ</span><span>ﾀ</span><span>ﾕ</span><span>9</span><span>ｹ</span><span>ﾓ</span><span>ﾃ</span><span>ｴ</span><span>ﾏ</span><span>5</span><span>.</span><span>ｷ</span><span>ｵ</span><span>9</span><span>2</span><span>ﾐ</span></div>
+    <div id="rain-c7" class="col" style="left:252px"><span>1</span><span>ｦ</span><span>*</span><span>9</span><span>ﾈ</span><span>ﾎ</span><span>ﾆ</span><span>ﾂ</span><span>*</span><span>3</span><span>ﾋ</span><span>:</span><span>ﾓ</span><span>ﾗ</span><span>2</span><span>-</span><span>ｹ</span><span>+</span><span>ｾ</span><span>ﾇ</span><span>ｿ</span><span>ﾋ</span><span>5</span><span>ｺ</span><span>ﾏ</span><span>ｾ</span><span>3</span><span>9</span><span>*</span><span>ｷ</span><span><</span><span>ﾎ</span><span>-</span><span>5</span></div>
+    <div id="rain-c8" class="col" style="left:288px"><span>1</span><span>9</span><span>ﾕ</span><span>ﾂ</span><span>ﾐ</span><span>ﾏ</span><span>ｹ</span><span>ﾈ</span><span>ｦ</span><span>ﾐ</span><span>7</span><span>ﾒ</span><span>ﾜ</span><span>ｽ</span><span>.</span><span>ﾕ</span><span>9</span><span>></span><span>1</span><span>ｾ</span><span>ﾜ</span><span>1</span><span>0</span><span>7</span><span>4</span><span>ｦ</span><span>7</span><span>ｺ</span><span>ﾜ</span><span>ﾑ</span><span>ｳ</span><span>ﾇ</span><span>ｴ</span><span>.</span></div>
+    <div id="rain-c9" class="col" style="left:324px"><span>Z</span><span>ｷ</span><span>ｻ</span><span>ﾆ</span><span>ﾆ</span><span>ｽ</span><span>ﾒ</span><span>ﾐ</span><span>.</span><span>ﾊ</span><span>+</span><span>></span><span>ﾏ</span><span>ｶ</span><span>ｦ</span><span>=</span><span>6</span><span>ｻ</span><span>1</span><span>Z</span><span>5</span><span>ﾂ</span><span>7</span><span>ﾃ</span><span>ｾ</span><span>ｳ</span><span>ﾊ</span><span>ｺ</span><span>3</span><span>ﾊ</span><span>ﾊ</span><span>ﾀ</span><span>ｽ</span><span>ﾋ</span></div>
+    <div id="rain-c10" class="col" style="left:360px"><span><</span><span>ﾃ</span><span>4</span><span>ｱ</span><span>=</span><span>ｦ</span><span>ﾂ</span><span>ﾘ</span><span>ﾐ</span><span>9</span><span>ｾ</span><span>ﾗ</span><span>ﾈ</span><span>ﾔ</span><span>ｿ</span><span>ｽ</span><span>.</span><span>ﾃ</span><span>ﾕ</span><span>ﾜ</span><span>ｴ</span><span>4</span><span>Z</span><span>ｾ</span><span>+</span><span>ｻ</span><span>:</span><span>ﾊ</span><span>5</span><span>ﾕ</span><span>ｻ</span><span>3</span><span>:</span><span>ｷ</span></div>
+    <div id="rain-c11" class="col" style="left:396px"><span>ｷ</span><span>ｶ</span><span>5</span><span>ﾈ</span><span>ﾔ</span><span>.</span><span>-</span><span>ﾏ</span><span>ﾔ</span><span>ﾃ</span><span>ﾂ</span><span>ﾈ</span><span>1</span><span>2</span><span>2</span><span>ｱ</span><span>ﾀ</span><span>+</span><span>ｼ</span><span>ｿ</span><span>ｵ</span><span>ｼ</span><span>6</span><span>ｦ</span><span>ﾔ</span><span>ﾕ</span><span>.</span><span>ﾎ</span><span>ｦ</span><span>1</span><span>*</span><span>=</span><span>ﾑ</span><span>ｽ</span></div>
+    <div id="rain-c12" class="col" style="left:432px"><span>ｷ</span><span>4</span><span>ﾂ</span><span><</span><span>ﾔ</span><span>ﾐ</span><span>ﾔ</span><span>ﾅ</span><span>ｿ</span><span>4</span><span>Z</span><span>ﾀ</span><span>6</span><span>ﾎ</span><span>ｱ</span><span>ﾔ</span><span>ﾓ</span><span>ｾ</span><span>6</span><span>ｳ</span><span>ﾋ</span><span>ﾓ</span><span>ﾘ</span><span>ｴ</span><span>ﾜ</span><span>ﾏ</span><span>ｷ</span><span>-</span><span>3</span><span>ｾ</span><span>4</span><span>ﾈ</span><span>ﾓ</span><span>2</span></div>
+    <div id="rain-c13" class="col" style="left:468px"><span>ｾ</span><span>2</span><span>ﾈ</span><span>ﾑ</span><span>ﾜ</span><span>ﾗ</span><span>3</span><span>ﾅ</span><span>ﾈ</span><span>ﾑ</span><span>=</span><span>ﾋ</span><span>ｷ</span><span>2</span><span>:</span><span>ｶ</span><span>ﾃ</span><span>Z</span><span>4</span><span>9</span><span>ﾈ</span><span>*</span><span>5</span><span>ﾂ</span><span>ｶ</span><span>ﾕ</span><span>ﾓ</span><span>ｵ</span><span>ｹ</span><span>ﾔ</span><span>ﾓ</span><span>Z</span><span>ﾗ</span><span>ｷ</span></div>
+    <div id="rain-c14" class="col" style="left:504px"><span>7</span><span>4</span><span>ﾇ</span><span>ﾊ</span><span>ｵ</span><span>9</span><span>ﾈ</span><span><</span><span>ﾈ</span><span>ﾇ</span><span>9</span><span>1</span><span>ﾑ</span><span>8</span><span>=</span><span>ｦ</span><span>ﾅ</span><span>ﾜ</span><span>ｷ</span><span>ﾜ</span><span>0</span><span>ｱ</span><span>ｵ</span><span>4</span><span>ﾂ</span><span>*</span><span>ﾑ</span><span>ﾎ</span><span>*</span><span>ｼ</span><span>ﾃ</span><span>ｿ</span><span>ｶ</span><span>ｼ</span></div>
+    <div id="rain-c15" class="col" style="left:540px"><span>ﾗ</span><span>=</span><span>ﾘ</span><span>></span><span>ｳ</span><span>ﾅ</span><span>ｹ</span><span>3</span><span>ｶ</span><span>ﾜ</span><span>ﾆ</span><span>ﾕ</span><span>ﾇ</span><span>8</span><span>7</span><span>ﾓ</span><span><</span><span>ﾑ</span><span>6</span><span>ﾆ</span><span>ｴ</span><span>3</span><span>ｿ</span><span>5</span><span>ﾑ</span><span>ﾂ</span><span>ｽ</span><span>ﾎ</span><span>3</span><span>ｱ</span><span>ﾗ</span><span>3</span><span>ﾋ</span><span>.</span></div>
+    <div id="rain-c16" class="col" style="left:576px"><span>.</span><span>8</span><span>ｿ</span><span>ﾀ</span><span>:</span><span>ﾒ</span><span>0</span><span>ｷ</span><span>ｷ</span><span>ﾜ</span><span>ｱ</span><span>ｷ</span><span>ｽ</span><span>ﾐ</span><span>ﾅ</span><span>*</span><span>ﾒ</span><span>ﾋ</span><span>8</span><span>3</span><span>ﾐ</span><span>ﾆ</span><span>ｦ</span><span>ﾏ</span><span>ﾑ</span><span>Z</span><span>8</span><span>3</span><span>ｾ</span><span>ﾂ</span><span>+</span><span>-</span><span>4</span><span>ﾀ</span></div>
+    <div id="rain-c17" class="col" style="left:612px"><span>ﾑ</span><span>4</span><span>ｽ</span><span>ｼ</span><span>ﾘ</span><span>2</span><span>ﾀ</span><span>ｿ</span><span>ｾ</span><span>ｽ</span><span>ﾆ</span><span>7</span><span>7</span><span>ﾏ</span><span>ﾏ</span><span>ﾒ</span><span>ﾏ</span><span>4</span><span>ﾋ</span><span>ｽ</span><span>ﾔ</span><span>ｴ</span><span>ﾗ</span><span>6</span><span>ﾕ</span><span>+</span><span>ｷ</span><span>ｽ</span><span>+</span><span>8</span><span>ﾅ</span><span>ｿ</span><span>ﾘ</span><span>ﾎ</span></div>
+    <div id="rain-c18" class="col" style="left:648px"><span>0</span><span>ｵ</span><span>ﾐ</span><span>ﾅ</span><span>ｼ</span><span>*</span><span>ｦ</span><span>3</span><span>4</span><span>ｻ</span><span>ｿ</span><span>ﾕ</span><span>1</span><span>ﾎ</span><span>ｶ</span><span>></span><span>ﾗ</span><span>ﾓ</span><span>1</span><span>ﾜ</span><span>ﾀ</span><span>ｿ</span><span>ﾜ</span><span>6</span><span>ﾅ</span><span>ﾓ</span><span>ｻ</span><span>6</span><span>6</span><span>ｱ</span><span>ﾀ</span><span>ﾐ</span><span>ｼ</span><span>ﾜ</span></div>
+    <div id="rain-c19" class="col" style="left:684px"><span>2</span><span>8</span><span>5</span><span>ｾ</span><span>+</span><span>ｷ</span><span>ｻ</span><span>ｿ</span><span>ﾈ</span><span>5</span><span>ｽ</span><span>ｳ</span><span>ﾎ</span><span>ﾃ</span><span>ﾆ</span><span>ﾗ</span><span>ﾘ</span><span>ﾀ</span><span>ｺ</span><span>ﾈ</span><span>1</span><span>Z</span><span>.</span><span>5</span><span>*</span><span>1</span><span>6</span><span>ｾ</span><span>ｽ</span><span>ﾂ</span><span>ﾑ</span><span>:</span><span>ﾊ</span><span><</span></div>
+    <div id="rain-c20" class="col" style="left:720px"><span>ﾐ</span><span>></span><span>6</span><span>ﾑ</span><span>ﾊ</span><span>ｵ</span><span>ｿ</span><span>*</span><span>ｴ</span><span>ｺ</span><span>9</span><span>ｦ</span><span>7</span><span>ﾜ</span><span>7</span><span>=</span><span>></span><span>ﾃ</span><span>5</span><span>></span><span>5</span><span>3</span><span>ﾕ</span><span>ｴ</span><span>ｿ</span><span>ﾓ</span><span>ﾃ</span><span>6</span><span>Z</span><span>.</span><span>2</span><span>ｦ</span><span>6</span><span>+</span></div>
+    <div id="rain-c21" class="col" style="left:756px"><span>ｷ</span><span>ﾂ</span><span>ﾑ</span><span>ﾐ</span><span>ﾋ</span><span>ﾘ</span><span>ﾓ</span><span>ﾀ</span><span>ﾋ</span><span>ﾒ</span><span>ｿ</span><span>ｻ</span><span>ﾎ</span><span>7</span><span>-</span><span>ﾏ</span><span>ﾎ</span><span>-</span><span>ｽ</span><span>9</span><span>ﾀ</span><span>ﾒ</span><span><</span><span>ﾘ</span><span>=</span><span>ﾈ</span><span>ｾ</span><span>ﾂ</span><span>ｴ</span><span>ﾋ</span><span>ﾓ</span><span>ｿ</span><span>3</span><span>ｺ</span></div>
+    <div id="rain-c22" class="col" style="left:792px"><span><</span><span>ｶ</span><span>1</span><span>ﾓ</span><span>=</span><span>3</span><span>1</span><span>></span><span>></span><span>ｳ</span><span>ｶ</span><span>-</span><span>ｦ</span><span>ｴ</span><span>ﾅ</span><span>ﾊ</span><span>ｼ</span><span>ﾔ</span><span>ｱ</span><span>ﾘ</span><span>-</span><span>6</span><span>=</span><span>ﾀ</span><span>5</span><span>ﾕ</span><span>ﾔ</span><span>ﾈ</span><span>ﾆ</span><span>ﾋ</span><span>ｹ</span><span>ｻ</span><span>ﾕ</span><span>ﾊ</span></div>
+    <div id="rain-c23" class="col" style="left:828px"><span>ｹ</span><span>=</span><span>6</span><span>-</span><span>-</span><span>ｦ</span><span>:</span><span>ﾇ</span><span>ｺ</span><span>9</span><span>0</span><span>ｹ</span><span>ﾒ</span><span>ﾘ</span><span>ｷ</span><span>ﾀ</span><span>6</span><span>+</span><span>ｳ</span><span>ﾈ</span><span>></span><span>ﾓ</span><span>ｻ</span><span>ｦ</span><span>:</span><span>ﾔ</span><span>ﾓ</span><span>ｴ</span><span>ｱ</span><span>ﾊ</span><span>ｹ</span><span>ﾃ</span><span>2</span><span>8</span></div>
+    <div id="rain-c24" class="col" style="left:864px"><span>ﾜ</span><span>ﾕ</span><span>ﾕ</span><span>5</span><span>ﾒ</span><span>ﾓ</span><span>ｱ</span><span>Z</span><span>ﾊ</span><span>5</span><span>ﾒ</span><span>ｵ</span><span>*</span><span>ﾑ</span><span>+</span><span>1</span><span>9</span><span>ｶ</span><span>ｦ</span><span>ﾗ</span><span><</span><span>0</span><span>ｱ</span><span>ﾊ</span><span>ﾆ</span><span>Z</span><span>ｳ</span><span>ﾊ</span><span>ﾓ</span><span>Z</span><span>ﾓ</span><span>3</span><span>-</span><span>ﾈ</span></div>
+    <div id="rain-c25" class="col" style="left:900px"><span>+</span><span>ｹ</span><span>:</span><span>ﾕ</span><span>3</span><span>ﾏ</span><span>ﾗ</span><span>ｷ</span><span>6</span><span>ｦ</span><span>ﾔ</span><span>3</span><span>ﾅ</span><span>ﾆ</span><span>ﾅ</span><span>=</span><span>5</span><span>ｾ</span><span>2</span><span>ﾔ</span><span>ｽ</span><span>></span><span>9</span><span>ﾜ</span><span>ｵ</span><span>ｱ</span><span>-</span><span>=</span><span>ｽ</span><span>ﾈ</span><span>-</span><span>ﾎ</span><span>+</span><span>ﾘ</span></div>
+    <div id="rain-c26" class="col" style="left:936px"><span>ｹ</span><span>ﾊ</span><span>ﾇ</span><span>ｼ</span><span>4</span><span>1</span><span>:</span><span>ﾅ</span><span>ﾘ</span><span>ｿ</span><span>ﾆ</span><span>ﾅ</span><span>ﾗ</span><span>8</span><span>ﾎ</span><span>ﾊ</span><span>ﾐ</span><span>ﾒ</span><span>ﾕ</span><span>ｴ</span><span>ﾈ</span><span>ｱ</span><span>ｹ</span><span>ｽ</span><span>ﾜ</span><span>ﾏ</span><span>ﾂ</span><span>ﾃ</span><span>ﾒ</span><span>ｴ</span><span>ﾕ</span><span>Z</span><span>ｹ</span><span>*</span></div>
+    <div id="rain-c27" class="col" style="left:972px"><span>9</span><span>*</span><span>ﾅ</span><span>ﾂ</span><span>ﾋ</span><span>ﾏ</span><span>ﾇ</span><span>ﾊ</span><span>ﾃ</span><span>ﾐ</span><span>Z</span><span>ﾑ</span><span>ﾊ</span><span>-</span><span>6</span><span>3</span><span>ﾅ</span><span>ﾆ</span><span>ｵ</span><span>:</span><span>:</span><span>ﾕ</span><span>5</span><span>ｾ</span><span>7</span><span>=</span><span>ﾂ</span><span>ﾗ</span><span>ﾀ</span><span>+</span><span>:</span><span>ﾅ</span><span>Z</span><span>ﾃ</span></div>
+    <div id="rain-c28" class="col" style="left:1008px"><span>+</span><span>ｽ</span><span>ｱ</span><span><</span><span>></span><span>ｳ</span><span>ﾂ</span><span>ﾊ</span><span>ｵ</span><span>5</span><span>ｽ</span><span>ﾘ</span><span>+</span><span>ｼ</span><span>ﾃ</span><span>3</span><span>ﾜ</span><span>ｼ</span><span>6</span><span>ｷ</span><span>ｼ</span><span>ｵ</span><span>ｽ</span><span>ﾒ</span><span>ｼ</span><span>ｷ</span><span>ｶ</span><span>ﾅ</span><span>2</span><span>ｼ</span><span>ｶ</span><span>5</span><span>ﾘ</span><span>ｽ</span></div>
+    <div id="rain-c29" class="col" style="left:1044px"><span>ﾂ</span><span>ﾊ</span><span>ﾏ</span><span>ﾏ</span><span>ｽ</span><span>0</span><span>ﾗ</span><span>ﾔ</span><span><</span><span>ﾎ</span><span>ｵ</span><span>9</span><span>ｺ</span><span>3</span><span>ﾐ</span><span>.</span><span>></span><span>></span><span>1</span><span>ﾆ</span><span>></span><span>2</span><span>ﾈ</span><span>ﾋ</span><span>ｷ</span><span>5</span><span>ｽ</span><span>ﾘ</span><span>7</span><span>.</span><span>ﾘ</span><span>ﾓ</span><span>ﾕ</span><span>4</span></div>
+  </div>
+  <script>
+    (() => {
+      const tl = gsap.timeline({ paused: true });
+      tl.fromTo("#rain-c0", { y: -895 }, { y: 1920, duration: 2.132, ease: "none" }, 0);
+      tl.fromTo("#rain-c0", { y: -1071 }, { y: 1920, duration: 2.265, ease: "none", immediateRender: false }, 2.133);
+      tl.fromTo("#rain-c0", { y: -1071 }, { y: 1920, duration: 2.265, ease: "none", immediateRender: false }, 4.399);
+      tl.fromTo("#rain-c0", { y: -1071 }, { y: 1920, duration: 2.265, ease: "none", immediateRender: false }, 6.665);
+      tl.fromTo("#rain-c0", { y: -1071 }, { y: 1920, duration: 2.265, ease: "none", immediateRender: false }, 8.931);
+      tl.fromTo("#rain-c0", { y: -1071 }, { y: 1920, duration: 2.265, ease: "none", immediateRender: false }, 11.197);
+      tl.fromTo("#rain-c0", { y: -1071 }, { y: 1920, duration: 2.265, ease: "none", immediateRender: false }, 13.463);
+      tl.fromTo("#rain-c0", { y: -1071 }, { y: 1920, duration: 2.265, ease: "none", immediateRender: false }, 15.729);
+      tl.fromTo("#rain-c1", { y: 1725 }, { y: 1920, duration: 0.203, ease: "none" }, 0);
+      tl.fromTo("#rain-c1", { y: -1071 }, { y: 1920, duration: 3.108, ease: "none", immediateRender: false }, 0.204);
+      tl.fromTo("#rain-c1", { y: -1071 }, { y: 1920, duration: 3.108, ease: "none", immediateRender: false }, 3.313);
+      tl.fromTo("#rain-c1", { y: -1071 }, { y: 1920, duration: 3.108, ease: "none", immediateRender: false }, 6.422);
+      tl.fromTo("#rain-c1", { y: -1071 }, { y: 1920, duration: 3.108, ease: "none", immediateRender: false }, 9.531);
+      tl.fromTo("#rain-c1", { y: -1071 }, { y: 1920, duration: 3.108, ease: "none", immediateRender: false }, 12.640);
+      tl.fromTo("#rain-c1", { y: -1071 }, { y: 1920, duration: 3.108, ease: "none", immediateRender: false }, 15.749);
+      tl.fromTo("#rain-c2", { y: 937 }, { y: 1920, duration: 0.719, ease: "none" }, 0);
+      tl.fromTo("#rain-c2", { y: -1071 }, { y: 1920, duration: 2.188, ease: "none", immediateRender: false }, 0.720);
+      tl.fromTo("#rain-c2", { y: -1071 }, { y: 1920, duration: 2.188, ease: "none", immediateRender: false }, 2.909);
+      tl.fromTo("#rain-c2", { y: -1071 }, { y: 1920, duration: 2.188, ease: "none", immediateRender: false }, 5.098);
+      tl.fromTo("#rain-c2", { y: -1071 }, { y: 1920, duration: 2.188, ease: "none", immediateRender: false }, 7.287);
+      tl.fromTo("#rain-c2", { y: -1071 }, { y: 1920, duration: 2.188, ease: "none", immediateRender: false }, 9.476);
+      tl.fromTo("#rain-c2", { y: -1071 }, { y: 1920, duration: 2.188, ease: "none", immediateRender: false }, 11.665);
+      tl.fromTo("#rain-c2", { y: -1071 }, { y: 1920, duration: 2.188, ease: "none", immediateRender: false }, 13.854);
+      tl.fromTo("#rain-c2", { y: -1071 }, { y: 1920, duration: 2.188, ease: "none", immediateRender: false }, 16.043);
+      tl.fromTo("#rain-c3", { y: 110 }, { y: 1920, duration: 1.143, ease: "none" }, 0);
+      tl.fromTo("#rain-c3", { y: -1071 }, { y: 1920, duration: 1.888, ease: "none", immediateRender: false }, 1.144);
+      tl.fromTo("#rain-c3", { y: -1071 }, { y: 1920, duration: 1.888, ease: "none", immediateRender: false }, 3.033);
+      tl.fromTo("#rain-c3", { y: -1071 }, { y: 1920, duration: 1.888, ease: "none", immediateRender: false }, 4.922);
+      tl.fromTo("#rain-c3", { y: -1071 }, { y: 1920, duration: 1.888, ease: "none", immediateRender: false }, 6.811);
+      tl.fromTo("#rain-c3", { y: -1071 }, { y: 1920, duration: 1.888, ease: "none", immediateRender: false }, 8.700);
+      tl.fromTo("#rain-c3", { y: -1071 }, { y: 1920, duration: 1.888, ease: "none", immediateRender: false }, 10.589);
+      tl.fromTo("#rain-c3", { y: -1071 }, { y: 1920, duration: 1.888, ease: "none", immediateRender: false }, 12.478);
+      tl.fromTo("#rain-c3", { y: -1071 }, { y: 1920, duration: 1.888, ease: "none", immediateRender: false }, 14.367);
+      tl.fromTo("#rain-c3", { y: -1071 }, { y: 1920, duration: 1.888, ease: "none", immediateRender: false }, 16.256);
+      tl.fromTo("#rain-c4", { y: 1028 }, { y: 1920, duration: 0.753, ease: "none" }, 0);
+      tl.fromTo("#rain-c4", { y: -1071 }, { y: 1920, duration: 2.524, ease: "none", immediateRender: false }, 0.754);
+      tl.fromTo("#rain-c4", { y: -1071 }, { y: 1920, duration: 2.524, ease: "none", immediateRender: false }, 3.279);
+      tl.fromTo("#rain-c4", { y: -1071 }, { y: 1920, duration: 2.524, ease: "none", immediateRender: false }, 5.804);
+      tl.fromTo("#rain-c4", { y: -1071 }, { y: 1920, duration: 2.524, ease: "none", immediateRender: false }, 8.329);
+      tl.fromTo("#rain-c4", { y: -1071 }, { y: 1920, duration: 2.524, ease: "none", immediateRender: false }, 10.854);
+      tl.fromTo("#rain-c4", { y: -1071 }, { y: 1920, duration: 2.524, ease: "none", immediateRender: false }, 13.379);
+      tl.fromTo("#rain-c4", { y: -1071 }, { y: 1920, duration: 2.524, ease: "none", immediateRender: false }, 15.904);
+      tl.fromTo("#rain-c5", { y: 1286 }, { y: 1920, duration: 0.512, ease: "none" }, 0);
+      tl.fromTo("#rain-c5", { y: -1071 }, { y: 1920, duration: 2.417, ease: "none", immediateRender: false }, 0.513);
+      tl.fromTo("#rain-c5", { y: -1071 }, { y: 1920, duration: 2.417, ease: "none", immediateRender: false }, 2.931);
+      tl.fromTo("#rain-c5", { y: -1071 }, { y: 1920, duration: 2.417, ease: "none", immediateRender: false }, 5.349);
+      tl.fromTo("#rain-c5", { y: -1071 }, { y: 1920, duration: 2.417, ease: "none", immediateRender: false }, 7.767);
+      tl.fromTo("#rain-c5", { y: -1071 }, { y: 1920, duration: 2.417, ease: "none", immediateRender: false }, 10.185);
+      tl.fromTo("#rain-c5", { y: -1071 }, { y: 1920, duration: 2.417, ease: "none", immediateRender: false }, 12.603);
+      tl.fromTo("#rain-c5", { y: -1071 }, { y: 1920, duration: 2.417, ease: "none", immediateRender: false }, 15.021);
+      tl.fromTo("#rain-c6", { y: -291 }, { y: 1920, duration: 1.790, ease: "none" }, 0);
+      tl.fromTo("#rain-c6", { y: -1071 }, { y: 1920, duration: 2.421, ease: "none", immediateRender: false }, 1.791);
+      tl.fromTo("#rain-c6", { y: -1071 }, { y: 1920, duration: 2.421, ease: "none", immediateRender: false }, 4.213);
+      tl.fromTo("#rain-c6", { y: -1071 }, { y: 1920, duration: 2.421, ease: "none", immediateRender: false }, 6.635);
+      tl.fromTo("#rain-c6", { y: -1071 }, { y: 1920, duration: 2.421, ease: "none", immediateRender: false }, 9.057);
+      tl.fromTo("#rain-c6", { y: -1071 }, { y: 1920, duration: 2.421, ease: "none", immediateRender: false }, 11.479);
+      tl.fromTo("#rain-c6", { y: -1071 }, { y: 1920, duration: 2.421, ease: "none", immediateRender: false }, 13.901);
+      tl.fromTo("#rain-c6", { y: -1071 }, { y: 1920, duration: 2.421, ease: "none", immediateRender: false }, 16.323);
+      tl.fromTo("#rain-c7", { y: 1537 }, { y: 1920, duration: 0.309, ease: "none" }, 0);
+      tl.fromTo("#rain-c7", { y: -1071 }, { y: 1920, duration: 2.417, ease: "none", immediateRender: false }, 0.310);
+      tl.fromTo("#rain-c7", { y: -1071 }, { y: 1920, duration: 2.417, ease: "none", immediateRender: false }, 2.728);
+      tl.fromTo("#rain-c7", { y: -1071 }, { y: 1920, duration: 2.417, ease: "none", immediateRender: false }, 5.146);
+      tl.fromTo("#rain-c7", { y: -1071 }, { y: 1920, duration: 2.417, ease: "none", immediateRender: false }, 7.564);
+      tl.fromTo("#rain-c7", { y: -1071 }, { y: 1920, duration: 2.417, ease: "none", immediateRender: false }, 9.982);
+      tl.fromTo("#rain-c7", { y: -1071 }, { y: 1920, duration: 2.417, ease: "none", immediateRender: false }, 12.400);
+      tl.fromTo("#rain-c7", { y: -1071 }, { y: 1920, duration: 2.417, ease: "none", immediateRender: false }, 14.818);
+      tl.fromTo("#rain-c8", { y: 647 }, { y: 1920, duration: 1.029, ease: "none" }, 0);
+      tl.fromTo("#rain-c8", { y: -1071 }, { y: 1920, duration: 2.417, ease: "none", immediateRender: false }, 1.030);
+      tl.fromTo("#rain-c8", { y: -1071 }, { y: 1920, duration: 2.417, ease: "none", immediateRender: false }, 3.448);
+      tl.fromTo("#rain-c8", { y: -1071 }, { y: 1920, duration: 2.417, ease: "none", immediateRender: false }, 5.866);
+      tl.fromTo("#rain-c8", { y: -1071 }, { y: 1920, duration: 2.417, ease: "none", immediateRender: false }, 8.284);
+      tl.fromTo("#rain-c8", { y: -1071 }, { y: 1920, duration: 2.417, ease: "none", immediateRender: false }, 10.702);
+      tl.fromTo("#rain-c8", { y: -1071 }, { y: 1920, duration: 2.417, ease: "none", immediateRender: false }, 13.120);
+      tl.fromTo("#rain-c8", { y: -1071 }, { y: 1920, duration: 2.417, ease: "none", immediateRender: false }, 15.538);
+      tl.fromTo("#rain-c9", { y: 412 }, { y: 1920, duration: 1.162, ease: "none" }, 0);
+      tl.fromTo("#rain-c9", { y: -1071 }, { y: 1920, duration: 2.303, ease: "none", immediateRender: false }, 1.163);
+      tl.fromTo("#rain-c9", { y: -1071 }, { y: 1920, duration: 2.303, ease: "none", immediateRender: false }, 3.467);
+      tl.fromTo("#rain-c9", { y: -1071 }, { y: 1920, duration: 2.303, ease: "none", immediateRender: false }, 5.771);
+      tl.fromTo("#rain-c9", { y: -1071 }, { y: 1920, duration: 2.303, ease: "none", immediateRender: false }, 8.075);
+      tl.fromTo("#rain-c9", { y: -1071 }, { y: 1920, duration: 2.303, ease: "none", immediateRender: false }, 10.379);
+      tl.fromTo("#rain-c9", { y: -1071 }, { y: 1920, duration: 2.303, ease: "none", immediateRender: false }, 12.683);
+      tl.fromTo("#rain-c9", { y: -1071 }, { y: 1920, duration: 2.303, ease: "none", immediateRender: false }, 14.987);
+      tl.fromTo("#rain-c10", { y: -811 }, { y: 1920, duration: 1.691, ease: "none" }, 0);
+      tl.fromTo("#rain-c10", { y: -1071 }, { y: 1920, duration: 1.852, ease: "none", immediateRender: false }, 1.692);
+      tl.fromTo("#rain-c10", { y: -1071 }, { y: 1920, duration: 1.852, ease: "none", immediateRender: false }, 3.545);
+      tl.fromTo("#rain-c10", { y: -1071 }, { y: 1920, duration: 1.852, ease: "none", immediateRender: false }, 5.398);
+      tl.fromTo("#rain-c10", { y: -1071 }, { y: 1920, duration: 1.852, ease: "none", immediateRender: false }, 7.251);
+      tl.fromTo("#rain-c10", { y: -1071 }, { y: 1920, duration: 1.852, ease: "none", immediateRender: false }, 9.104);
+      tl.fromTo("#rain-c10", { y: -1071 }, { y: 1920, duration: 1.852, ease: "none", immediateRender: false }, 10.957);
+      tl.fromTo("#rain-c10", { y: -1071 }, { y: 1920, duration: 1.852, ease: "none", immediateRender: false }, 12.810);
+      tl.fromTo("#rain-c10", { y: -1071 }, { y: 1920, duration: 1.852, ease: "none", immediateRender: false }, 14.663);
+      tl.fromTo("#rain-c11", { y: 1313 }, { y: 1920, duration: 0.468, ease: "none" }, 0);
+      tl.fromTo("#rain-c11", { y: -1071 }, { y: 1920, duration: 2.310, ease: "none", immediateRender: false }, 0.469);
+      tl.fromTo("#rain-c11", { y: -1071 }, { y: 1920, duration: 2.310, ease: "none", immediateRender: false }, 2.780);
+      tl.fromTo("#rain-c11", { y: -1071 }, { y: 1920, duration: 2.310, ease: "none", immediateRender: false }, 5.091);
+      tl.fromTo("#rain-c11", { y: -1071 }, { y: 1920, duration: 2.310, ease: "none", immediateRender: false }, 7.402);
+      tl.fromTo("#rain-c11", { y: -1071 }, { y: 1920, duration: 2.310, ease: "none", immediateRender: false }, 9.713);
+      tl.fromTo("#rain-c11", { y: -1071 }, { y: 1920, duration: 2.310, ease: "none", immediateRender: false }, 12.024);
+      tl.fromTo("#rain-c11", { y: -1071 }, { y: 1920, duration: 2.310, ease: "none", immediateRender: false }, 14.335);
+      tl.fromTo("#rain-c12", { y: -534 }, { y: 1920, duration: 2.282, ease: "none" }, 0);
+      tl.fromTo("#rain-c12", { y: -1071 }, { y: 1920, duration: 2.781, ease: "none", immediateRender: false }, 2.283);
+      tl.fromTo("#rain-c12", { y: -1071 }, { y: 1920, duration: 2.781, ease: "none", immediateRender: false }, 5.065);
+      tl.fromTo("#rain-c12", { y: -1071 }, { y: 1920, duration: 2.781, ease: "none", immediateRender: false }, 7.847);
+      tl.fromTo("#rain-c12", { y: -1071 }, { y: 1920, duration: 2.781, ease: "none", immediateRender: false }, 10.629);
+      tl.fromTo("#rain-c12", { y: -1071 }, { y: 1920, duration: 2.781, ease: "none", immediateRender: false }, 13.411);
+      tl.fromTo("#rain-c12", { y: -1071 }, { y: 1920, duration: 2.781, ease: "none", immediateRender: false }, 16.193);
+      tl.fromTo("#rain-c13", { y: 1821 }, { y: 1920, duration: 0.095, ease: "none" }, 0);
+      tl.fromTo("#rain-c13", { y: -1071 }, { y: 1920, duration: 2.866, ease: "none", immediateRender: false }, 0.096);
+      tl.fromTo("#rain-c13", { y: -1071 }, { y: 1920, duration: 2.866, ease: "none", immediateRender: false }, 2.963);
+      tl.fromTo("#rain-c13", { y: -1071 }, { y: 1920, duration: 2.866, ease: "none", immediateRender: false }, 5.830);
+      tl.fromTo("#rain-c13", { y: -1071 }, { y: 1920, duration: 2.866, ease: "none", immediateRender: false }, 8.697);
+      tl.fromTo("#rain-c13", { y: -1071 }, { y: 1920, duration: 2.866, ease: "none", immediateRender: false }, 11.564);
+      tl.fromTo("#rain-c13", { y: -1071 }, { y: 1920, duration: 2.866, ease: "none", immediateRender: false }, 14.431);
+      tl.fromTo("#rain-c14", { y: -739 }, { y: 1920, duration: 1.901, ease: "none" }, 0);
+      tl.fromTo("#rain-c14", { y: -1071 }, { y: 1920, duration: 2.138, ease: "none", immediateRender: false }, 1.902);
+      tl.fromTo("#rain-c14", { y: -1071 }, { y: 1920, duration: 2.138, ease: "none", immediateRender: false }, 4.041);
+      tl.fromTo("#rain-c14", { y: -1071 }, { y: 1920, duration: 2.138, ease: "none", immediateRender: false }, 6.180);
+      tl.fromTo("#rain-c14", { y: -1071 }, { y: 1920, duration: 2.138, ease: "none", immediateRender: false }, 8.319);
+      tl.fromTo("#rain-c14", { y: -1071 }, { y: 1920, duration: 2.138, ease: "none", immediateRender: false }, 10.458);
+      tl.fromTo("#rain-c14", { y: -1071 }, { y: 1920, duration: 2.138, ease: "none", immediateRender: false }, 12.597);
+      tl.fromTo("#rain-c14", { y: -1071 }, { y: 1920, duration: 2.138, ease: "none", immediateRender: false }, 14.736);
+      tl.fromTo("#rain-c15", { y: 597 }, { y: 1920, duration: 1.135, ease: "none" }, 0);
+      tl.fromTo("#rain-c15", { y: -1071 }, { y: 1920, duration: 2.566, ease: "none", immediateRender: false }, 1.136);
+      tl.fromTo("#rain-c15", { y: -1071 }, { y: 1920, duration: 2.566, ease: "none", immediateRender: false }, 3.703);
+      tl.fromTo("#rain-c15", { y: -1071 }, { y: 1920, duration: 2.566, ease: "none", immediateRender: false }, 6.270);
+      tl.fromTo("#rain-c15", { y: -1071 }, { y: 1920, duration: 2.566, ease: "none", immediateRender: false }, 8.837);
+      tl.fromTo("#rain-c15", { y: -1071 }, { y: 1920, duration: 2.566, ease: "none", immediateRender: false }, 11.404);
+      tl.fromTo("#rain-c15", { y: -1071 }, { y: 1920, duration: 2.566, ease: "none", immediateRender: false }, 13.971);
+      tl.fromTo("#rain-c16", { y: 966 }, { y: 1920, duration: 0.725, ease: "none" }, 0);
+      tl.fromTo("#rain-c16", { y: -1071 }, { y: 1920, duration: 2.272, ease: "none", immediateRender: false }, 0.726);
+      tl.fromTo("#rain-c16", { y: -1071 }, { y: 1920, duration: 2.272, ease: "none", immediateRender: false }, 2.999);
+      tl.fromTo("#rain-c16", { y: -1071 }, { y: 1920, duration: 2.272, ease: "none", immediateRender: false }, 5.272);
+      tl.fromTo("#rain-c16", { y: -1071 }, { y: 1920, duration: 2.272, ease: "none", immediateRender: false }, 7.545);
+      tl.fromTo("#rain-c16", { y: -1071 }, { y: 1920, duration: 2.272, ease: "none", immediateRender: false }, 9.818);
+      tl.fromTo("#rain-c16", { y: -1071 }, { y: 1920, duration: 2.272, ease: "none", immediateRender: false }, 12.091);
+      tl.fromTo("#rain-c16", { y: -1071 }, { y: 1920, duration: 2.272, ease: "none", immediateRender: false }, 14.364);
+      tl.fromTo("#rain-c17", { y: 595 }, { y: 1920, duration: 0.905, ease: "none" }, 0);
+      tl.fromTo("#rain-c17", { y: -1071 }, { y: 1920, duration: 2.043, ease: "none", immediateRender: false }, 0.906);
+      tl.fromTo("#rain-c17", { y: -1071 }, { y: 1920, duration: 2.043, ease: "none", immediateRender: false }, 2.950);
+      tl.fromTo("#rain-c17", { y: -1071 }, { y: 1920, duration: 2.043, ease: "none", immediateRender: false }, 4.994);
+      tl.fromTo("#rain-c17", { y: -1071 }, { y: 1920, duration: 2.043, ease: "none", immediateRender: false }, 7.038);
+      tl.fromTo("#rain-c17", { y: -1071 }, { y: 1920, duration: 2.043, ease: "none", immediateRender: false }, 9.082);
+      tl.fromTo("#rain-c17", { y: -1071 }, { y: 1920, duration: 2.043, ease: "none", immediateRender: false }, 11.126);
+      tl.fromTo("#rain-c17", { y: -1071 }, { y: 1920, duration: 2.043, ease: "none", immediateRender: false }, 13.170);
+      tl.fromTo("#rain-c17", { y: -1071 }, { y: 1920, duration: 2.043, ease: "none", immediateRender: false }, 15.214);
+      tl.fromTo("#rain-c18", { y: -152 }, { y: 1920, duration: 1.807, ease: "none" }, 0);
+      tl.fromTo("#rain-c18", { y: -1071 }, { y: 1920, duration: 2.608, ease: "none", immediateRender: false }, 1.808);
+      tl.fromTo("#rain-c18", { y: -1071 }, { y: 1920, duration: 2.608, ease: "none", immediateRender: false }, 4.417);
+      tl.fromTo("#rain-c18", { y: -1071 }, { y: 1920, duration: 2.608, ease: "none", immediateRender: false }, 7.026);
+      tl.fromTo("#rain-c18", { y: -1071 }, { y: 1920, duration: 2.608, ease: "none", immediateRender: false }, 9.635);
+      tl.fromTo("#rain-c18", { y: -1071 }, { y: 1920, duration: 2.608, ease: "none", immediateRender: false }, 12.244);
+      tl.fromTo("#rain-c18", { y: -1071 }, { y: 1920, duration: 2.608, ease: "none", immediateRender: false }, 14.853);
+      tl.fromTo("#rain-c19", { y: 362 }, { y: 1920, duration: 0.989, ease: "none" }, 0);
+      tl.fromTo("#rain-c19", { y: -1071 }, { y: 1920, duration: 1.898, ease: "none", immediateRender: false }, 0.990);
+      tl.fromTo("#rain-c19", { y: -1071 }, { y: 1920, duration: 1.898, ease: "none", immediateRender: false }, 2.889);
+      tl.fromTo("#rain-c19", { y: -1071 }, { y: 1920, duration: 1.898, ease: "none", immediateRender: false }, 4.788);
+      tl.fromTo("#rain-c19", { y: -1071 }, { y: 1920, duration: 1.898, ease: "none", immediateRender: false }, 6.687);
+      tl.fromTo("#rain-c19", { y: -1071 }, { y: 1920, duration: 1.898, ease: "none", immediateRender: false }, 8.586);
+      tl.fromTo("#rain-c19", { y: -1071 }, { y: 1920, duration: 1.898, ease: "none", immediateRender: false }, 10.485);
+      tl.fromTo("#rain-c19", { y: -1071 }, { y: 1920, duration: 1.898, ease: "none", immediateRender: false }, 12.384);
+      tl.fromTo("#rain-c19", { y: -1071 }, { y: 1920, duration: 1.898, ease: "none", immediateRender: false }, 14.283);
+      tl.fromTo("#rain-c19", { y: -1071 }, { y: 1920, duration: 1.898, ease: "none", immediateRender: false }, 16.182);
+      tl.fromTo("#rain-c20", { y: 1269 }, { y: 1920, duration: 0.475, ease: "none" }, 0);
+      tl.fromTo("#rain-c20", { y: -1071 }, { y: 1920, duration: 2.181, ease: "none", immediateRender: false }, 0.476);
+      tl.fromTo("#rain-c20", { y: -1071 }, { y: 1920, duration: 2.181, ease: "none", immediateRender: false }, 2.658);
+      tl.fromTo("#rain-c20", { y: -1071 }, { y: 1920, duration: 2.181, ease: "none", immediateRender: false }, 4.840);
+      tl.fromTo("#rain-c20", { y: -1071 }, { y: 1920, duration: 2.181, ease: "none", immediateRender: false }, 7.022);
+      tl.fromTo("#rain-c20", { y: -1071 }, { y: 1920, duration: 2.181, ease: "none", immediateRender: false }, 9.204);
+      tl.fromTo("#rain-c20", { y: -1071 }, { y: 1920, duration: 2.181, ease: "none", immediateRender: false }, 11.386);
+      tl.fromTo("#rain-c20", { y: -1071 }, { y: 1920, duration: 2.181, ease: "none", immediateRender: false }, 13.568);
+      tl.fromTo("#rain-c20", { y: -1071 }, { y: 1920, duration: 2.181, ease: "none", immediateRender: false }, 15.750);
+      tl.fromTo("#rain-c21", { y: -76 }, { y: 1920, duration: 1.394, ease: "none" }, 0);
+      tl.fromTo("#rain-c21", { y: -1071 }, { y: 1920, duration: 2.089, ease: "none", immediateRender: false }, 1.395);
+      tl.fromTo("#rain-c21", { y: -1071 }, { y: 1920, duration: 2.089, ease: "none", immediateRender: false }, 3.485);
+      tl.fromTo("#rain-c21", { y: -1071 }, { y: 1920, duration: 2.089, ease: "none", immediateRender: false }, 5.575);
+      tl.fromTo("#rain-c21", { y: -1071 }, { y: 1920, duration: 2.089, ease: "none", immediateRender: false }, 7.665);
+      tl.fromTo("#rain-c21", { y: -1071 }, { y: 1920, duration: 2.089, ease: "none", immediateRender: false }, 9.755);
+      tl.fromTo("#rain-c21", { y: -1071 }, { y: 1920, duration: 2.089, ease: "none", immediateRender: false }, 11.845);
+      tl.fromTo("#rain-c21", { y: -1071 }, { y: 1920, duration: 2.089, ease: "none", immediateRender: false }, 13.935);
+      tl.fromTo("#rain-c21", { y: -1071 }, { y: 1920, duration: 2.089, ease: "none", immediateRender: false }, 16.025);
+      tl.fromTo("#rain-c22", { y: 93 }, { y: 1920, duration: 1.909, ease: "none" }, 0);
+      tl.fromTo("#rain-c22", { y: -1071 }, { y: 1920, duration: 3.124, ease: "none", immediateRender: false }, 1.910);
+      tl.fromTo("#rain-c22", { y: -1071 }, { y: 1920, duration: 3.124, ease: "none", immediateRender: false }, 5.035);
+      tl.fromTo("#rain-c22", { y: -1071 }, { y: 1920, duration: 3.124, ease: "none", immediateRender: false }, 8.160);
+      tl.fromTo("#rain-c22", { y: -1071 }, { y: 1920, duration: 3.124, ease: "none", immediateRender: false }, 11.285);
+      tl.fromTo("#rain-c22", { y: -1071 }, { y: 1920, duration: 3.124, ease: "none", immediateRender: false }, 14.410);
+      tl.fromTo("#rain-c23", { y: -647 }, { y: 1920, duration: 2.496, ease: "none" }, 0);
+      tl.fromTo("#rain-c23", { y: -1071 }, { y: 1920, duration: 2.908, ease: "none", immediateRender: false }, 2.497);
+      tl.fromTo("#rain-c23", { y: -1071 }, { y: 1920, duration: 2.908, ease: "none", immediateRender: false }, 5.406);
+      tl.fromTo("#rain-c23", { y: -1071 }, { y: 1920, duration: 2.908, ease: "none", immediateRender: false }, 8.315);
+      tl.fromTo("#rain-c23", { y: -1071 }, { y: 1920, duration: 2.908, ease: "none", immediateRender: false }, 11.224);
+      tl.fromTo("#rain-c23", { y: -1071 }, { y: 1920, duration: 2.908, ease: "none", immediateRender: false }, 14.133);
+      tl.fromTo("#rain-c24", { y: -313 }, { y: 1920, duration: 1.496, ease: "none" }, 0);
+      tl.fromTo("#rain-c24", { y: -1071 }, { y: 1920, duration: 2.004, ease: "none", immediateRender: false }, 1.497);
+      tl.fromTo("#rain-c24", { y: -1071 }, { y: 1920, duration: 2.004, ease: "none", immediateRender: false }, 3.502);
+      tl.fromTo("#rain-c24", { y: -1071 }, { y: 1920, duration: 2.004, ease: "none", immediateRender: false }, 5.507);
+      tl.fromTo("#rain-c24", { y: -1071 }, { y: 1920, duration: 2.004, ease: "none", immediateRender: false }, 7.512);
+      tl.fromTo("#rain-c24", { y: -1071 }, { y: 1920, duration: 2.004, ease: "none", immediateRender: false }, 9.517);
+      tl.fromTo("#rain-c24", { y: -1071 }, { y: 1920, duration: 2.004, ease: "none", immediateRender: false }, 11.522);
+      tl.fromTo("#rain-c24", { y: -1071 }, { y: 1920, duration: 2.004, ease: "none", immediateRender: false }, 13.527);
+      tl.fromTo("#rain-c24", { y: -1071 }, { y: 1920, duration: 2.004, ease: "none", immediateRender: false }, 15.532);
+      tl.fromTo("#rain-c25", { y: 1798 }, { y: 1920, duration: 0.080, ease: "none" }, 0);
+      tl.fromTo("#rain-c25", { y: -1071 }, { y: 1920, duration: 1.954, ease: "none", immediateRender: false }, 0.081);
+      tl.fromTo("#rain-c25", { y: -1071 }, { y: 1920, duration: 1.954, ease: "none", immediateRender: false }, 2.036);
+      tl.fromTo("#rain-c25", { y: -1071 }, { y: 1920, duration: 1.954, ease: "none", immediateRender: false }, 3.991);
+      tl.fromTo("#rain-c25", { y: -1071 }, { y: 1920, duration: 1.954, ease: "none", immediateRender: false }, 5.946);
+      tl.fromTo("#rain-c25", { y: -1071 }, { y: 1920, duration: 1.954, ease: "none", immediateRender: false }, 7.901);
+      tl.fromTo("#rain-c25", { y: -1071 }, { y: 1920, duration: 1.954, ease: "none", immediateRender: false }, 9.856);
+      tl.fromTo("#rain-c25", { y: -1071 }, { y: 1920, duration: 1.954, ease: "none", immediateRender: false }, 11.811);
+      tl.fromTo("#rain-c25", { y: -1071 }, { y: 1920, duration: 1.954, ease: "none", immediateRender: false }, 13.766);
+      tl.fromTo("#rain-c25", { y: -1071 }, { y: 1920, duration: 1.954, ease: "none", immediateRender: false }, 15.721);
+      tl.fromTo("#rain-c26", { y: 1585 }, { y: 1920, duration: 0.222, ease: "none" }, 0);
+      tl.fromTo("#rain-c26", { y: -1071 }, { y: 1920, duration: 1.988, ease: "none", immediateRender: false }, 0.223);
+      tl.fromTo("#rain-c26", { y: -1071 }, { y: 1920, duration: 1.988, ease: "none", immediateRender: false }, 2.212);
+      tl.fromTo("#rain-c26", { y: -1071 }, { y: 1920, duration: 1.988, ease: "none", immediateRender: false }, 4.201);
+      tl.fromTo("#rain-c26", { y: -1071 }, { y: 1920, duration: 1.988, ease: "none", immediateRender: false }, 6.190);
+      tl.fromTo("#rain-c26", { y: -1071 }, { y: 1920, duration: 1.988, ease: "none", immediateRender: false }, 8.179);
+      tl.fromTo("#rain-c26", { y: -1071 }, { y: 1920, duration: 1.988, ease: "none", immediateRender: false }, 10.168);
+      tl.fromTo("#rain-c26", { y: -1071 }, { y: 1920, duration: 1.988, ease: "none", immediateRender: false }, 12.157);
+      tl.fromTo("#rain-c26", { y: -1071 }, { y: 1920, duration: 1.988, ease: "none", immediateRender: false }, 14.146);
+      tl.fromTo("#rain-c26", { y: -1071 }, { y: 1920, duration: 1.988, ease: "none", immediateRender: false }, 16.135);
+      tl.fromTo("#rain-c27", { y: 556 }, { y: 1920, duration: 0.881, ease: "none" }, 0);
+      tl.fromTo("#rain-c27", { y: -1071 }, { y: 1920, duration: 1.932, ease: "none", immediateRender: false }, 0.882);
+      tl.fromTo("#rain-c27", { y: -1071 }, { y: 1920, duration: 1.932, ease: "none", immediateRender: false }, 2.815);
+      tl.fromTo("#rain-c27", { y: -1071 }, { y: 1920, duration: 1.932, ease: "none", immediateRender: false }, 4.748);
+      tl.fromTo("#rain-c27", { y: -1071 }, { y: 1920, duration: 1.932, ease: "none", immediateRender: false }, 6.681);
+      tl.fromTo("#rain-c27", { y: -1071 }, { y: 1920, duration: 1.932, ease: "none", immediateRender: false }, 8.614);
+      tl.fromTo("#rain-c27", { y: -1071 }, { y: 1920, duration: 1.932, ease: "none", immediateRender: false }, 10.547);
+      tl.fromTo("#rain-c27", { y: -1071 }, { y: 1920, duration: 1.932, ease: "none", immediateRender: false }, 12.480);
+      tl.fromTo("#rain-c27", { y: -1071 }, { y: 1920, duration: 1.932, ease: "none", immediateRender: false }, 14.413);
+      tl.fromTo("#rain-c27", { y: -1071 }, { y: 1920, duration: 1.932, ease: "none", immediateRender: false }, 16.346);
+      tl.fromTo("#rain-c28", { y: -485 }, { y: 1920, duration: 1.646, ease: "none" }, 0);
+      tl.fromTo("#rain-c28", { y: -1071 }, { y: 1920, duration: 2.047, ease: "none", immediateRender: false }, 1.647);
+      tl.fromTo("#rain-c28", { y: -1071 }, { y: 1920, duration: 2.047, ease: "none", immediateRender: false }, 3.695);
+      tl.fromTo("#rain-c28", { y: -1071 }, { y: 1920, duration: 2.047, ease: "none", immediateRender: false }, 5.743);
+      tl.fromTo("#rain-c28", { y: -1071 }, { y: 1920, duration: 2.047, ease: "none", immediateRender: false }, 7.791);
+      tl.fromTo("#rain-c28", { y: -1071 }, { y: 1920, duration: 2.047, ease: "none", immediateRender: false }, 9.839);
+      tl.fromTo("#rain-c28", { y: -1071 }, { y: 1920, duration: 2.047, ease: "none", immediateRender: false }, 11.887);
+      tl.fromTo("#rain-c28", { y: -1071 }, { y: 1920, duration: 2.047, ease: "none", immediateRender: false }, 13.935);
+      tl.fromTo("#rain-c28", { y: -1071 }, { y: 1920, duration: 2.047, ease: "none", immediateRender: false }, 15.983);
+      tl.fromTo("#rain-c29", { y: 169 }, { y: 1920, duration: 1.160, ease: "none" }, 0);
+      tl.fromTo("#rain-c29", { y: -1071 }, { y: 1920, duration: 1.981, ease: "none", immediateRender: false }, 1.161);
+      tl.fromTo("#rain-c29", { y: -1071 }, { y: 1920, duration: 1.981, ease: "none", immediateRender: false }, 3.143);
+      tl.fromTo("#rain-c29", { y: -1071 }, { y: 1920, duration: 1.981, ease: "none", immediateRender: false }, 5.125);
+      tl.fromTo("#rain-c29", { y: -1071 }, { y: 1920, duration: 1.981, ease: "none", immediateRender: false }, 7.107);
+      tl.fromTo("#rain-c29", { y: -1071 }, { y: 1920, duration: 1.981, ease: "none", immediateRender: false }, 9.089);
+      tl.fromTo("#rain-c29", { y: -1071 }, { y: 1920, duration: 1.981, ease: "none", immediateRender: false }, 11.071);
+      tl.fromTo("#rain-c29", { y: -1071 }, { y: 1920, duration: 1.981, ease: "none", immediateRender: false }, 13.053);
+      tl.fromTo("#rain-c29", { y: -1071 }, { y: 1920, duration: 1.981, ease: "none", immediateRender: false }, 15.035);
+      window.__timelines["rain"] = tl;
+    })();
+  </script>
+</template>

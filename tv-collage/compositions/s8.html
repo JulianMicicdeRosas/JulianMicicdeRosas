@@ -1,12 +1,12 @@
 <template>
   <style>
-    #s8 { position: absolute; inset: 0; overflow: hidden; background: #0c0907; }
+    #s8 { position: absolute; inset: 0; overflow: hidden; background: #010802; }
     #s8 .cam { position: absolute; inset: 0; transform-origin: 50% 50%; }
-    #s8 .tv { position: absolute; background: linear-gradient(160deg, #2b231d, #0d0a08);
+    #s8 .tv { position: absolute; background: linear-gradient(160deg, #0f2a15, #020803);
       border-radius: 9% / 12%; padding: 16px; box-shadow: 0 8px 22px rgba(0,0,0,.65); }
     #s8 .tv.flat { background: none; padding: 0; box-shadow: none; border-radius: 0; }
     #s8 .scr { position: relative; width: 100%; height: 100%; overflow: hidden;
-      border-radius: 14% / 18%; background: #ccc; }
+      border-radius: 14% / 18%; background: #021006; }
     #s8 .flat .scr { border-radius: 0; }
     #s8 .scr img, #s8 .scr .fill { position: absolute; inset: 0; width: 100%; height: 100%;
       object-fit: cover; }
@@ -16,23 +16,25 @@
       box-shadow: inset 0 0 38px rgba(0,0,0,.55), inset 0 0 6px rgba(255,255,255,.25); }
     #s8 .flat .scr::after { box-shadow: none; background: none; }
     #s8 .knobs { position: absolute; right: -2px; top: 10%; width: 22%; height: 80%;
-      background: linear-gradient(#cfc8ba, #8f887c); border-radius: 6px; }
-    #s8 .bar { position: absolute; background: #0b0807; }
-    #s8 .redbar { position: absolute; background: #cf3a1f; }
+      background: linear-gradient(#1f6b2f, #06240d); border-radius: 6px; }
+    #s8 .bar { position: absolute; background: #010502; }
+    #s8 .redbar { position: absolute; background: #00ff41; }
     #s8 .photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
     #s8 .slice { position: absolute; left: 0; width: 100%; overflow: hidden; }
     #s8 .slice img { position: absolute; left: 0; width: 1080px; height: 1920px; object-fit: cover; }
-    #s8 .px { position: absolute; background: #e9e1d2; }
+    #s8 .px { position: absolute; background: #00ff41; }
+    #s8 .patch { position: absolute; overflow: hidden; }
+    #s8 .patch img { position: absolute; width: 1080px; height: 1920px; object-fit: cover; }
     #s8 .scan { position: absolute; inset: 0; pointer-events: none;
       background: repeating-linear-gradient(0deg, rgba(0,0,0,.10) 0 2px, transparent 2px 4px); }
   </style>
   <div id="s8" data-composition-id="s8" data-width="1080" data-height="1920" data-layout-allow-overflow data-layout-allow-overlap>
     <div id="s8-cam" class="cam">
-      <div id="s8-tv1" class="tv" style="left:20px;top:-40px;width:880px;height:610px"><div class="scr"><img class="" src="assets/apple-tv.jpg" alt="" /></div></div>
-      <div id="s8-tv2" class="tv" style="left:930px;top:-20px;width:160px;height:560px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div><div class="knobs"></div></div>
-      <div id="s8-tv3" class="tv flat" style="left:-30px;top:620px;width:1140px;height:640px"><div class="scr"><img class="" src="assets/eye8.jpg" alt="" /></div></div>
+      <div id="s8-tv1" class="tv" style="left:20px;top:-40px;width:880px;height:610px"><div class="scr"><img class="" src="assets/matrix/apple-tv.jpg" alt="" /></div></div>
+      <div id="s8-tv2" class="tv" style="left:930px;top:-20px;width:160px;height:560px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #5dff86 0%, #00c932 55%, #00701a 100%)"></div></div><div class="knobs"></div></div>
+      <div id="s8-tv3" class="tv flat" style="left:-30px;top:620px;width:1140px;height:640px"><div class="scr"><img class="" src="assets/eye8.jpg" alt="" data-color-grading="{&quot;effects&quot;: {&quot;ascii&quot;: 1, &quot;asciiSize&quot;: 0.1, &quot;asciiInvert&quot;: 0, &quot;asciiStyle&quot;: 0, &quot;asciiColor&quot;: 0, &quot;asciiRotation&quot;: 0}, &quot;palette&quot;: [&quot;#010802&quot;, &quot;#00ff41&quot;]}" /></div></div>
       <div class="bar" style="left:0;top:1250px;width:1080px;height:150px"></div>
-      <div id="s8-tv4" class="tv flat" style="left:-30px;top:1400px;width:1140px;height:560px"><div class="scr"><img class="" src="assets/eye9.jpg" alt="" /></div></div>
+      <div id="s8-tv4" class="tv flat" style="left:-30px;top:1400px;width:1140px;height:560px"><div class="scr"><img class="" src="assets/eye9.jpg" alt="" data-color-grading="{&quot;effects&quot;: {&quot;ascii&quot;: 1, &quot;asciiSize&quot;: 0.1, &quot;asciiInvert&quot;: 0, &quot;asciiStyle&quot;: 0, &quot;asciiColor&quot;: 0, &quot;asciiRotation&quot;: 0}, &quot;palette&quot;: [&quot;#010802&quot;, &quot;#00ff41&quot;]}" /></div></div>
     </div>
     <div class="scan"></div>
   </div>
