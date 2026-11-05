@@ -196,7 +196,9 @@ export class LogoStage {
     const F = frontWall(), fx0 = W * F.x0, fw = W * (F.x1 - F.x0);
     const aw = fw * A.w, ah = H * A.h;
     const rects = layoutLogos(page.map((c) => c.width / c.height), aw, ah);
-    page.forEach((c, i) => g.drawImage(c, fx0 + (fw - aw) / 2 + rects[i].x, (H - ah) / 2 + rects[i].y, rects[i].w, rects[i].h));
+    // dónde quedó cada uno, en px del lienzo (el título sólido se desarma desde ahí)
+    this.rects = rects.map((r) => ({ x: fx0 + (fw - aw) / 2 + r.x, y: (H - ah) / 2 + r.y, w: r.w, h: r.h }));
+    page.forEach((c, i) => g.drawImage(c, this.rects[i].x, this.rects[i].y, this.rects[i].w, this.rects[i].h));
     return buf;
   }
 
@@ -239,6 +241,66 @@ export class LogoStage {
     this.cur = null;
     this.page = null;
     this._transition(prev, null, duration, 1, () => this.canvas.classList.remove('on'));
+  }
+
+  /**
+   * Se desarma en letras: el sólido se borra celda por celda (cada celda, en su momento, pasa a ser una letra que
+   * se suelta con glitch; las letras las pone el campo). Devuelve las celdas {x, y, at} en px del lienzo y segundos.
+   */
+  crumble({ cell = 20, secs = 1.6, cover = 0.55 } = {}) {
+    if (!this.visible || !this.cur) return [];
+    const W = this.canvas.width, H = this.canvas.height;
+    const R = this.rects?.[0] || { x: 0, y: 0, w: W, h: H };
+    const x0 = Math.max(0, Math.floor(R.x)), y0 = Math.max(0, Math.floor(R.y));
+    const w = Math.min(W - x0, Math.ceil(R.w)), h = Math.min(H - y0, Math.ceil(R.h));
+    if (w < 2 || h < 2) return [];
+    const d = this.cur.getContext('2d', { willReadFrequently: true }).getImageData(x0, y0, w, h).data;
+    const cells = [];
+    const c = Math.max(4, Math.round(cell));
+    for (let cy = 0; cy < h; cy += c) {
+      for (let cx = 0; cx < w; cx += c) {
+        let on = 0, n = 0;
+        for (let yy = cy + 1; yy < Math.min(h, cy + c); yy += 3) for (let xx = cx + 1; xx < Math.min(w, cx + c); xx += 3) {
+          n++;
+          if (d[(yy * w + xx) * 4 + 3] > 120) on++;
+        }
+        if (!on) continue;
+        // barrido de izquierda a derecha con azar: el sólido se va soltando en letras
+        const at = secs * (0.55 * (cx / w) + 0.45 * Math.random());
+        cells.push({ x: x0 + cx, y: y0 + cy, s: c, at, letter: n > 0 && on / n >= cover });
+      }
+    }
+    // el lienzo se va borrando en sincronía con las letras
+    const buf = document.createElement('canvas');
+    buf.width = W;
+    buf.height = H;
+    const g = buf.getContext('2d');
+    g.drawImage(this.cur, 0, 0);
+    const order = [...cells].sort((a, b) => a.at - b.at);
+    const tok = (this.animTok = (this.animTok || 0) + 1);
+    this.anim = tok;
+    this.visible = false;
+    this.cur = null;
+    this.page = null;
+    const t0 = performance.now();
+    let k = 0;
+    const step = () => {
+      if (tok !== this.animTok) return;
+      const e = (performance.now() - t0) / 1000;
+      while (k < order.length && order[k].at <= e) {
+        const q = order[k++];
+        g.clearRect(q.x - 1, q.y - 1, q.s + 2, q.s + 2);
+      }
+      this._blit(buf);
+      if (k < order.length) nextFrame(step);
+      else {
+        this.anim = 0;
+        this._blit(null);
+        this.canvas.classList.remove('on');
+      }
+    };
+    nextFrame(step);
+    return cells;
   }
 
   _transition(prev, next, duration, intensity, done) {
@@ -300,4 +362,48 @@ export class LogoStage {
     };
     nextFrame(step); // con la ventana oculta (Alt+Tab) la transición también termina
   }
+}
+
+/**
+ * Título sólido con la tipografía de FLAT (la de marca cargada en el panel C o Geist Mono Bold, la de títulos del
+ * manual), en hueso como los logos. Se parte en renglones según la proporción del lugar donde va.
+ */
+export function solidTitle(text, { aspect = 4, upper = true } = {}) {
+  const t = String(text || '').trim().replace(/\s+/g, ' ');
+  const str = upper ? t.toUpperCase() : t;
+  const words = str.split(' ');
+  const PX = 260;
+  const font = `700 ${PX}px "Marca FLAT", "Geist Mono", "IBM Plex Mono", monospace`;
+  const m = document.createElement('canvas').getContext('2d');
+  m.font = font;
+  const wOf = (s) => m.measureText(s).width;
+  const lineH = PX * 1.04;
+  // renglones parejos: se prueba de 1 a 4 y gana el que, ajustado a la proporción, queda más grande
+  let best = null;
+  for (let n = 1; n <= Math.min(4, words.length); n++) {
+    const target = wOf(str) / n;
+    const lines = [];
+    let cur = '';
+    for (const w of words) {
+      const next = cur ? `${cur} ${w}` : w;
+      if (cur && wOf(next) > target * 1.08 && lines.length < n - 1) {
+        lines.push(cur);
+        cur = w;
+      } else cur = next;
+    }
+    lines.push(cur);
+    const bw = Math.max(...lines.map(wOf)), bh = lines.length * lineH;
+    const scale = Math.min(aspect / bw, 1 / bh); // tamaño relativo dentro de una caja de aspect × 1
+    if (!best || scale > best.scale * 1.02) best = { lines, bw, bh, scale };
+  }
+  const cv = document.createElement('canvas');
+  cv.width = Math.ceil(best.bw + PX * 0.1);
+  cv.height = Math.ceil(best.bh + PX * 0.1);
+  const g = cv.getContext('2d');
+  g.font = font;
+  g.fillStyle = `rgb(${BONE.join(',')})`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  best.lines.forEach((l, i) => g.fillText(l, cv.width / 2, PX * 0.05 + lineH * (i + 0.5)));
+  return trim(cv);
 }

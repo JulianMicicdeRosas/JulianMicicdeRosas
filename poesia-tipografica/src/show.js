@@ -8,7 +8,7 @@
 //  Sólo se transcribe (y se paga OpenAI) mientras recording = true.
 // ─────────────────────────────────────────────────────────────────────────────
 import { sampleText, sampleImage } from './svgSampler.js';
-import { processLogo, paginate, composeLogos, LogoStage } from './logos.js';
+import { processLogo, paginate, composeLogos, LogoStage, solidTitle } from './logos.js';
 import { later, every, cancel } from './ticker.js'; // no se frenan con la ventana oculta (Alt+Tab)
 
 export const ANIMS = ['clasica', 'muro', 'cruce', 'constelacion', 'sedimento', 'partitura'];
@@ -38,6 +38,8 @@ export const TITULO = 'UMBRAL';
 export const PRESENTACIONES = { umbral: 'UMBRAL', charlas: 'Ciclo de charlas y talleres FLAT' };
 export const presentationTitle = (s) => PRESENTACIONES[s?.presentacion] || TITULO;
 
+const clampN = (v, a, b, d) => (Number.isFinite(v) ? Math.min(b, Math.max(a, v)) : d);
+
 export const DEFAULT_SETTINGS = {
   artists: [{ name: 'Nombre del artista 1' }, { name: 'Nombre del artista 2' }, { name: 'Nombre del artista 3' }, { name: 'Nombre del artista 4' }],
   // Loop hasta que empieza la noche (categorías de flatfestival.org): organizadores → socio cultural (más
@@ -46,7 +48,7 @@ export const DEFAULT_SETTINGS = {
   loop: [
     // FLAT es el centro del evento: abre el loop. Si falta el PNG (logos/flat), se escribe «FLAT».
     { tipo: 'logos', carpeta: 'logos/flat', imagenes: [], render: 'imagen', duracion: 10, por_pagina: 1, de_a_uno: true, monocromo: true, letras: '', alt: 'FLAT', fondo: true },
-    { tipo: 'texto', contenido: TITULO, render: 'letras', duracion: 12, letras: TITULO.toUpperCase() },
+    { tipo: 'texto', contenido: TITULO, render: 'solido', duracion: 12, letras: TITULO.toUpperCase() }, // sólido, tipografía de FLAT
     { tipo: 'logos', carpeta: 'logos/organizadores', imagenes: [], render: 'imagen', duracion: 8, por_pagina: 6, de_a_uno: false, monocromo: true, letras: '', alt: 'ORGANIZAN' },
     { tipo: 'logos', carpeta: 'logos/socio-cultural', imagenes: [], render: 'imagen', duracion: 16, por_pagina: 6, de_a_uno: false, monocromo: true, letras: '', alt: 'SOCIO CULTURAL' },
     { tipo: 'logos', carpeta: 'logos/patrocinadores', imagenes: [], render: 'imagen', duracion: 8, por_pagina: 8, de_a_uno: false, monocromo: true, letras: '', alt: 'PATROCINAN' },
@@ -77,6 +79,10 @@ export const DEFAULT_SETTINGS = {
   marca: { base: '#FFFFFF', secundario: '#CCCCCC', acento: '#FF9898', fuente: '', fuente_nombre: '', mayusculas: true, global: true },
   // modo T: muro de palabras
   muro: { tipo: 'grilla', filas: 34, mayusculas: true }, // cada cuánto una imagen: verso | estrofa | contemplativa | personalizada
+  // tecla 0: cuántas palabras a la vez, líneas que las unen, segundos en pantalla y variación de tamaños
+  cero: { palabras: 12, lineas: 'figura', vida: 13, tamanos: 'media' },
+  // brillo (1 = normal): telón y letras que caen · palabras, nombres y títulos · logos, título sólido y dibujos
+  brillo: { fondo: 1, palabras: 1, cosas: 1 },
   pointcloud: true, // estética nube de puntos (TouchDesigner)
   profundidad: 0.45, // extrusión en Z de las figuras
   nube: 1, // intensidad de la nube
@@ -127,6 +133,8 @@ export class Show {
     this.overlay.appendChild(this.overlayImg);
     document.body.appendChild(this.overlay);
     this.stage = new LogoStage(); // logos con transición glitch
+    this.titleStage = new LogoStage(); // título del loop en sólido (tipografía de FLAT); se desarma en letras
+    this.solidText = '';
     // logo de FLAT fijo abajo a la derecha (tecla 0)
     this.corner = document.createElement('div');
     this.corner.id = 'corner';
@@ -403,6 +411,11 @@ export class Show {
       this._showImage(img.src);
       return;
     }
+    if (kind === 'texto' && step.render === 'solido') {
+      f.releaseFigure(true);
+      await this._showSolidTitle(content);
+      return;
+    }
     if (kind === 'texto' && step.render === 'titulo') {
       f.releaseFigure(true);
       f.showTitle(content);
@@ -476,7 +489,50 @@ export class Show {
     this.overlay.classList.add('on');
   }
 
-  _hideImage(keepStage = false) {
+  /** Título del loop en sólido, con la tipografía de FLAT, en la pared de frente (entra con glitch). */
+  async _showSolidTitle(text) {
+    const f = this.field;
+    const area = { w: 0.86, h: 0.5 };
+    const txt = String(text || '').trim();
+    if (!txt) return;
+    if (!(this.titleStage.visible && this.solidText === txt)) {
+      // (si ya está, queda fijo: sólo se rehace el hueco del telón)
+      try {
+        await document.fonts.load('700 100px "Geist Mono"');
+      } catch {
+        /* sin la fuente empaquetada: la del sistema */
+      }
+      const cv = solidTitle(txt, { aspect: (f.focus.w * area.w) / (f.H * area.h), upper: this.settings.marca?.mayusculas !== false });
+      this.solidText = txt;
+      this.solidAspect = cv.width / cv.height;
+      this.titleStage.show([cv], { area, duration: 0.9, intensity: 1.2 });
+    }
+    // el telón no pasa por debajo del título: un hueco negro a su medida (con aire)
+    const a = this.solidAspect || 4;
+    const w = Math.min(f.focus.w * area.w, f.H * area.h * a), h = w / a, pad = f.H * 0.04;
+    f.setBackdropHoles([{ x0: f.focus.cx - w / 2 - pad, x1: f.focus.cx + w / 2 + pad, y0: -h / 2 - pad, y1: h / 2 + pad }]);
+  }
+
+  /** El título sólido se desarma: cada parte del sólido pasa a ser una letra que salta con glitch y cae. */
+  _crumbleTitle() {
+    const st = this.titleStage;
+    if (!st.visible) return;
+    const f = this.field;
+    const W = st.canvas.width, H = st.canvas.height;
+    const cellPx = Math.max(5, H * 0.017); // celdas chicas y letras encimadas: de cerca son letras, de lejos el sólido
+    const cells = st.crumble({ cell: cellPx, secs: 1.7 });
+    const text = this.solidText;
+    this.solidText = '';
+    const k = f.H / H;
+    const world = cells
+      .filter((c) => c.letter)
+      .map((c) => ({ x: ((c.x + c.s / 2) / W - 0.5) * f.W, y: (0.5 - (c.y + c.s / 2) / H) * f.H, s: c.s * k, at: c.at }));
+    // después de lo que limpie la escena siguiente (clearScene, etc.): las letras son de la transición
+    queueMicrotask(() => f.crumbleCells(world, text));
+  }
+
+  _hideImage(keepStage = false, keepTitle = false) {
+    if (!keepTitle) this._crumbleTitle();
     this._hideCorner();
     cancel(this.flatTimer);
     this.flatTimer = 0;
@@ -550,7 +606,10 @@ export class Show {
     this._setRecording(false);
     cancel(this.loopTimer);
     this.loopToken++;
-    this._hideImage();
+    const txt = this._loopSteps().find((s) => s.tipo === 'texto');
+    const name = (txt && txt.contenido) || TITULO;
+    const solid = txt?.render === 'solido';
+    this._hideImage(false, solid && this.titleStage.visible && this.solidText === name.trim()); // el mismo título: queda
     const f = this.field;
     f.wallFx = false;
     f.sparseMode = false;
@@ -558,15 +617,14 @@ export class Show {
     f.flowMode = null;
     f.backdropOnlyShape = false;
     f.clearScene();
-    const txt = this._loopSteps().find((s) => s.tipo === 'texto');
-    const name = (txt && txt.contenido) || TITULO;
     f.resetCorpus(this._loopCorpus());
     f.cursorEnabled = false;
     f.setSceneDensity(0.06);
     f.setPalette(this.basePalette());
     f.setPhysics({ modo: 'lluvia_text_rain', intensidad: 0.3, velocidad: 0.35, turbulencia: 0.15, densidad: 0.4 });
     f.setBackdrop(true);
-    f.showTitle(name);
+    if (solid) this._showSolidTitle(name);
+    else f.showTitle(name);
     this.state = 'title';
     this.notify(`${name} — T para comenzar`);
   }
@@ -627,7 +685,9 @@ export class Show {
     const sameMode = this.state === 'perform' && this.mode === mode && this.variant === v;
     if (!sameMode && mode !== 'muro') f.clearSparse(); // (el muro ya limpia todo al arrancar)
     f.sparseMode = mode === 'pocas' || v === 'constelacion';
-    f.sparseMax = v === 'constelacion' ? 14 : 12;
+    const cero = { ...DEFAULT_SETTINGS.cero, ...(this.settings.cero || {}) };
+    f.sparseMax = mode === 'pocas' ? Math.round(clampN(+cero.palabras, 2, 80, 12)) : 14;
+    f.sparseCfg = mode === 'pocas' ? { lineas: cero.lineas, vida: clampN(+cero.vida, 2, 120, 13), tamanos: cero.tamanos } : { lineas: 'figura', vida: 13, tamanos: 'media' };
     f.sparseKeep = 0; // tecla 0: pocas palabras que viven unos segundos y se rompen (sin acumular párrafos)
     f.artistWall = v === 'muro' || v === 'cruce';
     f.flowMode = v === 'sedimento' || v === 'partitura' ? v : null;

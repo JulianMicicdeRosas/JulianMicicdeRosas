@@ -385,6 +385,14 @@ Quedan a lo sumo 12 palabras: cada una vive 10–16 s y se rompe con glitch. Las
 en el resto de las escenas. **Abajo a la derecha queda fijo el logo de FLAT** (el de `logos/flat`), y ninguna palabra
 se pone encima. S detiene / retoma; L vuelve al loop.
 
+**Ajustes de la tecla 0** (panel C → Tecla 0 · palabras; se ven al instante): cuántas palabras a la vez (2 a 60; de
+fábrica 12), cuántos segundos queda cada una (3 a 90, ±23 %; de fábrica 13), las **líneas** que las unen (todas las de
+cada figura · sólo las de la misma oración, cortando en cada punto o pausa al hablar · sin líneas) y la **variación
+de tamaños** (todas iguales · poca, 1× y 2× · media, 1× a 3× · mucha, 1× a 5×). Las palabras de enlace quedan chicas.
+
+**Brillo** (panel C → Brillo; 1 = normal, 0 = apagado, 2 = el doble): **fondo** (el telón y las letras que caen),
+**palabras** (lo dicho, nombres, títulos y las líneas de la tecla 0) y **logos, título sólido y dibujos**.
+
 **Las palabras aparecen mientras se habla** (no al terminar la frase): el backend corta el audio en la primera
 micro-pausa después de 1,35 s de habla continua (o a los 4 s como máximo) y OpenAI devuelve ese tramo enseguida. Se
 regula con `OPENAI_COMMIT_S` en `.env` (más chico = más rápido pero con más cortes; `0` = esperar al silencio).
@@ -430,6 +438,14 @@ cada letra tiene azar propio en cada función, así que no es un video cuadro po
 Para un video fijo, grabar la pantalla durante la re-proyección (OBS).
 
 ## Operación de la noche
+
+**Título del loop en sólido:** «UMBRAL» o «Ciclo de charlas y talleres FLAT» se escribe en sólido con la tipografía
+de FLAT (la de marca cargada en el panel C o, si no hay, Geist Mono Bold, la de títulos del manual), en hueso como los
+logos, en la pared de frente. Entra con glitch y queda fijo. Al pasar a otra cosa (el paso siguiente del loop, T, la
+tecla de un artista, 0, 5, L) **se desarma en letras**: el sólido se borra de izquierda a derecha y en cada parte
+aparece, en su lugar, una letra del título (encimadas, así de lejos sigue pareciendo el sólido), que salta con glitch
+y cae. En el panel C, Loop, el paso de texto tiene la opción «sólido (tipografía FLAT)»; con «letras» vuelve a armarse
+con palabras. En el loop, el título y el cierre la cámara queda quieta, de frente (la pantalla no se inclina).
 
 ```
  LOOP (FLAT · título · logos, se repite)  ──→──→ (desde el último paso)

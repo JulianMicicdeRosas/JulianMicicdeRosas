@@ -220,6 +220,39 @@ export class ConfigPanel {
         backend (server.py); si aparece «backend desconectado», arráncalo.</p>
       </section>
       <section>
+        <h2>Tecla 0 · palabras</h2>
+        <p class="hint">Cómo aparecen las palabras dichas en la tecla 0. Los cambios se ven enseguida.</p>
+        <div class="slider"><span>Palabras a la vez</span><input type="range" min="2" max="60" step="1" data-cero="palabras"><output></output></div>
+        <div class="slider"><span>Segundos en pantalla</span><input type="range" min="3" max="90" step="1" data-cero="vida"><output></output></div>
+        <div class="row">
+          <span>Líneas que las unen:</span>
+          <select data-cero="lineas">
+            <option value="figura">sí, todas las de cada figura</option>
+            <option value="oracion">sí, sólo las de la misma oración (se corta en cada punto)</option>
+            <option value="no">no, sin líneas</option>
+          </select>
+        </div>
+        <div class="row">
+          <span>Tamaños:</span>
+          <select data-cero="tamanos">
+            <option value="iguales">todas iguales</option>
+            <option value="poca">poca variación (1× y 2×)</option>
+            <option value="media">variación media (1× a 3×)</option>
+            <option value="mucha">mucha variación (1× a 5×)</option>
+          </select>
+        </div>
+        <p class="hint">Cada palabra dura los segundos elegidos (±23 %) y se rompe con glitch; si se llega al máximo, se
+        rompen las más viejas. Las palabras de enlace (de, la, y…) quedan chicas.</p>
+      </section>
+      <section>
+        <h2>Brillo</h2>
+        <div class="slider"><span>Fondo (telón y letras que caen)</span><input type="range" min="0" max="2" step="0.05" data-brillo="fondo"><output></output></div>
+        <div class="slider"><span>Palabras, nombres y títulos</span><input type="range" min="0" max="2" step="0.05" data-brillo="palabras"><output></output></div>
+        <div class="slider"><span>Logos, título sólido y dibujos</span><input type="range" min="0" max="2" step="0.05" data-brillo="cosas"><output></output></div>
+        <p class="hint">1 = normal · 0 = apagado · 2 = el doble. Para todo junto: la nube de puntos tiene su intensidad
+        en Estética.</p>
+      </section>
+      <section>
         <h2>Cronograma del día · flatfestival.org</h2>
         <p class="hint">El programa se fija qué día es y qué hay en el cronograma publicado en flatfestival.org (al
         arrancar y cada 30 min; sin internet usa la última copia). Propone una placa por lector de <b>Umbral</b> (y el
@@ -408,6 +441,7 @@ export class ConfigPanel {
           <input data-field="contenido" value="${isData ? '(archivo subido)' : esc(st.contenido)}" ${isData ? 'readonly' : ''} placeholder="${st.tipo === 'imagen' ? 'loop/logo.png' : 'UMBRAL'}">
           ${st.tipo === 'imagen' ? '<button data-act="upload">Subir…</button>' : ''}
           <select data-field="render">
+            ${st.tipo === 'imagen' ? '' : `<option value="solido"${st.render === 'solido' ? ' selected' : ''}>sólido (tipografía FLAT)</option>`}
             <option value="letras"${st.render === 'letras' ? ' selected' : ''}>letras</option>
             ${st.tipo === 'imagen' ? `<option value="imagen"${st.render === 'imagen' ? ' selected' : ''}>imagen</option>` : `<option value="titulo"${st.render === 'titulo' ? ' selected' : ''}>título</option>`}
           </select>
@@ -467,6 +501,13 @@ export class ConfigPanel {
     for (const el of this.el.querySelectorAll('[data-cad]')) {
       if (document.activeElement !== el) el.value = cad[el.dataset.cad];
       if (el.type === 'number') el.disabled = cad.preset !== 'personalizada';
+    }
+    const cero = { palabras: 12, lineas: 'figura', vida: 13, tamanos: 'media', ...(s.cero || {}) };
+    const brillo = { fondo: 1, palabras: 1, cosas: 1, ...(s.brillo || {}) };
+    for (const el of this.el.querySelectorAll('[data-cero], [data-brillo]')) {
+      const v = el.dataset.cero ? cero[el.dataset.cero] : brillo[el.dataset.brillo];
+      if (document.activeElement !== el) el.value = v;
+      if (el.type === 'range') el.nextElementSibling.textContent = el.dataset.brillo ? (+v).toFixed(2) : String(v);
     }
     for (const el of this.el.querySelectorAll('[data-opt]')) {
       const k = el.dataset.opt;
@@ -1047,6 +1088,13 @@ export class ConfigPanel {
     if (t.dataset.marca) {
       if (ev.type === 'input' && t.type === 'checkbox') return;
       this._commit((s) => (s.marca = { ...(s.marca || {}), [t.dataset.marca]: t.type === 'checkbox' ? t.checked : t.value }), false);
+      return;
+    }
+    if (t.dataset.cero || t.dataset.brillo) {
+      if (ev.type === 'input' && t.tagName === 'SELECT') return;
+      const grp = t.dataset.cero ? 'cero' : 'brillo', k = t.dataset.cero || t.dataset.brillo;
+      if (t.type === 'range') t.nextElementSibling.textContent = grp === 'brillo' ? (+t.value).toFixed(2) : t.value;
+      this._commit((s) => (s[grp] = { ...(s[grp] || {}), [k]: t.type === 'range' ? +t.value : t.value }), false);
       return;
     }
     if (t.dataset.muro) {

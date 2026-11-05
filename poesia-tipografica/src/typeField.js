@@ -145,6 +145,14 @@ export class TypeField {
     this.artistWall = false;
     this.artistCross = false; // «cruce»: palabras horizontales y verticales, como un crucigrama
     this.sparseMax = 12;
+    // tecla 0, desde el panel C: líneas ('figura' todas · 'oracion' sólo dentro de cada oración · 'no'), segundos en
+    // pantalla (±23 %) y variación de tamaños ('iguales' · 'poca' · 'media' · 'mucha')
+    this.sparseCfg = { lineas: 'figura', vida: 13, tamanos: 'media' };
+    this.sparseSent = 0; // oración en curso (sube con cada punto)
+    // brillo, desde el panel C: telón y letras que caen · palabras dichas, nombres y títulos · dibujos
+    this.gainFondo = 1;
+    this.gainPalabras = 1;
+    this.gainCosas = 1;
     this.reservedFrac = []; // zonas (fracción del cuadro, 0..1 desde abajo a la izquierda) sin palabras sueltas: el logo de FLAT en la tecla 0
     this.sparseKeep = 0;
     this.flowMode = null; // 6 «sedimento» · 7 «partitura»
@@ -1230,7 +1238,8 @@ export class TypeField {
       posRot[o + 2] = pz[i];
       posRot[o + 3] = rot[i];
       data[o] = size[i];
-      data[o + 1] = alpha[i];
+      const stU = this.state[i];
+      data[o + 1] = alpha[i] * (stU === FREE || stU === BGW ? this.gainFondo : stU === FIGURE ? this.gainCosas : this.gainPalabras);
       data[o + 2] = this.slot[i];
       data[o + 3] = this.tint[i];
       if (alpha[i] > 0.01) visible++;
@@ -1769,6 +1778,46 @@ export class TypeField {
     });
     if (this.title.rect) this.titleFade = { rect: this.title.rect, until: t + secs + 0.5 };
     this.title = null;
+    this.onTransition?.(0.5);
+  }
+
+  /**
+   * Título sólido que se desarma: en cada celda {x, y, s, at} (mundo, segundos desde ahora) aparece una letra del
+   * título justo donde estaba el sólido, que en su momento salta con glitch y cae. Las letras se recorren en orden de
+   * lectura, así el sólido se deshace en las mismas palabras.
+   */
+  crumbleCells(cells, text) {
+    const chars = [...this._u(String(text || 'FLAT').replace(/\s+/g, ''))];
+    if (!chars.length || !cells.length) return;
+    const t = this.time;
+    const tk = 'brand';
+    const sorted = [...cells].sort((a, b) => b.y - a.y || a.x - b.x);
+    let n = 0;
+    for (const c of sorted) {
+      const i = this._allocParticle(false);
+      if (i < 0) break;
+      const sl = this.atlas.slot(chars[n++ % chars.length], tk);
+      const S = c.s * 2.9; // más grande que su celda: se enciman y se lee como un sólido
+      this.state[i] = WORD;
+      this.grp[i] = Math.random();
+      this.px[i] = this.tx[i] = c.x;
+      this.py[i] = this.ty[i] = c.y;
+      this.pz[i] = this.tz[i] = 0;
+      this.vx[i] = this.vy[i] = this.vz[i] = 0;
+      this.rot[i] = this.trot[i] = 0;
+      this.size[i] = this.tsize[i] = S;
+      this.alpha[i] = this.talpha[i] = 1; // debajo del sólido: se ve recién cuando su celda se borra
+      this.slot[i] = sl;
+      this.pslot[i] = -1;
+      this.tint[i] = this.ptint[i] = 0;
+      this.accent[i] = this.paccent[i] = 0;
+      this.delay[i] = t;
+      this.birth[i] = t - 10; // sin destello de llegada
+      this.level[i] = 0.35;
+      const at = t + c.at;
+      this.breaking.push({ i, jumpAt: at + 0.12 + Math.random() * 0.25, at: at + 0.45 + Math.random() * 0.4, span: c.s * 5, fall: true });
+    }
+    this.metaDirty = true;
     this.onTransition?.(0.5);
   }
 
@@ -2594,8 +2643,16 @@ export class TypeField {
       }
       if (this.state[b.i] !== WORD) continue;
       this.state[b.i] = FREE;
-      this.alpha[b.i] = 0;
       this.pslot[b.i] = -1;
+      if (b.fall) {
+        // título sólido que se desarma: la letra cae (y se apila con el resto), no se apaga
+        this.keepFall[b.i] = 1;
+        this.life[b.i] = 0;
+        this.vx[b.i] = (Math.random() - 0.5) * 50;
+        this.vy[b.i] = -(10 + Math.random() * 60);
+        continue;
+      }
+      this.alpha[b.i] = 0;
       this.keepFall[b.i] = 0;
     }
     this.breaking = keep;
@@ -2686,7 +2743,13 @@ export class TypeField {
     const base = clamp(this.H * 0.034, 18, 48) * 1.3; // tecla 0: todo un 30 % más grande
     const u = Math.random();
     const nw = normalizeWord(word);
-    let k = this.keywords.has(nw) || u > (this.sparseKeep ? 0.93 : 0.86) ? 3 : u > (this.sparseKeep ? 0.72 : 0.6) ? 2 : 1;
+    const kw = this.keywords.has(nw);
+    const var_ = this.sparseCfg.tamanos;
+    let k;
+    if (var_ === 'iguales') k = 1;
+    else if (var_ === 'poca') k = kw || u > 0.75 ? 2 : 1;
+    else if (var_ === 'mucha') k = u > 0.95 ? 5 : kw || u > 0.86 ? 4 : u > 0.7 ? 3 : u > 0.48 ? 2 : 1;
+    else k = kw || u > (this.sparseKeep ? 0.93 : 0.86) ? 3 : u > (this.sparseKeep ? 0.72 : 0.6) ? 2 : 1;
     if (STOP.has(nw) || nw.length <= 2) k = 1; // las palabras de enlace, chicas
     const S = base * k;
     const slots = [...this._u(word)].map((ch) => this.atlas.slot(ch, this._k('mono')));
@@ -2768,7 +2831,9 @@ export class TypeField {
       idx.push(i);
     });
     const keep = this.sparseKeep > 0;
-    this.sparse.push({ idx, x, y, k, w: width, para: this.sparsePara, fig: F.id, until: keep ? Infinity : t + 10 + Math.random() * 6 });
+    const vida = Math.max(2, +this.sparseCfg.vida || 13);
+    this.sparse.push({ idx, x, y, k, w: width, para: this.sparsePara, fig: F.id, sent: this.sparseSent, until: keep ? Infinity : t + vida * (0.77 + Math.random() * 0.46) });
+    if (/[.?!…]["»”)]?$/.test(word)) this.sparseSent++; // la oración terminó: la próxima palabra empieza otra línea
     this.metaDirty = true;
     this.onTransition?.(0.18);
     const cap = keep ? 160 : this.sparseMax;
@@ -2778,6 +2843,7 @@ export class TypeField {
   /** Tecla 0: empieza un párrafo nuevo (pausa larga): su propia figura; si hay más de `sparseKeep`, se rompe el más viejo. */
   newParagraph() {
     this.sparsePara++;
+    this.sparseSent++;
     this.sparseFig = null;
     if (!this.sparseKeep) return;
     const paras = [...new Set(this.sparse.map((w) => w.para))];

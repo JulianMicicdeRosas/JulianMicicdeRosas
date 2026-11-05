@@ -13,6 +13,7 @@ import '@fontsource/cormorant-garamond/500.css';
 import '@fontsource/ibm-plex-mono/400.css';
 // Manual de marca FLAT: Geist Mono (títulos y destacados) y Roboto (texto). Empaquetadas: funcionan sin internet.
 import '@fontsource/geist-mono/500.css';
+import '@fontsource/geist-mono/700.css'; // título sólido del loop
 import '@fontsource/roboto/400.css';
 import * as THREE from 'three';
 import { GlyphAtlas, loadFonts } from './glyphAtlas.js';
@@ -23,7 +24,7 @@ import { DebugPanel } from './debugPanel.js';
 import { localArtDirection, normalizeDirection } from './localDirector.js';
 import { sampleFigure } from './svgSampler.js';
 import { SHAPES } from './shapeLibrary.js';
-import { Show, DEFAULT_SETTINGS, TITULO, presentationTitle } from './show.js';
+import { Show, DEFAULT_SETTINGS, TITULO, PRESENTACIONES, presentationTitle } from './show.js';
 import { ConfigPanel } from './configPanel.js';
 import { PointCloud } from './pointCloud.js';
 import { Overlay } from './overlay.js';
@@ -369,6 +370,18 @@ async function boot() {
     field.brandAll = settings.marca?.global === true;
     field.brandUpper = field.brandAll && settings.marca?.mayusculas !== false;
     field.wallRows = settings.muro?.filas || 34;
+    // brillo del fondo, de las palabras y de lo demás (logos, título sólido, dibujos)
+    const br = { fondo: 1, palabras: 1, cosas: 1, ...(settings.brillo || {}) };
+    field.gainFondo = +br.fondo;
+    field.gainPalabras = +br.palabras;
+    field.gainCosas = +br.cosas;
+    document.documentElement.style.setProperty('--brillo-cosas', String(+br.cosas));
+    // tecla 0 andando: los cambios del panel se ven enseguida
+    if (show.mode === 'pocas' && show.state === 'perform') {
+      const c = { ...DEFAULT_SETTINGS.cero, ...(settings.cero || {}) };
+      field.sparseMax = Math.round(Math.min(80, Math.max(2, +c.palabras || 12)));
+      field.sparseCfg = { lineas: c.lineas, vida: Math.min(120, Math.max(2, +c.vida || 13)), tamanos: c.tamanos };
+    }
     field.wallUpper = settings.muro?.mayusculas !== false;
     const fuente = settings.marca?.fuente || '';
     if (fuente && fuente !== brandFontLoaded) {
@@ -403,6 +416,12 @@ async function boot() {
       const viejo = (v) => /^\s*(encuentro con martel - futuridades|ciclo de charlas y talleres flat)\s*$/i.test(String(v || ''));
       const loop = (s.loop || []).map((st) => (st && st.tipo === 'texto' && (viejo(st.contenido) || viejo(st.letras)) ? { ...st, contenido: TITULO, letras: TITULO.toUpperCase() } : st));
       s = { ...s, loop, titulo_v11: true };
+    }
+    // v12: el título del loop (UMBRAL / Ciclo de charlas y talleres FLAT) pasa a ser sólido con la tipografía de FLAT
+    if (!s.titulo_solido_v12) {
+      const pres = Object.values(PRESENTACIONES).map((x) => x.toLowerCase());
+      const loop = (s.loop || []).map((st) => (st && st.tipo === 'texto' && st.render === 'letras' && pres.includes(String(st.contenido || '').trim().toLowerCase()) ? { ...st, render: 'solido' } : st));
+      s = { ...s, loop, titulo_solido_v12: true };
     }
     // v10: tres paredes (oeste 3175 · norte 1775 · este 3450) en 8400 × 690, una sola vez si estaba un formato anterior
     if (!s.formato_v10) s = { ...s, formato: ['1024x768', '1822x737', '', undefined].includes(s.formato) ? '8400x690/3175,1775,3450' : s.formato, formato_v10: true };
@@ -607,6 +626,8 @@ async function boot() {
       if (show.mode === 'pocas') {
         const now = performance.now();
         if (m.state === 'started' && field.sparseKeep > 0 && now - lastSpeechStop > 1000) field.newParagraph();
+        // una pausa al hablar también cierra la oración (por si la transcripción no trae el punto)
+        else if (m.state === 'started' && now - lastSpeechStop > 700) field.sparseSent++;
         if (m.state === 'stopped') lastSpeechStop = now;
       }
     },
@@ -809,6 +830,7 @@ async function boot() {
     timeOffset += n * step;
   }
   let orbit = 0;
+  let camMove = 0; // 0 = cámara quieta de frente (loop, título, cierre)
 
   // ── glitch azaroso: ráfagas de duración e intensidad al azar (la voz fuerte las provoca) ──
   const glitch = { level: 0, burst: 0, amp: 0, wait: 1, frame: 0 };
@@ -907,15 +929,18 @@ async function boot() {
     orbit += (orbitGoal - orbit) * (1 - Math.exp(-dt * 0.35));
     // en formatos muy anchos el mismo giro corre y deforma mucho los bordes: se achica en proporción
     const wide = Math.min(1, 2.5 / camera.aspect);
-    const yaw = (Math.sin(t * 0.055) * 0.55 * orbit + Math.sin(t * 0.043) * 0.015) * wide;
-    const pitch = Math.sin(t * 0.037) * 0.16 * orbit + Math.sin(t * 0.031) * 0.008;
+    // loop, título y cierre: cámara quieta, de frente (sin que la pantalla se incline)
+    const still = show.state === 'loop' || show.state === 'title' || show.state === 'flat';
+    camMove += ((still ? 0 : 1) - camMove) * (1 - Math.exp(-dt * 1.2));
+    const yaw = (Math.sin(t * 0.055) * 0.55 * orbit + Math.sin(t * 0.043) * 0.015) * wide * camMove;
+    const pitch = (Math.sin(t * 0.037) * 0.16 * orbit + Math.sin(t * 0.031) * 0.008) * camMove;
     camera.position.set(Math.sin(yaw) * Math.cos(pitch) * camDist, Math.sin(pitch) * camDist, Math.cos(yaw) * Math.cos(pitch) * camDist);
-    camera.lookAt(0, field.figure ? field.figure.cy * orbit : 0, 0);
+    camera.lookAt(0, field.figure ? field.figure.cy * orbit * camMove : 0, 0);
     updateGlitch(dt);
     field.update(dt, t);
     cloud.setPalette(field.uniforms.uBase.value, field.uniforms.uSecond.value);
     // sin nube en nombres, modo palabras y logos mostrados como imagen (que se lean limpios)
-    const quiet = show.state === 'artist' || (show.state === 'perform' && show.mode === 'palabras') || show.stage.visible;
+    const quiet = show.state === 'artist' || (show.state === 'perform' && show.mode === 'palabras') || show.stage.visible || show.titleStage.visible;
     const styleCloud = !field.figure ? 1 : currentStyle === 'ascii' ? 0.1 : currentStyle === 'marca' ? 0.5 : 1;
     cloud.update(dt, t, field.rms, { visible: pc && !quiet, intensity: (settings.nube ?? 1) * styleCloud });
     fx.render(t);

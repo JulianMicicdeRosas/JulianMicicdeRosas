@@ -659,3 +659,10 @@ body.hide-cursor * {
   white-space: nowrap;
   min-width: 0;
 }
+
+/* brillo de logos, título sólido e imágenes (panel C → Brillo) */
+#logostage,
+#overlay,
+#corner {
+  filter: brightness(var(--brillo-cosas, 1));
+}
