@@ -5,7 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { formatFromUrl, formatLabel } from './frame.js';
-import { artistKey, resolveAnim, RESERVED_KEYS } from './show.js';
+import { artistKey, resolveAnim, RESERVED_KEYS, PRESENTACIONES, presentationTitle } from './show.js';
 
 const SHORTCUTS = [
   ['C', 'abrir / cerrar este panel'],
@@ -56,7 +56,7 @@ export class ConfigPanel {
     const el = document.createElement('div');
     el.id = 'config';
     el.innerHTML = `
-      <header><h1>UMBRAL · operación</h1><span class="saved" data-saved></span><button data-act="close">Cerrar (C)</button></header>
+      <header><h1><span data-pres-title>UMBRAL</span> · operación</h1><span class="saved" data-saved></span><button data-act="close">Cerrar (C)</button></header>
       <section>
         <h2>Atajos</h2>
         <dl class="keys">${SHORTCUTS.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
@@ -212,6 +212,11 @@ export class ConfigPanel {
       </section>
       <section>
         <h2>Loop</h2>
+        <div class="row">
+          <span>Presentación:</span>
+          <select data-presentacion>${Object.entries(PRESENTACIONES).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('')}</select>
+        </div>
+        <p class="hint">Qué título se escribe en el loop después del logo de FLAT (y el de la ventana y este panel).</p>
         <p class="hint">Cada paso: texto (p. ej. el título del ciclo) o imagen (ruta dentro de <code>public/</code>, p. ej.
         <code>loop/flat.png</code>, o subir archivo). «letras» = la figura se forma con letras; «imagen» = se muestra tal cual;
         «título» = texto compuesto en tipografía.</p>
@@ -391,6 +396,8 @@ export class ConfigPanel {
     this._renderPresets(s, forma);
     this.$('[data-voz]').checked = s.inicio_por_voz !== false;
     this.$('[data-umbral-voz]').value = s.umbral_voz ?? 0.35;
+    this.$('[data-presentacion]').value = PRESENTACIONES[s.presentacion] ? s.presentacion : 'umbral';
+    this.$('[data-pres-title]').textContent = presentationTitle(s);
     this.$('[data-umbral-val]').textContent = Number(s.umbral_voz ?? 0.35).toFixed(2);
     const fmt = s.formato || '1822x737';
     const fsel = this.$('select[data-formato]');
@@ -955,6 +962,20 @@ export class ConfigPanel {
       const k = t.dataset.sopt;
       this._commit((s) => (s[k] = t.value), false);
       if (k === 'forma_grilla' || k === 'grilla_preset') this._renderPresets(this.getSettings());
+      return;
+    }
+    if (t.matches('[data-presentacion]')) {
+      if (ev.type !== 'change') return;
+      // cambia el título del loop: el paso de texto que tenía una presentación (o el primero de texto)
+      const titulos = Object.values(PRESENTACIONES).map((x) => x.toLowerCase());
+      const nuevo = PRESENTACIONES[t.value] || PRESENTACIONES.umbral;
+      this._commit((s) => {
+        s.presentacion = t.value;
+        const loop = s.loop || [];
+        let i = loop.findIndex((st) => st && st.tipo === 'texto' && titulos.includes(String(st.contenido || '').trim().toLowerCase()));
+        if (i < 0) i = loop.findIndex((st) => st && st.tipo === 'texto');
+        if (i >= 0) loop[i] = { ...loop[i], contenido: nuevo, letras: nuevo.toUpperCase() };
+      });
       return;
     }
     if (t.matches('[data-curaduria]')) {

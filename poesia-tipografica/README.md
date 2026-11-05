@@ -475,7 +475,7 @@ todo a `Documentos/Ciclo FLAT/logos/`:
 | `embajadas` | 5º | 8 s |
 | `media-partner` | 6º | 6 s (vacía = se salta) |
 
-El título «UMBRAL» se escribe en letras justo después del logo de FLAT (en uno a cuatro
+El título («UMBRAL» o «Ciclo de charlas y talleres FLAT», según la **Presentación** elegida en panel C → Loop) se escribe en letras justo después del logo de FLAT (en uno a cuatro
 renglones, según la proporción de la pantalla); el loop vuelve a empezar hasta que se aprieta la tecla de un artista. Cada carpeta se muestra en grilla
 adaptativa (o «de a uno»); entre logo y logo hay una transición de **glitch** (cortes, separación rojo/cian, bloques).
 Se muestran en orden alfabético: para forzar un orden, numerar los archivos (`01-flat.png`, `02-…`).

@@ -238,7 +238,7 @@ class SettingsStore:
     KEYS = ("device", "artists", "loop", "prompt_estetica", "avisos", "pointcloud", "profundidad", "nube", "orbita",
             "curaduria", "imagenes", "prompt_grilla", "polaridad", "director", "cadencia", "estilos", "glitch_ambiente", "ascii_filas",
             "marca", "muro", "formato", "canal", "canal2", "forma_grilla", "grilla_preset", "tratamiento",
-            "inicio_por_voz", "umbral_voz",
+            "inicio_por_voz", "umbral_voz", "presentacion",
             # marcas de migración: que una corrección automática se aplique una sola vez (y no pise lo elegido)
             "imagenes_v4", "imagenes_v5", "loop_grupos_v2", "loop_flat_v3", "loop_flat_v4", "loop_titulo_v7", "titulo_flat_v8", "titulo_v9", "titulo_v11", "formato_v9", "formato_v10", "imagenes_v7")
 

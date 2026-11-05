@@ -23,7 +23,7 @@ import { DebugPanel } from './debugPanel.js';
 import { localArtDirection, normalizeDirection } from './localDirector.js';
 import { sampleFigure } from './svgSampler.js';
 import { SHAPES } from './shapeLibrary.js';
-import { Show, DEFAULT_SETTINGS, TITULO } from './show.js';
+import { Show, DEFAULT_SETTINGS, TITULO, presentationTitle } from './show.js';
 import { ConfigPanel } from './configPanel.js';
 import { PointCloud } from './pointCloud.js';
 import { Overlay } from './overlay.js';
@@ -362,6 +362,7 @@ async function boot() {
   let brandFontLoaded = '';
   function applyLiveSettings() {
     setFormat(settings.formato || DEFAULT_FORMAT);
+    document.title = presentationTitle(settings); // la presentación elegida (UMBRAL o Charlas y talleres)
     const wl = wallLayout(); // paredes: la de frente y las esquinas
     field.setWalls(wl.walls, wl.front);
     field.wallMode = (settings.muro?.tipo || 'grilla') === 'grilla';
@@ -442,7 +443,6 @@ async function boot() {
 
   // Si no se está transcribiendo (OpenAI caído o reconectando, micrófono sin señal), en la pared no se escribe
   // nada: el aviso va al título de la ventana (se ve en la barra de tareas y en Alt+Tab) y al panel C.
-  const BASE_TITLE = document.title;
   let lastStatus = {};
   function warnOperator(st) {
     lastStatus = { ...lastStatus, ...st };
@@ -450,7 +450,8 @@ async function boot() {
     let warn = '';
     if (mic === 'error' || mic === 'unavailable') warn = 'micrófono sin señal';
     else if (oa && oa !== 'connected') warn = oa === 'reconnecting' || oa === 'connecting' ? 'transcripción reconectando' : 'sin transcripción';
-    document.title = warn ? `⚠ ${warn} · ${BASE_TITLE}` : BASE_TITLE;
+    const base = presentationTitle(settings);
+    document.title = warn ? `⚠ ${warn} · ${base}` : base;
   }
 
   // El estado del show nunca se escribe en la pared: sólo en el panel C.
