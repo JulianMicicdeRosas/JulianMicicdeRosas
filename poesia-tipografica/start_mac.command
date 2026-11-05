@@ -148,14 +148,22 @@ if [ -z "$MODO" ]; then
   read -r -t 10 -n 1 -p "¿Pantalla completa (P) o ventana (V)? [en 10 s: pantalla completa] " MODO || true
   echo
 fi
+# FLAT_FORMATO (p. ej. 1920x690) manda sobre el panel C; FLAT_VENTANA=x,y,ancho,alto es la ventana del modo V.
+SHOW_URL="http://127.0.0.1:5173/"
+[ -n "${FLAT_FORMATO:-}" ] && SHOW_URL="${SHOW_URL}?formato=${FLAT_FORMATO}"
+VENTANA="--window-size=1600,900"
+if [ -n "${FLAT_VENTANA:-}" ]; then
+  IFS=, read -r VX VY VW VH <<< "$FLAT_VENTANA"
+  VENTANA="--window-position=$VX,$VY --window-size=$VW,$VH"
+fi
 case "$MODO" in
-  v|V) CHROME_MODO="--app=http://127.0.0.1:5173/ --window-size=1600,900"; PERFIL=ventana; DESTINO="" ;;
-  *) CHROME_MODO="--kiosk"; PERFIL=kiosk; DESTINO="http://127.0.0.1:5173/" ;;
+  v|V) CHROME_MODO="--app=$SHOW_URL $VENTANA"; PERFIL=ventana; DESTINO="" ;;
+  *) CHROME_MODO="--kiosk"; PERFIL=kiosk; DESTINO="$SHOW_URL" ;;
 esac
 
 for _ in $(seq 1 40); do curl -s -m 1 http://127.0.0.1:5173/ >/dev/null && break; sleep 0.25; done
 
-URL="http://127.0.0.1:5173/"
+URL="$SHOW_URL"
 if [ -d "/Applications/Google Chrome.app" ]; then
   open -na "Google Chrome" --args $CHROME_MODO --no-first-run --disable-infobars \
     --disable-session-crashed-bubble --overscroll-history-navigation=0 --disable-pinch \

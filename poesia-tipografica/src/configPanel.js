@@ -253,6 +253,7 @@ export class ConfigPanel {
         <div class="row">
           <select data-formato>
             <option value="8400x690/3175,1775,3450">8400 × 690 · tres paredes: oeste 3175 · norte 1775 (frente) · este 3450</option>
+            <option value="1920x690">1920 × 690</option>
             <option value="1024x768">1024 × 768</option>
             <option value="1822x737">1822 × 737</option>
             <option value="13480x1080@1920">13480 × 1080 sin los primeros 1920 (se ven 11560 × 1080)</option>

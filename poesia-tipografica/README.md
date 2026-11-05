@@ -32,6 +32,8 @@ poesia-tipografica/
 ├── reproyectar.bat      Re-proyección de una sesión grabada (también reproyectar_mac.command)
 ├── start_instalacion_8400.bat / reproyectar_8400.bat     Tres paredes: 8400 × 690 (oeste · norte · este)
 ├── start_instalacion_13480.bat / reproyectar_13480.bat   Lo mismo en 13480 × 1080 sin los primeros 1920 px
+├── start_instalacion_1920x690.bat / reproyectar_1920x690.bat   Una sola pantalla de 1920 × 690
+│                         (Mac: start_mac_1920x690.command / reproyectar_mac_1920x690.command)
 ├── abrir_pantalla.bat   Abre Chrome / Edge (pregunta pantalla completa o ventana) con el formato del lanzador
 ├── public/loop/          Imágenes del loop (flat.png) y public/loop/sponsors/ (todos los logos)
 └── src/
@@ -174,13 +176,27 @@ Micrófono de condensador: activar **48V** en la placa. Ganancia: que la voz nor
 
 ## Formato de salida
 
-Panel C → **Formato de salida**: **8400 × 690 en tres paredes** (por defecto), 1024 × 768, 1822 × 737, 1920 × 1080, pantalla completa u
+Panel C → **Formato de salida**: **8400 × 690 en tres paredes** (por defecto), 1920 × 690, 1024 × 768, 1822 × 737, 1920 × 1080, pantalla completa u
 otro («ancho x alto»). Con formato fijo todo se compone para esa proporción y se centra en la ventana; lo que sobra
 queda negro. El muro de palabras, el título, los nombres y la transcripción quedan centrados en el cuadro.
 
 Con **«@N»** los primeros N px del ancho no se usan: `13480x1080@1920` es una salida de 13480 × 1080 donde el
 primer proyector (a la izquierda) está apagado. Todo se compone y se centra en los 11560 × 1080 restantes; la franja de
 la izquierda queda negra. Los paneles C y D también se abren dentro de la parte visible.
+
+### Versión 1920 × 690
+
+Una sola pantalla o proyector de 1920 × 690 (sin paredes: todo se compone en ese cuadro, con el título, los logos y el
+logo de FLAT de la tecla 0 en su lugar de siempre). Tres maneras:
+
+- **Windows:** doble clic en **`start_instalacion_1920x690.bat`** (y **`reproyectar_1920x690.bat`** para re-proyectar).
+- **Mac:** **`start_mac_1920x690.command`** (y **`reproyectar_mac_1920x690.command`**).
+- **Con cualquier lanzador:** panel C → Formato de salida → «1920 × 690» (queda guardado).
+
+Los lanzadores de 1920 × 690 fijan el formato (manda sobre el panel C) y preguntan **P** = pantalla completa (si la
+pantalla es más alta, el cuadro queda centrado con franjas negras arriba y abajo) o **V** = ventana de 1920 × 690 desde
+la esquina 0,0 (si va en otra pantalla, cambiar `FLAT_VENTANA=x,y,ancho,alto` en el lanzador). Los lanzadores de Mac
+ahora también entienden `FLAT_FORMATO` y `FLAT_VENTANA`, como los de Windows.
 
 ### Versión 13480 × 1080 (PC)
 
