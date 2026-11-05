@@ -523,6 +523,7 @@ async function boot() {
       }
       config.setRecInfo(m.grabacion, m.replay);
       noteRecording(m.grabacion);
+      if (!m.replay) socket.send({ type: 'cronograma' }); // qué hay hoy en el cronograma: propuesta de placas
       debug.setStatus({ backend: 'connected', ...(m.status || {}) });
       config.setMicStatus(m.status || {});
       config.setDefaultPrompt(m.default_prompt);
@@ -550,6 +551,7 @@ async function boot() {
       }
     },
     key_status: (m) => config.setKeyStatus(m),
+    cronograma: (m) => config.setCronograma(m),
     grabacion: (m) => {
       config.setRecInfo(m);
       noteRecording(m);
@@ -629,6 +631,9 @@ async function boot() {
     onSaveKey: (key) => socket.send({ type: 'set_api_key', key }),
     onOpenFolder: (que) => socket.send({ type: 'open_folder', que }),
     onSetRec: (activa, carpeta) => socket.send({ type: 'set_rec', activa, carpeta }),
+    onCronograma: (fecha) => socket.send({ type: 'cronograma', fecha }),
+    // páginas de flatfestival.org: las abre el backend en el navegador común (la ventana del show queda como está)
+    onOpenPage: (que, url) => (socket?.open ? socket.send({ type: 'open_page', que }) : window.open(url, '_blank', 'noopener')),
     onTestGrid: (text) => {
       socket.send({ type: 'save_settings', settings }); // primero lo último elegido en el panel
       if (!socket.send({ type: 'test_grid', text })) config.setGridTest({ ok: false, error: 'sin conexión con el backend' });

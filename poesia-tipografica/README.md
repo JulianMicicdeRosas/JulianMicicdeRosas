@@ -329,6 +329,25 @@ la figura de la biblioteca. En modo palabras (T) las ilustraciones también se c
 
 ## Placa del artista · tamaños en grilla · tecla 0
 
+**Cronograma del día (flatfestival.org)**: al arrancar, el programa se fija qué día es y lee el cronograma publicado
+en flatfestival.org (la misma pestaña «WEB · Programa (VERSIÓN FINAL)» de la planilla que lee la web; sólo lo que
+está publicado). Lo vuelve a mirar cada 30 min y, sin internet, usa la última copia (`Documentos/Ciclo FLAT/cronograma.csv`).
+En panel C → **Cronograma del día** aparece la propuesta de placas:
+
+- **Ciclo Umbral**: una placa por lector, en el orden del cronograma, y una para quien hace el desmontaje.
+- **Charlas y talleres**: una placa por actividad, con sus disertantes («Gabriela Bazán y Iván Vidal»), en orden de
+  horario. Lo que es en otra sala (Espacio de taller, teatros) viene sin tildar.
+- Al lado de cada nombre, la tecla que le tocaría (1 … 4, 6 … 9 y después letras); destildar uno corre las teclas.
+- **Usar estas placas** reemplaza la lista de Artistas, pone la presentación que corresponde (UMBRAL o Ciclo de charlas
+  y talleres FLAT) y cambia el título del loop. Si había otros nombres cargados, pide un segundo clic. Después se puede
+  corregir todo a mano en Artistas.
+- **Día**: para preparar otro día; **Hoy** vuelve a hoy. Abajo se listan las otras actividades de ese día.
+- **Ver acreditaciones ↗** abre www.flatfestival.org/acreditaciones en el navegador común de la compu (no en la pared).
+
+El nombre de la placa es el del cronograma sin lo que va entre paréntesis («Francisco Erian (Diadema)» → «Francisco
+Erian»). Si el cronograma cambia de lugar: `CRONOGRAMA_URL=` en `.env` (un CSV con columnas Fecha, Inicio, Actividad,
+Tipo, Artistas / participantes, Sede / sala, Ciclo y Publicar en la web).
+
 **Disertantes y sus teclas**: en panel C → Artistas se escribe el nombre de cada disertante y **la tecla que muestra
 su placa** (una letra o un número). Vacía = su número de orden (1 … 4, 6 … 9). No se pueden usar C, D, F, S, P, T, L,
 0 ni 5 (son del show): el panel lo avisa; si dos comparten tecla, se marca en rojo y sólo funciona la primera.

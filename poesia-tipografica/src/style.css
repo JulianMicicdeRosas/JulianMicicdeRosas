@@ -621,3 +621,41 @@ body.hide-cursor * {
   pointer-events: none;
   z-index: 1;
 }
+
+/* panel C · cronograma del día */
+#config .crono h3 {
+  font-size: 12px;
+  color: #cfcac0;
+  margin: 12px 0 4px;
+  font-weight: 400;
+}
+#config .crono .sug {
+  color: #9fc29a;
+}
+#config .crono-item {
+  cursor: pointer;
+  flex-wrap: nowrap;
+  align-items: baseline;
+}
+#config .crono-item.off {
+  opacity: 0.5;
+}
+#config .crono-item .k {
+  width: 1.6em;
+  text-align: center;
+  color: #e3a14b;
+  font-weight: 400;
+}
+#config .crono-item .n {
+  font: 16px/1.2 'Cormorant Garamond', Georgia, serif;
+  color: #f4f1ea;
+  white-space: nowrap;
+}
+#config .crono-item .d {
+  color: #7d7870;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}

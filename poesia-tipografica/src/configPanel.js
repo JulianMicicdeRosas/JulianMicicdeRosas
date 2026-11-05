@@ -45,6 +45,9 @@ export class ConfigPanel {
     this.onDevice = onDevice;
     this.onChannel = onChannel;
     this.onSetRec = onSetRec;
+    this.onCronograma = arguments[0].onCronograma;
+    this.onOpenPage = arguments[0].onOpenPage;
+    this.crono = null;
     this.onShowPrompt = onShowPrompt;
     this.requestDevices = requestDevices;
     this.defaultPrompt = defaultPrompt || '';
@@ -215,6 +218,20 @@ export class ConfigPanel {
         grabación nueva ahí, sin cortar el show. ~170 MB por hora de audio.</p>
         <p class="hint">Habla al micrófono: la barra debe moverse. Verde = señal, rojo = saturación. El micrófono lo abre el
         backend (server.py); si aparece «backend desconectado», arráncalo.</p>
+      </section>
+      <section>
+        <h2>Cronograma del día · flatfestival.org</h2>
+        <p class="hint">El programa se fija qué día es y qué hay en el cronograma publicado en flatfestival.org (al
+        arrancar y cada 30 min; sin internet usa la última copia). Propone una placa por lector de <b>Umbral</b> (y el
+        desmontaje) o una por <b>charla / taller</b>. Lo que es en otra sala va sin tildar. «Usar» reemplaza la lista de
+        Artistas y elige la presentación; después se puede corregir a mano.</p>
+        <div class="row">
+          <span>Día:</span><input type="date" data-crono-fecha>
+          <button data-act="crono-hoy">Hoy</button><button data-act="crono-refresh">Volver a leer</button>
+          <button data-act="acreditaciones" title="www.flatfestival.org/acreditaciones">Ver acreditaciones ↗</button>
+        </div>
+        <p class="hint" data-crono-info>Leyendo el cronograma…</p>
+        <div data-crono></div>
       </section>
       <section>
         <h2>Artistas</h2>
@@ -696,6 +713,84 @@ export class ConfigPanel {
     el.className = '';
   }
 
+  /** Propuesta de placas del día según el cronograma publicado (la manda el backend). */
+  setCronograma(c) {
+    if (!c) return;
+    this.crono = { ...c, umbral: (c.umbral || []).map((x) => ({ ...x })), charlas: (c.charlas || []).map((x) => ({ ...x })) };
+    this._cronoConfirm = '';
+    const f = this.$('[data-crono-fecha]');
+    if (f && document.activeElement !== f && c.fecha) f.value = c.fecha;
+    this._renderCrono();
+  }
+
+  _cronoKeys(list) {
+    // teclas en orden: 1 … 4, 6 … 9 y después letras que no son del show
+    const keys = [...'12346789abeghijkmnoqruvwxyz'].filter((k) => !RESERVED_KEYS.has(k));
+    let n = 0;
+    return list.map((x) => (x.usar ? keys[n++] || '' : ''));
+  }
+
+  _renderCrono() {
+    const c = this.crono;
+    const info = this.$('[data-crono-info]'), box = this.$('[data-crono]');
+    if (!c || !info || !box) return;
+    const err = c.error ? `No pude leer el cronograma: ${c.error}` : '';
+    info.textContent = err || `${c.dia} · ${c.fuente || ''} · leído a las ${c.actualizado || ''}${c.aviso ? ` · ${c.aviso}` : ''}`;
+    info.classList.toggle('warn', !!err);
+    const pres = this.getSettings().presentacion || 'umbral';
+    const grupos = [
+      ['umbral', `Ciclo Umbral — ${PRESENTACIONES.umbral}`],
+      ['charlas', `Charlas y talleres — ${PRESENTACIONES.charlas}`],
+    ].sort((a, b) => (b[0] === pres) - (a[0] === pres));
+    let html = grupos
+      .filter(([g]) => c[g]?.length)
+      .map(([g, titulo]) => {
+        const keys = this._cronoKeys(c[g]);
+        const n = keys.filter(Boolean).length;
+        const conf = this._cronoConfirm === g;
+        return `<div class="crono" data-g="${g}">
+          <h3>${esc(titulo)}${c.sugerida === g ? ' <span class="sug">· sugerida hoy</span>' : ''}</h3>
+          ${c[g].map((x, i) => `<label class="item crono-item${x.usar ? '' : ' off'}">
+            <input type="checkbox" data-crono-i="${i}"${x.usar ? ' checked' : ''}>
+            <b class="k">${esc((keys[i] || '·').toUpperCase())}</b>
+            <span class="n">${esc(x.nombre)}</span><span class="d">${esc(x.detalle)}</span></label>`).join('')}
+          <button data-act="crono-usar" data-g="${g}"${n ? '' : ' disabled'}>${conf ? `¿Seguro? Reemplaza los artistas cargados — apretá de nuevo` : `Usar estas ${n} placas (presentación ${esc(PRESENTACIONES[g])})`}</button>
+        </div>`;
+      })
+      .join('');
+    if (!html && !err) html = `<p class="hint">Ese día no hay Umbral ni charlas o talleres con nombres en el cronograma.</p>`;
+    if (c.otras?.length) html += `<p class="hint">También ese día: ${c.otras.map(esc).join(' · ')}</p>`;
+    box.innerHTML = html;
+  }
+
+  _useCrono(g) {
+    const c = this.crono;
+    const list = c?.[g] || [];
+    const keys = this._cronoKeys(list);
+    const picked = list.map((x, i) => ({ name: x.nombre, tecla: keys[i] })).filter((a) => a.tecla);
+    if (!picked.length) return;
+    // si ya hay otros nombres cargados (no los de ejemplo), pedir un segundo clic
+    const cur = (this.getSettings().artists || []).map((a) => a?.name?.trim()).filter((n) => n && !/^Nombre del artista \d+$/.test(n));
+    const same = cur.length === picked.length && cur.every((n, i) => n === picked[i].name);
+    if (cur.length && !same && this._cronoConfirm !== g) {
+      this._cronoConfirm = g;
+      this._renderCrono();
+      return;
+    }
+    this._cronoConfirm = '';
+    const titulos = Object.values(PRESENTACIONES).map((x) => x.toLowerCase());
+    const nuevo = PRESENTACIONES[g];
+    this._commit((s) => {
+      s.artists = picked;
+      s.presentacion = g;
+      const loop = s.loop || [];
+      const i = loop.findIndex((st) => st && st.tipo === 'texto' && titulos.includes(String(st.contenido || '').trim().toLowerCase()));
+      if (i >= 0) loop[i] = { ...loop[i], contenido: nuevo, letras: nuevo.toUpperCase() };
+    });
+    this._keyMsg = '';
+    this._renderCrono();
+  }
+
   /** Dónde se está grabando la sesión (audio + eventos) y cuánto lleva; o la sesión que se re-proyecta. */
   setRecInfo(info, replay = null) {
     if (replay) this.recText = `RE-PROYECTANDO ${replay.carpeta} (${Math.round(replay.duracion / 60)} min). Nada se graba.`;
@@ -818,6 +913,13 @@ export class ConfigPanel {
     else if (act === 'swatch') this._commit((s) => (s.marca = { ...(s.marca || {}), acento: ev.target.dataset.color.toUpperCase() }));
     else if (act === 'open-logos') this.onOpenFolder?.('logos');
     else if (act === 'open-rec') this.onOpenFolder?.('grabaciones');
+    else if (act === 'crono-hoy') {
+      const f = this.$('[data-crono-fecha]');
+      if (f) f.value = '';
+      this.onCronograma?.('');
+    } else if (act === 'crono-refresh') this.onCronograma?.(this.$('[data-crono-fecha]')?.value || '');
+    else if (act === 'acreditaciones') this.onOpenPage?.('acreditaciones', 'https://www.flatfestival.org/acreditaciones');
+    else if (act === 'crono-usar') this._useCrono(ev.target.closest('[data-g]').dataset.g);
     else if (act === 'rec-dir') this.onSetRec?.(this.$('[data-rec-on]').checked, this.$('[data-rec-dir]').value.trim());
     else if (act === 'reset-prompt-grilla') this._commit((s) => (s.prompt_grilla = ''));
     else if (act === 'test-grid') {
@@ -997,6 +1099,21 @@ export class ConfigPanel {
       return;
     }
     if (t.matches('[data-rec-dir]')) return; // se aplica con «Usar esta carpeta»
+    if (t.matches('[data-crono-fecha]')) {
+      if (ev.type === 'change' && t.value) {
+        this.$('[data-crono-info]').textContent = 'Leyendo el cronograma…';
+        this.onCronograma?.(t.value);
+      }
+      return;
+    }
+    if (t.matches('[data-crono-i]')) {
+      if (ev.type !== 'change') return;
+      const g = t.closest('[data-g]').dataset.g;
+      this.crono[g][+t.dataset.cronoI].usar = t.checked;
+      this._cronoConfirm = '';
+      this._renderCrono();
+      return;
+    }
     if (t.matches('[data-presentacion]')) {
       if (ev.type !== 'change') return;
       // cambia el título del loop: el paso de texto que tenía una presentación (o el primero de texto)

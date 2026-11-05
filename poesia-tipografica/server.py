@@ -21,6 +21,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
+import csv
+import datetime as dt
+import io
 import json
 import logging
 import math
@@ -467,7 +470,7 @@ def check_writable(folder: str) -> str | None:
     except OSError as exc:
         return str(exc)
 # mensajes al frontend que no se guardan: el análisis del audio se recalcula desde audio.wav al re-proyectar
-_NO_RECORD = {"audio_reactive", "inputs", "pong", "hello", "devices", "logos", "grabacion"}
+_NO_RECORD = {"audio_reactive", "inputs", "pong", "hello", "devices", "logos", "grabacion", "cronograma"}
 
 
 def _wav_header(sr: int, n_samples: int) -> bytes:
@@ -2528,6 +2531,139 @@ class ArtDirector:
 #  Main
 # ════════════════════════════════════════════════════════════════════════════
 
+# ── Cronograma de flatfestival.org: qué hay hoy y quién va en cada placa ─────────────────────────────────────
+# La web lee la pestaña «WEB · Programa (VERSIÓN FINAL)» de la planilla del cronograma; acá se lee la misma, así
+# lo que propone el panel C es exactamente lo que está publicado. Sin internet se usa la última copia bajada.
+CRONOGRAMA_URL = ("https://docs.google.com/spreadsheets/d/1QrCF2wisJPhQV4EoII-2BdE9MAQDPLGtAa-BV3DkIPw"
+                  "/export?format=csv&gid=2044191660")
+FLAT_PAGES = {"acreditaciones": "https://www.flatfestival.org/acreditaciones"}  # botones del panel C
+CRONOGRAMA_SALA = "sala inmersiva"  # donde está la instalación: lo de otras salas se propone sin tildar
+_CHARLA_TIPOS = ("charla", "taller", "masterclass", "capacitaci", "seminario", "conversatorio")
+_DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+
+
+def _cronograma_cache() -> str:
+    return os.path.join(USER_DIR, "cronograma.csv")
+
+
+def fetch_cronograma() -> tuple[str, str, str | None]:
+    """(csv, de dónde salió, error). Baja el cronograma publicado; si no puede, usa la última copia."""
+    url = os.environ.get("CRONOGRAMA_URL", "").strip() or CRONOGRAMA_URL
+    try:
+        r = httpx.get(url, timeout=15, follow_redirects=True)
+        r.raise_for_status()
+        text = r.content.decode("utf-8-sig", errors="replace")
+        if not parse_cronograma(text):
+            raise ValueError("la planilla no tiene la tabla del programa (¿cambió la pestaña?)")
+        try:
+            ensure_user_dir()
+            with open(_cronograma_cache(), "w", encoding="utf-8") as f:
+                f.write(text)
+        except OSError:
+            pass
+        return text, "flatfestival.org (en línea)", None
+    except Exception as exc:  # noqa: BLE001
+        err = str(exc) or exc.__class__.__name__
+        try:
+            with open(_cronograma_cache(), encoding="utf-8") as f:
+                text = f.read()
+            when = time.strftime("%d/%m %H:%M", time.localtime(os.path.getmtime(_cronograma_cache())))
+            return text, f"copia guardada del {when} (sin conexión)", err
+        except OSError:
+            return "", "", err
+
+
+def parse_cronograma(text: str) -> list[dict[str, Any]]:
+    """Filas publicadas del programa: fecha, horario, tipo, actividad, participantes, sala y ciclo."""
+    rows = list(csv.reader(io.StringIO(text)))
+    head = next((i for i, r in enumerate(rows[:30])
+                 if {"fecha", "actividad"} <= {c.strip().lower() for c in r}), -1)
+    if head < 0:
+        return []
+    names = [c.strip().lower() for c in rows[head]]
+
+    def col(r: list[str], *prefixes: str) -> str:
+        for i, n in enumerate(names):
+            if any(n.startswith(p) for p in prefixes) and i < len(r):
+                return r[i].strip()
+        return ""
+
+    out = []
+    for r in rows[head + 1:]:
+        try:
+            fecha = dt.datetime.strptime(col(r, "fecha"), "%d/%m/%Y").date()
+        except ValueError:
+            continue
+        if col(r, "publicar").lower().startswith("no"):
+            continue  # oculta en la web
+        out.append({"id": col(r, "id"), "fecha": fecha.isoformat(), "inicio": col(r, "inicio"), "fin": col(r, "fin"),
+                    "tipo": col(r, "tipo"), "actividad": col(r, "actividad"),
+                    "participantes": col(r, "artistas", "participantes"), "sala": col(r, "sede", "sala"),
+                    "ciclo": col(r, "ciclo")})
+    return out
+
+
+def _people(s: str) -> list[str]:
+    """«A, B y C» → [A, B, C], sin repetidos."""
+    out: list[str] = []
+    s = re.sub(r"\s*\([^)]*\)", "", s)  # «Francisco Erian (Diadema)» → «Francisco Erian»: la placa lleva el nombre
+    for p in re.split(r",|\s+y\s+(?=[A-ZÁÉÍÓÚÑ])", s):
+        p = p.strip(" .")
+        if p and p[0].isupper() and p.lower() not in [o.lower() for o in out]:  # «equipo docente…» no es un nombre
+            out.append(p)
+    return out
+
+
+def _join_people(ps: list[str]) -> str:
+    return ps[0] if len(ps) == 1 else ", ".join(ps[:-1]) + " y " + ps[-1] if ps else ""
+
+
+def propose_placas(events: list[dict[str, Any]], day: dt.date) -> dict[str, Any]:
+    """Propuesta de placas para un día: Umbral (una por lector, y el desmontaje) y charlas/talleres (una por
+    actividad). Lo que no es de la sala de la instalación va sin tildar."""
+    today = sorted((e for e in events if e["fecha"] == day.isoformat()), key=lambda e: e["inicio"] or "99")
+    umbral: list[dict[str, Any]] = []
+    charlas: list[dict[str, Any]] = []
+    otras: list[str] = []
+    for e in today:
+        hora = e["inicio"] + (f"–{e['fin']}" if e["fin"] else "")
+        en_sala = CRONOGRAMA_SALA in e["sala"].lower()
+        if "umbral" in (e["ciclo"] + " " + e["actividad"]).lower():
+            lectores, _, resto = e["participantes"].partition("·")
+            nombres = _people(lectores)
+            for n in nombres:
+                umbral.append({"nombre": n, "detalle": f"{hora} · lectura", "usar": True})
+            m = re.search(r"desmontaje\s*:\s*(.+)", resto, re.I)
+            for n in _people(m.group(1)) if m else []:
+                if n.lower() not in [x.lower() for x in nombres]:
+                    umbral.append({"nombre": n, "detalle": f"{hora} · desmontaje", "usar": True})
+            if not nombres:
+                otras.append(f"{hora} {e['actividad']} (todavía sin nombres en el cronograma)")
+        elif any(t in (e["tipo"] + " " + e["actividad"]).lower() for t in _CHARLA_TIPOS) or "charla" in e["ciclo"].lower():
+            ps = _people(e["participantes"])
+            if not ps:
+                otras.append(f"{hora} {e['actividad']} (sin disertantes cargados)")
+                continue
+            titulo = re.sub(r"^(charla|taller|masterclass|seminario|conversatorio)\s*:\s*", "", e["actividad"], flags=re.I)
+            charlas.append({"nombre": _join_people(ps), "detalle": f"{hora} · {e['tipo'].lower()} · {titulo} · {e['sala']}",
+                            "usar": en_sala})
+        else:
+            otras.append(f"{hora} {e['actividad']}")
+    sugerida = "umbral" if umbral and not any(c["usar"] for c in charlas) else "charlas" if charlas else ""
+    return {"fecha": day.isoformat(), "dia": f"{_DIAS[day.weekday()]} {day.strftime('%d/%m/%Y')}",
+            "umbral": umbral, "charlas": charlas, "otras": otras, "sugerida": sugerida}
+
+
+def cronograma_for(day: dt.date | None = None) -> dict[str, Any]:
+    """Baja el cronograma y arma la propuesta del día (hoy si no se pide otro)."""
+    text, fuente, err = fetch_cronograma()
+    events = parse_cronograma(text) if text else []
+    out = propose_placas(events, day or dt.date.today())
+    out.update(fuente=fuente, actualizado=time.strftime("%H:%M"), error=err if not events else None,
+               aviso=err if events and err else None, total=len(events))
+    return out
+
+
 async def main_async(args: argparse.Namespace) -> None:
     cfg = Config.from_env()
     loop = asyncio.get_running_loop()
@@ -2704,6 +2840,18 @@ async def main_async(args: argparse.Namespace) -> None:
             if transcriber is not None:
                 transcriber.set_key(key)
             hub.emit("key_status", ok=True, **key_status())
+        elif kind == "cronograma":  # panel C: propuesta de placas según el cronograma de flatfestival.org
+            try:
+                day = dt.date.fromisoformat(str(msg.get("fecha") or "")) if msg.get("fecha") else None
+            except ValueError:
+                day = None
+            await hub.reply(ws, "cronograma", **(await asyncio.to_thread(cronograma_for, day)))
+        elif kind == "open_page":  # panel C: páginas de flatfestival.org en el navegador del operador (no en la pared)
+            url = FLAT_PAGES.get(str(msg.get("que") or ""))
+            if url:
+                import webbrowser
+                ok = await asyncio.to_thread(webbrowser.open, url, 2)
+                log.info("Abro %s en el navegador%s", url, "" if ok else " (no pude: abrila a mano)")
         elif kind == "open_folder":
             que = msg.get("que")
             target = os.path.join(USER_DIR, "logos") if que == "logos" else RECORDINGS_DIR if que == "grabaciones" else USER_DIR
@@ -2764,7 +2912,27 @@ async def main_async(args: argparse.Namespace) -> None:
             if n % 5 == 0:
                 hub.emit("grabacion", **rec_info())
 
+    async def cronograma_tick() -> None:
+        """Al arrancar se fija qué día es y qué hay en el cronograma; se vuelve a mirar cada 30 min."""
+        last = ""
+        while True:
+            try:
+                c = await asyncio.to_thread(cronograma_for)
+                hub.emit("cronograma", **c)
+                resumen = (f"Cronograma ({c['dia']}): " + (f"{len(c['umbral'])} placas de Umbral" if c["umbral"] else "")
+                           + (" · " if c["umbral"] and c["charlas"] else "")
+                           + (f"{len(c['charlas'])} charlas/talleres" if c["charlas"] else "")
+                           + ("" if c["umbral"] or c["charlas"] else "nada con placas hoy")
+                           + (f" · {c['error'] or c['aviso']}" if c.get("error") or c.get("aviso") else ""))
+                if resumen != last:
+                    log.info("%s — propuesta en el panel C", resumen)
+                    last = resumen
+            except Exception as exc:  # noqa: BLE001
+                log.warning("No pude leer el cronograma: %s", exc)
+            await asyncio.sleep(1800)
+
     tasks.append(recorder_tick())
+    tasks.append(cronograma_tick())
     if audio is not None:
         tasks.append(audio.run())
     else:
