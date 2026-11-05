@@ -1,0 +1,112 @@
+<template>
+  <style>
+    #s10 { position: absolute; inset: 0; overflow: hidden; background: radial-gradient(ellipse at 50% 45%, #5a1a0c, #140504 75%); }
+    #s10 .cam { position: absolute; inset: 0; transform-origin: 50% 50%; }
+    #s10 .tv { position: absolute; background: linear-gradient(160deg, #2b231d, #0d0a08);
+      border-radius: 9% / 12%; padding: 9px; box-shadow: 0 8px 22px rgba(0,0,0,.65); }
+    #s10 .tv.flat { background: none; padding: 0; box-shadow: none; border-radius: 0; }
+    #s10 .scr { position: relative; width: 100%; height: 100%; overflow: hidden;
+      border-radius: 14% / 18%; background: #ccc; }
+    #s10 .flat .scr { border-radius: 0; }
+    #s10 .scr img, #s10 .scr .fill { position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; }
+    #s10 .scr .alt { opacity: 0; }
+    #s10 .scr::after { content: ""; position: absolute; inset: 0; border-radius: inherit;
+      background: repeating-linear-gradient(0deg, rgba(0,0,0,.13) 0 2px, transparent 2px 5px);
+      box-shadow: inset 0 0 38px rgba(0,0,0,.55), inset 0 0 6px rgba(255,255,255,.25); }
+    #s10 .flat .scr::after { box-shadow: none; background: none; }
+    #s10 .knobs { position: absolute; right: -2px; top: 10%; width: 22%; height: 80%;
+      background: linear-gradient(#cfc8ba, #8f887c); border-radius: 6px; }
+    #s10 .bar { position: absolute; background: #0b0807; }
+    #s10 .redbar { position: absolute; background: #cf3a1f; }
+    #s10 .photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    #s10 .slice { position: absolute; left: 0; width: 100%; overflow: hidden; }
+    #s10 .slice img { position: absolute; left: 0; width: 1080px; height: 1920px; object-fit: cover; }
+    #s10 .px { position: absolute; background: #e9e1d2; }
+    #s10 .scan { position: absolute; inset: 0; pointer-events: none;
+      background: repeating-linear-gradient(0deg, rgba(0,0,0,.10) 0 2px, transparent 2px 4px); }
+  </style>
+  <div id="s10" data-composition-id="s10" data-width="1080" data-height="1920" data-layout-allow-overflow data-layout-allow-overlap>
+    <div id="s10-cam" class="cam">
+      <div id="s10-tv1" class="tv flat" style="left:160px;top:160px;width:760px;height:500px"><div class="scr"><img class="" src="assets/eye-green2.jpg" alt="" /></div></div>
+      <div id="s10-tv2" class="tv" style="left:140px;top:819px;width:123px;height:88px"><div class="scr"><img class="" src="assets/tv-apple90.jpg" alt="" /></div></div>
+      <div id="s10-tv3" class="tv" style="left:383px;top:1737px;width:128px;height:92px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div></div></div>
+      <div id="s10-tv4" class="tv" style="left:919px;top:804px;width:212px;height:152px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div></div></div>
+      <div id="s10-tv5" class="tv" style="left:218px;top:1404px;width:187px;height:134px"><div class="scr"><img class="" src="assets/red-eye.jpg" alt="" /></div></div>
+      <div id="s10-tv6" class="tv" style="left:198px;top:1407px;width:181px;height:130px"><div class="scr"><img class="" src="assets/red-eye.jpg" alt="" /></div></div>
+      <div id="s10-tv7" class="tv" style="left:692px;top:1018px;width:197px;height:141px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div></div></div>
+      <div id="s10-tv8" class="tv" style="left:257px;top:1518px;width:231px;height:166px"><div class="scr"><img class="" src="assets/red-eye.jpg" alt="" /></div></div>
+      <div id="s10-tv9" class="tv" style="left:596px;top:727px;width:177px;height:127px"><div class="scr"><img class="" src="assets/red-eye.jpg" alt="" /></div></div>
+      <div id="s10-tv10" class="tv" style="left:328px;top:1599px;width:138px;height:99px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div></div></div>
+      <div id="s10-tv11" class="tv" style="left:18px;top:1547px;width:158px;height:113px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div></div></div>
+      <div id="s10-tv12" class="tv" style="left:-110px;top:1310px;width:168px;height:120px"><div class="scr"><img class="" src="assets/apple-red.jpg" alt="" /></div></div>
+      <div id="s10-tv13" class="tv" style="left:422px;top:1402px;width:253px;height:182px"><div class="scr"><img class="" src="assets/tv-apple90.jpg" alt="" /></div></div>
+      <div id="s10-tv14" class="tv" style="left:304px;top:1616px;width:164px;height:118px"><div class="scr"><img class="" src="assets/tv-apple90.jpg" alt="" /></div></div>
+      <div id="s10-tv15" class="tv" style="left:293px;top:1137px;width:131px;height:94px"><div class="scr"><img class="" src="assets/apple-red.jpg" alt="" /></div></div>
+      <div id="s10-tv16" class="tv" style="left:433px;top:1507px;width:160px;height:115px"><div class="scr"><img class="" src="assets/red-eye.jpg" alt="" /></div></div>
+      <div id="s10-tv17" class="tv" style="left:840px;top:594px;width:189px;height:136px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div></div></div>
+      <div id="s10-tv18" class="tv" style="left:669px;top:1551px;width:222px;height:159px"><div class="scr"><img class="" src="assets/tv-apple90.jpg" alt="" /></div></div>
+      <div id="s10-tv19" class="tv" style="left:70px;top:893px;width:162px;height:116px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div></div></div>
+      <div id="s10-tv20" class="tv" style="left:299px;top:1179px;width:120px;height:86px"><div class="scr"><img class="" src="assets/red-eye.jpg" alt="" /></div></div>
+      <div id="s10-tv21" class="tv" style="left:622px;top:1172px;width:236px;height:169px"><div class="scr"><img class="" src="assets/red-eye.jpg" alt="" /></div></div>
+      <div id="s10-tv22" class="tv" style="left:526px;top:238px;width:207px;height:149px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #3a3430 0%, #141110 100%)"></div></div></div>
+      <div id="s10-tv23" class="tv" style="left:91px;top:1104px;width:253px;height:182px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div></div></div>
+      <div id="s10-tv24" class="tv" style="left:64px;top:554px;width:242px;height:174px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div></div></div>
+      <div id="s10-tv25" class="tv" style="left:-67px;top:1303px;width:194px;height:139px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div></div></div>
+      <div id="s10-tv26" class="tv" style="left:506px;top:216px;width:193px;height:138px"><div class="scr"><img class="" src="assets/tv-apple90.jpg" alt="" /></div></div>
+      <div id="s10-tv27" class="tv" style="left:-24px;top:583px;width:169px;height:121px"><div class="scr"><img class="" src="assets/apple-red.jpg" alt="" /></div></div>
+      <div id="s10-tv28" class="tv" style="left:-104px;top:1369px;width:198px;height:142px"><div class="scr"><img class="" src="assets/red-eye.jpg" alt="" /></div></div>
+      <div id="s10-tv29" class="tv" style="left:655px;top:408px;width:234px;height:168px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #3a3430 0%, #141110 100%)"></div></div></div>
+      <div id="s10-tv30" class="tv" style="left:280px;top:849px;width:121px;height:87px"><div class="scr"><img class="" src="assets/tv-apple90.jpg" alt="" /></div></div>
+      <div id="s10-tv31" class="tv" style="left:59px;top:1501px;width:171px;height:123px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div></div></div>
+      <div id="s10-tv32" class="tv" style="left:370px;top:1040px;width:340px;height:230px"><div class="scr"><img class="" src="assets/tv-apple90.jpg" alt="" /></div></div>
+    </div>
+    <div class="scan"></div>
+  </div>
+  <script>
+    (() => {
+      const tl = gsap.timeline({ paused: true });
+      tl.fromTo("#s10-tv2", { x: 0, y: 0, rotation: -0.4 }, { x: -118, y: -76, rotation: -0.2, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv3", { x: 0, y: 0, rotation: -0.1 }, { x: -33, y: 246, rotation: -11.9, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv4", { x: 0, y: 0, rotation: -1.0 }, { x: 170, y: -70, rotation: -10.1, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv5", { x: 0, y: 0, rotation: -3.9 }, { x: -80, y: 137, rotation: -5.5, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv6", { x: 0, y: 0, rotation: 1.4 }, { x: -88, y: 137, rotation: -12.8, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv7", { x: 0, y: 0, rotation: -1.6 }, { x: 88, y: 3, rotation: 11.1, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv8", { x: 0, y: 0, rotation: -5.2 }, { x: -59, y: 182, rotation: 2.4, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv9", { x: 0, y: 0, rotation: -3.1 }, { x: 51, y: -101, rotation: -13.1, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv10", { x: 0, y: 0, rotation: 5.1 }, { x: -50, y: 199, rotation: -11.7, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv11", { x: 0, y: 0, rotation: 5.6 }, { x: -155, y: 183, rotation: 7.6, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv12", { x: 0, y: 0, rotation: -0.8 }, { x: -198, y: 102, rotation: -2.4, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv13", { x: 0, y: 0, rotation: 4.4 }, { x: 3, y: 145, rotation: -6.5, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv14", { x: 0, y: 0, rotation: -0.2 }, { x: -54, y: 208, rotation: -4.3, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv15", { x: 0, y: 0, rotation: 4.8 }, { x: -64, y: 36, rotation: -7.2, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv16", { x: 0, y: 0, rotation: 5.0 }, { x: -9, y: 170, rotation: -0.1, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv17", { x: 0, y: 0, rotation: -0.2 }, { x: 138, y: -146, rotation: -0.0, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv18", { x: 0, y: 0, rotation: -1.0 }, { x: 84, y: 193, rotation: 2.4, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv19", { x: 0, y: 0, rotation: -0.7 }, { x: -136, y: -45, rotation: 13.1, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv20", { x: 0, y: 0, rotation: 0.4 }, { x: -63, y: 50, rotation: -12.6, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv21", { x: 0, y: 0, rotation: -4.3 }, { x: 70, y: 62, rotation: 10.1, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv22", { x: 0, y: 0, rotation: -2.9 }, { x: 31, y: -269, rotation: 8.1, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv23", { x: 0, y: 0, rotation: -4.2 }, { x: -113, y: 40, rotation: -7.4, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv24", { x: 0, y: 0, rotation: 3.7 }, { x: -124, y: -154, rotation: 12.9, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv25", { x: 0, y: 0, rotation: -5.4 }, { x: -178, y: 102, rotation: 11.6, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv26", { x: 0, y: 0, rotation: 2.0 }, { x: 22, y: -278, rotation: -10.0, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv27", { x: 0, y: 0, rotation: -3.8 }, { x: -168, y: -153, rotation: 2.6, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv28", { x: 0, y: 0, rotation: 4.4 }, { x: -191, y: 126, rotation: 7.0, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv29", { x: 0, y: 0, rotation: 2.9 }, { x: 81, y: -206, rotation: -8.2, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv30", { x: 0, y: 0, rotation: -0.9 }, { x: -70, y: -66, rotation: -2.6, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-tv31", { x: 0, y: 0, rotation: 3.3 }, { x: -138, y: 169, rotation: 8.3, duration: 1.033, ease: "none" }, 0);
+      tl.fromTo("#s10-cam", { scale: 1.0, x: 0, y: 0 }, { scale: 1.12, x: 0, y: 0, duration: 1.033, ease: "none" }, 0);
+      // stop-motion jitter: tiles twitch a few px on 12 fps steps (seeded, so every render matches)
+      let seed = 1678828;
+      const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) - 0.5;
+      document.querySelectorAll("#s10 .jit").forEach((el) => {
+        for (let k = 0; k * (1 / 12) < 1.033; k++) {
+          tl.set(el, { x: rnd() * 7, y: rnd() * 7 }, k / 12);
+        }
+      });
+      tl.set({}, {}, 1.032);
+      window.__timelines["s10"] = tl;
+    })();
+  </script>
+</template>

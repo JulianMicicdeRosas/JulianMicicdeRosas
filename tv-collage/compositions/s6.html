@@ -1,0 +1,215 @@
+<template>
+  <style>
+    #s6 { position: absolute; inset: 0; overflow: hidden; background: #090706; }
+    #s6 .cam { position: absolute; inset: 0; transform-origin: 50% 50%; }
+    #s6 .tv { position: absolute; background: linear-gradient(160deg, #2b231d, #0d0a08);
+      border-radius: 9% / 12%; padding: 5px; box-shadow: 0 8px 22px rgba(0,0,0,.65); }
+    #s6 .tv.flat { background: none; padding: 0; box-shadow: none; border-radius: 0; }
+    #s6 .scr { position: relative; width: 100%; height: 100%; overflow: hidden;
+      border-radius: 14% / 18%; background: #ccc; }
+    #s6 .flat .scr { border-radius: 0; }
+    #s6 .scr img, #s6 .scr .fill { position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; }
+    #s6 .scr .alt { opacity: 0; }
+    #s6 .scr::after { content: ""; position: absolute; inset: 0; border-radius: inherit;
+      background: repeating-linear-gradient(0deg, rgba(0,0,0,.13) 0 2px, transparent 2px 5px);
+      box-shadow: inset 0 0 38px rgba(0,0,0,.55), inset 0 0 6px rgba(255,255,255,.25); }
+    #s6 .flat .scr::after { box-shadow: none; background: none; }
+    #s6 .knobs { position: absolute; right: -2px; top: 10%; width: 22%; height: 80%;
+      background: linear-gradient(#cfc8ba, #8f887c); border-radius: 6px; }
+    #s6 .bar { position: absolute; background: #0b0807; }
+    #s6 .redbar { position: absolute; background: #cf3a1f; }
+    #s6 .photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    #s6 .slice { position: absolute; left: 0; width: 100%; overflow: hidden; }
+    #s6 .slice img { position: absolute; left: 0; width: 1080px; height: 1920px; object-fit: cover; }
+    #s6 .px { position: absolute; background: #e9e1d2; }
+    #s6 .scan { position: absolute; inset: 0; pointer-events: none;
+      background: repeating-linear-gradient(0deg, rgba(0,0,0,.10) 0 2px, transparent 2px 4px); }
+  </style>
+  <div id="s6" data-composition-id="s6" data-width="1080" data-height="1920" data-layout-allow-overflow data-layout-allow-overlap>
+    <div id="s6-cam" class="cam">
+      <div id="s6-tv1" class="tv jit" style="left:-19px;top:-32px;width:91px;height:66px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv2" class="tv jit" style="left:84px;top:-28px;width:79px;height:66px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #3a3430 0%, #141110 100%)"></div></div></div>
+      <div id="s6-tv3" class="tv" style="left:168px;top:-25px;width:101px;height:66px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv4" class="tv" style="left:281px;top:-34px;width:77px;height:66px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv5" class="tv" style="left:362px;top:-33px;width:101px;height:66px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #3a3430 0%, #141110 100%)"></div></div></div>
+      <div id="s6-tv6" class="tv jit" style="left:476px;top:-35px;width:93px;height:66px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv7" class="tv jit" style="left:578px;top:-30px;width:111px;height:66px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv8" class="tv" style="left:694px;top:-31px;width:90px;height:66px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv9" class="tv" style="left:794px;top:-35px;width:77px;height:66px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv10" class="tv" style="left:884px;top:-24px;width:91px;height:66px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #3a3430 0%, #141110 100%)"></div></div></div>
+      <div id="s6-tv11" class="tv jit" style="left:982px;top:-36px;width:82px;height:66px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv12" class="tv" style="left:1073px;top:-27px;width:97px;height:66px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #3a3430 0%, #141110 100%)"></div></div></div>
+      <div id="s6-tv13" class="tv" style="left:-6px;top:40px;width:111px;height:83px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv14" class="tv" style="left:111px;top:51px;width:131px;height:83px;padding:5px"><div class="scr"><img class="" src="assets/tv-land.jpg" alt="" /></div></div>
+      <div id="s6-tv15" class="tv" style="left:247px;top:44px;width:119px;height:83px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv16" class="tv" style="left:379px;top:51px;width:133px;height:83px;padding:5px"><div class="scr"><img class="" src="assets/eye3.jpg" alt="" /></div></div>
+      <div id="s6-tv17" class="tv" style="left:523px;top:47px;width:131px;height:83px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div><img id="s6-tv17-a0" class="alt" src="assets/tv-land.jpg" alt="" /></div></div>
+      <div id="s6-tv18" class="tv jit" style="left:662px;top:41px;width:115px;height:83px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv19" class="tv jit" style="left:783px;top:49px;width:113px;height:83px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv20" class="tv" style="left:901px;top:52px;width:131px;height:83px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv21" class="tv" style="left:1037px;top:44px;width:120px;height:83px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv22" class="tv" style="left:-14px;top:139px;width:134px;height:88px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv23" class="tv" style="left:128px;top:142px;width:146px;height:88px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv24" class="tv" style="left:283px;top:138px;width:127px;height:88px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div><div id="s6-tv24-a0" class="fill alt" style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv25" class="tv" style="left:422px;top:143px;width:114px;height:88px;padding:5px"><div class="scr"><img class="" src="assets/eye3.jpg" alt="" /></div></div>
+      <div id="s6-tv26" class="tv jit" style="left:550px;top:146px;width:137px;height:88px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div><div id="s6-tv26-a0" class="fill alt" style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv27" class="tv jit" style="left:694px;top:143px;width:110px;height:88px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv28" class="tv" style="left:818px;top:136px;width:135px;height:88px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div><div id="s6-tv28-a0" class="fill alt" style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv29" class="tv" style="left:967px;top:146px;width:122px;height:88px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv30" class="tv" style="left:-36px;top:238px;width:144px;height:90px;padding:5px"><div class="scr"><img class="" src="assets/kanji.jpg" alt="" /></div></div>
+      <div id="s6-tv31" class="tv" style="left:115px;top:249px;width:129px;height:90px;padding:5px"><div class="scr"><img class="" src="assets/kanji.jpg" alt="" /></div></div>
+      <div id="s6-tv32" class="tv jit" style="left:258px;top:242px;width:150px;height:90px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv33" class="tv" style="left:416px;top:249px;width:137px;height:90px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv34" class="tv jit" style="left:562px;top:237px;width:127px;height:90px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv35" class="tv" style="left:693px;top:244px;width:150px;height:90px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv36" class="tv" style="left:847px;top:246px;width:143px;height:90px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv37" class="tv" style="left:1004px;top:247px;width:117px;height:90px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv38" class="tv" style="left:-32px;top:339px;width:120px;height:83px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv39" class="tv" style="left:101px;top:348px;width:133px;height:83px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv40" class="tv jit" style="left:238px;top:340px;width:140px;height:83px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv41" class="tv" style="left:392px;top:340px;width:107px;height:83px;padding:5px"><div class="scr"><img class="" src="assets/kanji.jpg" alt="" /></div></div>
+      <div id="s6-tv42" class="tv" style="left:510px;top:338px;width:95px;height:83px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv43" class="tv jit" style="left:618px;top:345px;width:133px;height:83px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div><div id="s6-tv43-a0" class="fill alt" style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv44" class="tv" style="left:762px;top:339px;width:110px;height:83px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div><div id="s6-tv44-a0" class="fill alt" style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv45" class="tv" style="left:882px;top:338px;width:102px;height:83px;padding:5px"><div class="scr"><img class="" src="assets/tv-land.jpg" alt="" /></div></div>
+      <div id="s6-tv46" class="tv jit" style="left:990px;top:346px;width:126px;height:83px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv47" class="tv" style="left:-25px;top:446px;width:104px;height:86px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div><div id="s6-tv47-a0" class="fill alt" style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv48" class="tv jit" style="left:85px;top:438px;width:99px;height:86px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv49" class="tv" style="left:192px;top:444px;width:104px;height:86px;padding:5px"><div class="scr"><img class="" src="assets/eye3.jpg" alt="" /><div id="s6-tv49-a0" class="fill alt" style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv50" class="tv jit" style="left:306px;top:441px;width:113px;height:86px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #3a3430 0%, #141110 100%)"></div><div id="s6-tv50-a0" class="fill alt" style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv51" class="tv" style="left:423px;top:446px;width:141px;height:86px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv52" class="tv" style="left:573px;top:440px;width:127px;height:86px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv53" class="tv jit" style="left:707px;top:442px;width:116px;height:86px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv54" class="tv jit" style="left:829px;top:442px;width:108px;height:86px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div><div id="s6-tv54-a0" class="fill alt" style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv55" class="tv jit" style="left:947px;top:434px;width:144px;height:86px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div></div></div>
+      <div id="s6-tv56" class="tv jit" style="left:-30px;top:534px;width:128px;height:104px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #3a3430 0%, #141110 100%)"></div></div></div>
+      <div id="s6-tv57" class="tv" style="left:111px;top:541px;width:158px;height:104px;padding:5px"><div class="scr"><img class="" src="assets/kanji.jpg" alt="" /></div></div>
+      <div id="s6-tv58" class="tv" style="left:275px;top:537px;width:137px;height:104px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv59" class="tv" style="left:425px;top:537px;width:174px;height:104px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv60" class="tv jit" style="left:610px;top:534px;width:137px;height:104px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv61" class="tv" style="left:760px;top:539px;width:150px;height:104px;padding:5px"><div class="scr"><img class="" src="assets/kanji.jpg" alt="" /></div></div>
+      <div id="s6-tv62" class="tv jit" style="left:920px;top:543px;width:138px;height:104px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv63" class="tv" style="left:1062px;top:544px;width:124px;height:104px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv64" class="tv" style="left:-33px;top:646px;width:119px;height:87px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div><img id="s6-tv64-a0" class="alt" src="assets/tv-land.jpg" alt="" /></div></div>
+      <div id="s6-tv65" class="tv" style="left:960px;top:651px;width:125px;height:87px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv66" class="tv jit" style="left:1089px;top:656px;width:103px;height:87px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv67" class="tv" style="left:-3px;top:752px;width:85px;height:70px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv68" class="tv" style="left:982px;top:757px;width:90px;height:70px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv69" class="tv jit" style="left:1078px;top:758px;width:118px;height:70px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv70" class="tv jit" style="left:-23px;top:841px;width:97px;height:74px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv71" class="tv" style="left:1020px;top:833px;width:98px;height:74px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div><div id="s6-tv71-a0" class="fill alt" style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv72" class="tv" style="left:-23px;top:921px;width:109px;height:70px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv73" class="tv jit" style="left:961px;top:919px;width:107px;height:70px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #3a3430 0%, #141110 100%)"></div></div></div>
+      <div id="s6-tv74" class="tv" style="left:1077px;top:924px;width:99px;height:70px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div><div id="s6-tv74-a0" class="fill alt" style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv75" class="tv jit" style="left:-34px;top:1006px;width:114px;height:76px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv76" class="tv" style="left:996px;top:996px;width:91px;height:76px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv77" class="tv" style="left:-30px;top:1093px;width:109px;height:70px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div></div></div>
+      <div id="s6-tv78" class="tv" style="left:1041px;top:1095px;width:105px;height:70px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv79" class="tv" style="left:-16px;top:1177px;width:115px;height:97px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv80" class="tv jit" style="left:987px;top:1172px;width:152px;height:97px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv81" class="tv" style="left:-35px;top:1290px;width:94px;height:80px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv82" class="tv" style="left:73px;top:1290px;width:111px;height:80px;padding:5px"><div class="scr"><img class="" src="assets/kanji.jpg" alt="" /></div></div>
+      <div id="s6-tv83" class="tv" style="left:192px;top:1286px;width:121px;height:80px;padding:5px"><div class="scr"><img class="" src="assets/eye3.jpg" alt="" /></div></div>
+      <div id="s6-tv84" class="tv jit" style="left:324px;top:1281px;width:96px;height:80px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv85" class="tv" style="left:426px;top:1282px;width:99px;height:80px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv86" class="tv jit" style="left:531px;top:1285px;width:124px;height:80px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv87" class="tv jit" style="left:665px;top:1288px;width:107px;height:80px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div></div></div>
+      <div id="s6-tv88" class="tv" style="left:786px;top:1289px;width:95px;height:80px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv89" class="tv jit" style="left:890px;top:1287px;width:116px;height:80px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv90" class="tv" style="left:1013px;top:1289px;width:97px;height:80px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #3a3430 0%, #141110 100%)"></div></div></div>
+      <div id="s6-tv91" class="tv" style="left:-12px;top:1367px;width:110px;height:93px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv92" class="tv jit" style="left:107px;top:1374px;width:141px;height:93px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div><div id="s6-tv92-a0" class="fill alt" style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv93" class="tv jit" style="left:260px;top:1367px;width:147px;height:93px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv94" class="tv jit" style="left:417px;top:1374px;width:121px;height:93px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv95" class="tv jit" style="left:543px;top:1372px;width:132px;height:93px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv96" class="tv jit" style="left:679px;top:1373px;width:136px;height:93px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv97" class="tv jit" style="left:824px;top:1366px;width:133px;height:93px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #3a3430 0%, #141110 100%)"></div></div></div>
+      <div id="s6-tv98" class="tv" style="left:962px;top:1377px;width:116px;height:93px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div></div></div>
+      <div id="s6-tv99" class="tv" style="left:1089px;top:1365px;width:151px;height:93px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv100" class="tv" style="left:-13px;top:1471px;width:145px;height:102px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div><div id="s6-tv100-a0" class="fill alt" style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv101" class="tv" style="left:142px;top:1476px;width:164px;height:102px;padding:5px"><div class="scr"><img class="" src="assets/eye-small.jpg" alt="" /><div id="s6-tv101-a0" class="fill alt" style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv102" class="tv" style="left:319px;top:1469px;width:119px;height:102px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #3a3430 0%, #141110 100%)"></div></div></div>
+      <div id="s6-tv103" class="tv" style="left:448px;top:1472px;width:136px;height:102px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv104" class="tv jit" style="left:592px;top:1473px;width:143px;height:102px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv105" class="tv" style="left:742px;top:1475px;width:130px;height:102px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv106" class="tv" style="left:878px;top:1473px;width:122px;height:102px;padding:5px"><div class="scr"><img class="" src="assets/eye-small.jpg" alt="" /><div id="s6-tv106-a0" class="fill alt" style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv107" class="tv" style="left:1009px;top:1476px;width:137px;height:102px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv108" class="tv jit" style="left:-23px;top:1578px;width:141px;height:92px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv109" class="tv jit" style="left:123px;top:1584px;width:107px;height:92px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv110" class="tv" style="left:243px;top:1576px;width:139px;height:92px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv111" class="tv jit" style="left:390px;top:1587px;width:156px;height:92px;padding:5px"><div class="scr"><img class="" src="assets/eye3.jpg" alt="" /></div></div>
+      <div id="s6-tv112" class="tv" style="left:552px;top:1586px;width:131px;height:92px;padding:5px"><div class="scr"><img class="" src="assets/eye3.jpg" alt="" /><div id="s6-tv112-a0" class="fill alt" style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv113" class="tv jit" style="left:695px;top:1580px;width:115px;height:92px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv114" class="tv" style="left:820px;top:1587px;width:115px;height:92px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv115" class="tv" style="left:942px;top:1581px;width:155px;height:92px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv116" class="tv" style="left:-11px;top:1679px;width:114px;height:70px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv117" class="tv" style="left:115px;top:1687px;width:110px;height:70px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv118" class="tv" style="left:231px;top:1682px;width:118px;height:70px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv119" class="tv" style="left:354px;top:1690px;width:113px;height:70px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv120" class="tv jit" style="left:474px;top:1678px;width:83px;height:70px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv121" class="tv" style="left:568px;top:1678px;width:93px;height:70px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv122" class="tv" style="left:672px;top:1690px;width:88px;height:70px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv123" class="tv jit" style="left:771px;top:1681px;width:101px;height:70px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv124" class="tv" style="left:886px;top:1686px;width:85px;height:70px;padding:5px"><div class="scr"><img class="" src="assets/kanji.jpg" alt="" /></div></div>
+      <div id="s6-tv125" class="tv" style="left:980px;top:1686px;width:106px;height:70px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv126" class="tv" style="left:-8px;top:1771px;width:154px;height:97px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv127" class="tv" style="left:159px;top:1767px;width:118px;height:97px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #3a3430 0%, #141110 100%)"></div></div></div>
+      <div id="s6-tv128" class="tv" style="left:289px;top:1771px;width:112px;height:97px;padding:5px"><div class="scr"><img class="" src="assets/eye3.jpg" alt="" /></div></div>
+      <div id="s6-tv129" class="tv" style="left:415px;top:1771px;width:130px;height:97px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv130" class="tv jit" style="left:549px;top:1766px;width:121px;height:97px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv131" class="tv" style="left:679px;top:1761px;width:141px;height:97px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #3a3430 0%, #141110 100%)"></div><div id="s6-tv131-a0" class="fill alt" style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv132" class="tv jit" style="left:826px;top:1773px;width:139px;height:97px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s6-tv133" class="tv" style="left:977px;top:1768px;width:132px;height:97px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv134" class="tv" style="left:-26px;top:1872px;width:129px;height:78px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv135" class="tv jit" style="left:110px;top:1867px;width:126px;height:78px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv136" class="tv" style="left:242px;top:1872px;width:90px;height:78px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #3a3430 0%, #141110 100%)"></div></div></div>
+      <div id="s6-tv137" class="tv jit" style="left:337px;top:1865px;width:102px;height:78px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div><img id="s6-tv137-a0" class="alt" src="assets/eye3.jpg" alt="" /></div></div>
+      <div id="s6-tv138" class="tv" style="left:451px;top:1875px;width:127px;height:78px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv139" class="tv" style="left:582px;top:1866px;width:102px;height:78px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv140" class="tv jit" style="left:695px;top:1868px;width:113px;height:78px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv141" class="tv jit" style="left:821px;top:1867px;width:92px;height:78px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv142" class="tv" style="left:925px;top:1875px;width:124px;height:78px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv143" class="tv" style="left:1054px;top:1874px;width:125px;height:78px;padding:5px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div><div id="s6-tv143-a0" class="fill alt" style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s6-tv144" class="tv" style="left:140px;top:720px;width:800px;height:440px;padding:12px"><div class="scr"><img class="" src="assets/eye-pupil.jpg" alt="" /></div></div>
+    </div>
+    <div class="scan"></div>
+  </div>
+  <script>
+    (() => {
+      const tl = gsap.timeline({ paused: true });
+      tl.set("#s6-tv17-a0", { opacity: 1 }, 0.500);
+      tl.set("#s6-tv24-a0", { opacity: 1 }, 0.667);
+      tl.set("#s6-tv26-a0", { opacity: 1 }, 0.750);
+      tl.set("#s6-tv28-a0", { opacity: 1 }, 0.417);
+      tl.set("#s6-tv43-a0", { opacity: 1 }, 0.583);
+      tl.set("#s6-tv44-a0", { opacity: 1 }, 0.583);
+      tl.set("#s6-tv47-a0", { opacity: 1 }, 0.583);
+      tl.set("#s6-tv49-a0", { opacity: 1 }, 0.417);
+      tl.set("#s6-tv50-a0", { opacity: 1 }, 0.417);
+      tl.set("#s6-tv54-a0", { opacity: 1 }, 0.500);
+      tl.set("#s6-tv64-a0", { opacity: 1 }, 0.667);
+      tl.set("#s6-tv71-a0", { opacity: 1 }, 0.417);
+      tl.set("#s6-tv74-a0", { opacity: 1 }, 0.500);
+      tl.set("#s6-tv92-a0", { opacity: 1 }, 0.750);
+      tl.set("#s6-tv100-a0", { opacity: 1 }, 0.333);
+      tl.set("#s6-tv101-a0", { opacity: 1 }, 0.417);
+      tl.set("#s6-tv106-a0", { opacity: 1 }, 0.667);
+      tl.set("#s6-tv112-a0", { opacity: 1 }, 0.417);
+      tl.set("#s6-tv131-a0", { opacity: 1 }, 0.583);
+      tl.set("#s6-tv137-a0", { opacity: 1 }, 0.333);
+      tl.set("#s6-tv143-a0", { opacity: 1 }, 0.750);
+      tl.fromTo("#s6-cam", { scale: 1.0, x: 0, y: 0 }, { scale: 1.07, x: 0, y: 0, duration: 0.967, ease: "none" }, 0);
+      // stop-motion jitter: tiles twitch a few px on 12 fps steps (seeded, so every render matches)
+      let seed = 1338311;
+      const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) - 0.5;
+      document.querySelectorAll("#s6 .jit").forEach((el) => {
+        for (let k = 0; k * (1 / 12) < 0.967; k++) {
+          tl.set(el, { x: rnd() * 7, y: rnd() * 7 }, k / 12);
+        }
+      });
+      tl.set({}, {}, 0.966);
+      window.__timelines["s6"] = tl;
+    })();
+  </script>
+</template>

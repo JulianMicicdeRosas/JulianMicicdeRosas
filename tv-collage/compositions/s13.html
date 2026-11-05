@@ -1,0 +1,51 @@
+<template>
+  <style>
+    #s13 { position: absolute; inset: 0; overflow: hidden; background: #d23a1c; }
+    #s13 .cam { position: absolute; inset: 0; transform-origin: 50% 30%; }
+    #s13 .tv { position: absolute; background: linear-gradient(160deg, #2b231d, #0d0a08);
+      border-radius: 9% / 12%; padding: 12px; box-shadow: 0 8px 22px rgba(0,0,0,.65); }
+    #s13 .tv.flat { background: none; padding: 0; box-shadow: none; border-radius: 0; }
+    #s13 .scr { position: relative; width: 100%; height: 100%; overflow: hidden;
+      border-radius: 14% / 18%; background: #ccc; }
+    #s13 .flat .scr { border-radius: 0; }
+    #s13 .scr img, #s13 .scr .fill { position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; }
+    #s13 .scr .alt { opacity: 0; }
+    #s13 .scr::after { content: ""; position: absolute; inset: 0; border-radius: inherit;
+      background: repeating-linear-gradient(0deg, rgba(0,0,0,.13) 0 2px, transparent 2px 5px);
+      box-shadow: inset 0 0 38px rgba(0,0,0,.55), inset 0 0 6px rgba(255,255,255,.25); }
+    #s13 .flat .scr::after { box-shadow: none; background: none; }
+    #s13 .knobs { position: absolute; right: -2px; top: 10%; width: 22%; height: 80%;
+      background: linear-gradient(#cfc8ba, #8f887c); border-radius: 6px; }
+    #s13 .bar { position: absolute; background: #0b0807; }
+    #s13 .redbar { position: absolute; background: #cf3a1f; }
+    #s13 .photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    #s13 .slice { position: absolute; left: 0; width: 100%; overflow: hidden; }
+    #s13 .slice img { position: absolute; left: 0; width: 1080px; height: 1920px; object-fit: cover; }
+    #s13 .px { position: absolute; background: #e9e1d2; }
+    #s13 .scan { position: absolute; inset: 0; pointer-events: none;
+      background: repeating-linear-gradient(0deg, rgba(0,0,0,.10) 0 2px, transparent 2px 4px); }
+  </style>
+  <div id="s13" data-composition-id="s13" data-width="1080" data-height="1920" data-layout-allow-overflow data-layout-allow-overlap>
+    <div id="s13-cam" class="cam">
+      <img class="photo" src="assets/portrait-final.jpg" alt="" />
+    </div>
+    <div class="scan"></div>
+  </div>
+  <script>
+    (() => {
+      const tl = gsap.timeline({ paused: true });
+      tl.fromTo("#s13-cam", { scale: 1.0, x: 0, y: 0 }, { scale: 1.06, x: 0, y: 0, duration: 1.400, ease: "none" }, 0);
+      // stop-motion jitter: tiles twitch a few px on 12 fps steps (seeded, so every render matches)
+      let seed = 1702585;
+      const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) - 0.5;
+      document.querySelectorAll("#s13 .jit").forEach((el) => {
+        for (let k = 0; k * (1 / 12) < 1.400; k++) {
+          tl.set(el, { x: rnd() * 7, y: rnd() * 7 }, k / 12);
+        }
+      });
+      tl.set({}, {}, 1.399);
+      window.__timelines["s13"] = tl;
+    })();
+  </script>
+</template>

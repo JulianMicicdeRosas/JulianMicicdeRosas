@@ -1,0 +1,85 @@
+<template>
+  <style>
+    #s3 { position: absolute; inset: 0; overflow: hidden; background: #0a0605; }
+    #s3 .cam { position: absolute; inset: 0; transform-origin: 50% 50%; }
+    #s3 .tv { position: absolute; background: linear-gradient(160deg, #2b231d, #0d0a08);
+      border-radius: 9% / 12%; padding: 12px; box-shadow: 0 8px 22px rgba(0,0,0,.65); }
+    #s3 .tv.flat { background: none; padding: 0; box-shadow: none; border-radius: 0; }
+    #s3 .scr { position: relative; width: 100%; height: 100%; overflow: hidden;
+      border-radius: 14% / 18%; background: #ccc; }
+    #s3 .flat .scr { border-radius: 0; }
+    #s3 .scr img, #s3 .scr .fill { position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; }
+    #s3 .scr .alt { opacity: 0; }
+    #s3 .scr::after { content: ""; position: absolute; inset: 0; border-radius: inherit;
+      background: repeating-linear-gradient(0deg, rgba(0,0,0,.13) 0 2px, transparent 2px 5px);
+      box-shadow: inset 0 0 38px rgba(0,0,0,.55), inset 0 0 6px rgba(255,255,255,.25); }
+    #s3 .flat .scr::after { box-shadow: none; background: none; }
+    #s3 .knobs { position: absolute; right: -2px; top: 10%; width: 22%; height: 80%;
+      background: linear-gradient(#cfc8ba, #8f887c); border-radius: 6px; }
+    #s3 .bar { position: absolute; background: #0b0807; }
+    #s3 .redbar { position: absolute; background: #cf3a1f; }
+    #s3 .photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    #s3 .slice { position: absolute; left: 0; width: 100%; overflow: hidden; }
+    #s3 .slice img { position: absolute; left: 0; width: 1080px; height: 1920px; object-fit: cover; }
+    #s3 .px { position: absolute; background: #e9e1d2; }
+    #s3 .scan { position: absolute; inset: 0; pointer-events: none;
+      background: repeating-linear-gradient(0deg, rgba(0,0,0,.10) 0 2px, transparent 2px 4px); }
+  </style>
+  <div id="s3" data-composition-id="s3" data-width="1080" data-height="1920" data-layout-allow-overflow data-layout-allow-overlap>
+    <div id="s3-cam" class="cam">
+      <div id="s3-tv1" class="tv" style="left:30px;top:-40px;width:480px;height:270px"><div class="scr"><img class="" src="assets/apple-red.jpg" alt="" /></div></div>
+      <div id="s3-tv2" class="tv" style="left:560px;top:-40px;width:300px;height:270px"><div class="scr"><div class="fill " style="background:linear-gradient(180deg, #5f86b4 0%, #b9cbdc 45%, #e8ece9 62%, #6f7466 100%)"></div></div></div>
+      <div id="s3-tv3" class="tv" style="left:890px;top:-40px;width:260px;height:270px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #3a3430 0%, #141110 100%)"></div></div></div>
+      <div id="s3-tv4" class="tv" style="left:30px;top:250px;width:520px;height:330px"><div class="scr"><img class="" src="assets/eye3.jpg" alt="" /></div></div>
+      <div id="s3-tv5" class="tv" style="left:30px;top:600px;width:520px;height:330px"><div class="scr"><img class="" src="assets/eye4.jpg" alt="" /></div></div>
+      <div id="s3-tv6" class="tv" style="left:30px;top:950px;width:520px;height:330px"><div class="scr"><img class="" src="assets/red-branch.jpg" alt="" /></div></div>
+      <div id="s3-tv7" class="tv jit" style="left:30px;top:1300px;width:520px;height:330px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div></div></div>
+      <div id="s3-tv8" class="tv" style="left:30px;top:1650px;width:520px;height:330px"><div class="scr"><img class="" src="assets/eye5.jpg" alt="" /></div></div>
+      <div id="s3-tv9" class="tv" style="left:580px;top:250px;width:470px;height:330px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #3a3430 0%, #141110 100%)"></div><img id="s3-tv9-a0" class="alt" src="assets/eye-small.jpg" alt="" /><div id="s3-tv9-a1" class="fill alt" style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div></div></div>
+      <div id="s3-tv10" class="tv" style="left:580px;top:600px;width:470px;height:330px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div><div id="s3-tv10-a0" class="fill alt" style="background:linear-gradient(170deg, #3a3430 0%, #141110 100%)"></div><img id="s3-tv10-a1" class="alt" src="assets/red-eye.jpg" alt="" /></div></div>
+      <div id="s3-tv11" class="tv" style="left:580px;top:950px;width:470px;height:330px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div><img id="s3-tv11-a0" class="alt" src="assets/red-branch.jpg" alt="" /><div id="s3-tv11-a1" class="fill alt" style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s3-tv12" class="tv" style="left:580px;top:1300px;width:470px;height:330px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #3a3430 0%, #141110 100%)"></div><div id="s3-tv12-a0" class="fill alt" style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div><img id="s3-tv12-a1" class="alt" src="assets/red-eye.jpg" alt="" /></div></div>
+      <div id="s3-tv13" class="tv" style="left:580px;top:1650px;width:470px;height:330px"><div class="scr"><img class="" src="assets/red-eye.jpg" alt="" /><div id="s3-tv13-a0" class="fill alt" style="background:linear-gradient(170deg, #ef4b2c 0%, #c62f17 60%, #861b0b 100%)"></div><img id="s3-tv13-a1" class="alt" src="assets/eye-green.jpg" alt="" /></div></div>
+      <div id="s3-tv14" class="tv" style="left:-120px;top:1300px;width:130px;height:330px"><div class="scr"><div class="fill " style="background:linear-gradient(170deg, #f4f1ea 0%, #d9d3c6 55%, #a59d8e 100%)"></div></div></div>
+      <div id="s3-gl0" class="bar" style="left:600px;top:612px;width:200px;height:14px;opacity:0"></div>
+      <div id="s3-gl1" class="bar" style="left:600px;top:1260px;width:200px;height:14px;opacity:0"></div>
+      <div id="s3-gl2" class="bar" style="left:600px;top:980px;width:200px;height:14px;opacity:0"></div>
+    </div>
+    <div class="scan"></div>
+  </div>
+  <script>
+    (() => {
+      const tl = gsap.timeline({ paused: true });
+      tl.set("#s3-tv9-a0", { opacity: 1 }, 0.750);
+      tl.set("#s3-tv9-a0", { opacity: 0 }, 1.250);
+      tl.set("#s3-tv9-a1", { opacity: 1 }, 1.250);
+      tl.set("#s3-tv10-a0", { opacity: 1 }, 0.750);
+      tl.set("#s3-tv10-a0", { opacity: 0 }, 1.250);
+      tl.set("#s3-tv10-a1", { opacity: 1 }, 1.250);
+      tl.set("#s3-tv11-a0", { opacity: 1 }, 0.750);
+      tl.set("#s3-tv11-a0", { opacity: 0 }, 1.250);
+      tl.set("#s3-tv11-a1", { opacity: 1 }, 1.250);
+      tl.set("#s3-tv12-a0", { opacity: 1 }, 0.750);
+      tl.set("#s3-tv12-a0", { opacity: 0 }, 1.250);
+      tl.set("#s3-tv12-a1", { opacity: 1 }, 1.250);
+      tl.set("#s3-tv13-a0", { opacity: 1 }, 0.750);
+      tl.set("#s3-tv13-a0", { opacity: 0 }, 1.250);
+      tl.set("#s3-tv13-a1", { opacity: 1 }, 1.250);
+      tl.set("#s3-gl0", { opacity: 1 }, 0.33); tl.set("#s3-gl0", { opacity: 0 }, 0.43);
+      tl.set("#s3-gl1", { opacity: 1 }, 0.92); tl.set("#s3-gl1", { opacity: 0 }, 1.02);
+      tl.set("#s3-gl2", { opacity: 1 }, 1.5); tl.set("#s3-gl2", { opacity: 0 }, 1.60);
+      tl.fromTo("#s3-cam", { scale: 1.02, x: 0, y: 0 }, { scale: 1.09, x: 0, y: 0, duration: 1.967, ease: "none" }, 0);
+      // stop-motion jitter: tiles twitch a few px on 12 fps steps (seeded, so every render matches)
+      let seed = 1314554;
+      const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) - 0.5;
+      document.querySelectorAll("#s3 .jit").forEach((el) => {
+        for (let k = 0; k * (1 / 12) < 1.967; k++) {
+          tl.set(el, { x: rnd() * 7, y: rnd() * 7 }, k / 12);
+        }
+      });
+      tl.set({}, {}, 1.966);
+      window.__timelines["s3"] = tl;
+    })();
+  </script>
+</template>

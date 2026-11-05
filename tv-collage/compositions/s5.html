@@ -1,0 +1,194 @@
+<template>
+  <style>
+    #s5 { position: absolute; inset: 0; overflow: hidden; background: #1a1410; }
+    #s5 .cam { position: absolute; inset: 0; transform-origin: 38% 52%; }
+    #s5 .tv { position: absolute; background: linear-gradient(160deg, #2b231d, #0d0a08);
+      border-radius: 9% / 12%; padding: 12px; box-shadow: 0 8px 22px rgba(0,0,0,.65); }
+    #s5 .tv.flat { background: none; padding: 0; box-shadow: none; border-radius: 0; }
+    #s5 .scr { position: relative; width: 100%; height: 100%; overflow: hidden;
+      border-radius: 14% / 18%; background: #ccc; }
+    #s5 .flat .scr { border-radius: 0; }
+    #s5 .scr img, #s5 .scr .fill { position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; }
+    #s5 .scr .alt { opacity: 0; }
+    #s5 .scr::after { content: ""; position: absolute; inset: 0; border-radius: inherit;
+      background: repeating-linear-gradient(0deg, rgba(0,0,0,.13) 0 2px, transparent 2px 5px);
+      box-shadow: inset 0 0 38px rgba(0,0,0,.55), inset 0 0 6px rgba(255,255,255,.25); }
+    #s5 .flat .scr::after { box-shadow: none; background: none; }
+    #s5 .knobs { position: absolute; right: -2px; top: 10%; width: 22%; height: 80%;
+      background: linear-gradient(#cfc8ba, #8f887c); border-radius: 6px; }
+    #s5 .bar { position: absolute; background: #0b0807; }
+    #s5 .redbar { position: absolute; background: #cf3a1f; }
+    #s5 .photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    #s5 .slice { position: absolute; left: 0; width: 100%; overflow: hidden; }
+    #s5 .slice img { position: absolute; left: 0; width: 1080px; height: 1920px; object-fit: cover; }
+    #s5 .px { position: absolute; background: #e9e1d2; }
+    #s5 .scan { position: absolute; inset: 0; pointer-events: none;
+      background: repeating-linear-gradient(0deg, rgba(0,0,0,.10) 0 2px, transparent 2px 4px); }
+  </style>
+  <div id="s5" data-composition-id="s5" data-width="1080" data-height="1920" data-layout-allow-overflow data-layout-allow-overlap>
+    <div id="s5-cam" class="cam">
+      <img id="s5-photo" class="photo" src="assets/face-glitch.jpg" alt="" />
+      <div id="s5-sl0" class="slice" style="top:1137px;height:30px"><img src="assets/face-glitch.jpg" alt="" style="top:-1137px" /></div>
+      <div id="s5-sl1" class="slice" style="top:980px;height:29px"><img src="assets/face-glitch.jpg" alt="" style="top:-980px" /></div>
+      <div id="s5-sl2" class="slice" style="top:1280px;height:18px"><img src="assets/face-glitch.jpg" alt="" style="top:-1280px" /></div>
+      <div id="s5-sl3" class="slice" style="top:796px;height:34px"><img src="assets/face-glitch.jpg" alt="" style="top:-796px" /></div>
+      <div id="s5-sl4" class="slice" style="top:924px;height:24px"><img src="assets/face-glitch.jpg" alt="" style="top:-924px" /></div>
+      <div id="s5-sl5" class="slice" style="top:817px;height:36px"><img src="assets/face-glitch.jpg" alt="" style="top:-817px" /></div>
+      <div id="s5-sl6" class="slice" style="top:1472px;height:36px"><img src="assets/face-glitch.jpg" alt="" style="top:-1472px" /></div>
+      <div id="s5-px0" class="px" style="left:281px;top:881px;width:34px;height:34px;background:#2a1d17;opacity:0"></div>
+      <div id="s5-px1" class="px" style="left:432px;top:1284px;width:21px;height:21px;background:#c9b7a0;opacity:0"></div>
+      <div id="s5-px2" class="px" style="left:190px;top:1363px;width:33px;height:33px;background:#c9b7a0;opacity:0"></div>
+      <div id="s5-px3" class="px" style="left:117px;top:1203px;width:12px;height:12px;background:#2a1d17;opacity:0"></div>
+      <div id="s5-px4" class="px" style="left:605px;top:1385px;width:21px;height:21px;background:#2a1d17;opacity:0"></div>
+      <div id="s5-px5" class="px" style="left:362px;top:1479px;width:27px;height:27px;background:#e9e1d2;opacity:0"></div>
+      <div id="s5-px6" class="px" style="left:404px;top:1073px;width:15px;height:15px;background:#e9e1d2;opacity:0"></div>
+      <div id="s5-px7" class="px" style="left:232px;top:1498px;width:32px;height:32px;background:#c9b7a0;opacity:0"></div>
+      <div id="s5-px8" class="px" style="left:245px;top:1497px;width:11px;height:11px;background:#e9e1d2;opacity:0"></div>
+      <div id="s5-px9" class="px" style="left:626px;top:1175px;width:11px;height:11px;background:#2a1d17;opacity:0"></div>
+      <div id="s5-px10" class="px" style="left:432px;top:1016px;width:24px;height:24px;background:#7a6150;opacity:0"></div>
+      <div id="s5-px11" class="px" style="left:137px;top:1413px;width:11px;height:11px;background:#7a6150;opacity:0"></div>
+      <div id="s5-px12" class="px" style="left:292px;top:893px;width:33px;height:33px;background:#2a1d17;opacity:0"></div>
+      <div id="s5-px13" class="px" style="left:503px;top:869px;width:15px;height:15px;background:#7a6150;opacity:0"></div>
+      <div id="s5-px14" class="px" style="left:232px;top:820px;width:23px;height:23px;background:#c9b7a0;opacity:0"></div>
+      <div id="s5-px15" class="px" style="left:544px;top:1395px;width:15px;height:15px;background:#7a6150;opacity:0"></div>
+      <div id="s5-px16" class="px" style="left:405px;top:1250px;width:18px;height:18px;background:#c9b7a0;opacity:0"></div>
+      <div id="s5-px17" class="px" style="left:493px;top:910px;width:13px;height:13px;background:#7a6150;opacity:0"></div>
+      <div id="s5-px18" class="px" style="left:263px;top:1402px;width:25px;height:25px;background:#c9b7a0;opacity:0"></div>
+      <div id="s5-px19" class="px" style="left:171px;top:1263px;width:18px;height:18px;background:#c9b7a0;opacity:0"></div>
+      <div id="s5-px20" class="px" style="left:444px;top:1471px;width:28px;height:28px;background:#e9e1d2;opacity:0"></div>
+      <div id="s5-px21" class="px" style="left:452px;top:1332px;width:32px;height:32px;background:#c9b7a0;opacity:0"></div>
+      <div id="s5-px22" class="px" style="left:351px;top:1467px;width:32px;height:32px;background:#c9b7a0;opacity:0"></div>
+      <div id="s5-px23" class="px" style="left:745px;top:942px;width:28px;height:28px;background:#e9e1d2;opacity:0"></div>
+      <div id="s5-px24" class="px" style="left:640px;top:1016px;width:20px;height:20px;background:#c9b7a0;opacity:0"></div>
+      <div id="s5-px25" class="px" style="left:375px;top:1272px;width:30px;height:30px;background:#c9b7a0;opacity:0"></div>
+    </div>
+    <div class="scan"></div>
+  </div>
+  <script>
+    (() => {
+      const tl = gsap.timeline({ paused: true });
+      tl.set("#s5-sl0", { x: 1 }, 0.000);
+      tl.set("#s5-sl0", { x: 86 }, 0.083);
+      tl.set("#s5-sl0", { x: 76 }, 0.167);
+      tl.set("#s5-sl0", { x: 45 }, 0.250);
+      tl.set("#s5-sl0", { x: -83 }, 0.333);
+      tl.set("#s5-sl0", { x: 29 }, 0.417);
+      tl.set("#s5-sl0", { x: -27 }, 0.500);
+      tl.set("#s5-sl0", { x: 76 }, 0.583);
+      tl.set("#s5-sl0", { x: -77 }, 0.667);
+      tl.set("#s5-sl0", { x: -50 }, 0.750);
+      tl.set("#s5-sl0", { x: -62 }, 0.833);
+      tl.set("#s5-sl0", { x: 5 }, 0.917);
+      tl.set("#s5-sl1", { x: 7 }, 0.000);
+      tl.set("#s5-sl1", { x: 49 }, 0.083);
+      tl.set("#s5-sl1", { x: -64 }, 0.167);
+      tl.set("#s5-sl1", { x: 56 }, 0.250);
+      tl.set("#s5-sl1", { x: -27 }, 0.333);
+      tl.set("#s5-sl1", { x: -87 }, 0.417);
+      tl.set("#s5-sl1", { x: -35 }, 0.500);
+      tl.set("#s5-sl1", { x: 14 }, 0.583);
+      tl.set("#s5-sl1", { x: -19 }, 0.667);
+      tl.set("#s5-sl1", { x: -44 }, 0.750);
+      tl.set("#s5-sl1", { x: 9 }, 0.833);
+      tl.set("#s5-sl1", { x: -50 }, 0.917);
+      tl.set("#s5-sl2", { x: -55 }, 0.000);
+      tl.set("#s5-sl2", { x: 68 }, 0.083);
+      tl.set("#s5-sl2", { x: 68 }, 0.167);
+      tl.set("#s5-sl2", { x: 23 }, 0.250);
+      tl.set("#s5-sl2", { x: -58 }, 0.333);
+      tl.set("#s5-sl2", { x: -57 }, 0.417);
+      tl.set("#s5-sl2", { x: -90 }, 0.500);
+      tl.set("#s5-sl2", { x: -89 }, 0.583);
+      tl.set("#s5-sl2", { x: -37 }, 0.667);
+      tl.set("#s5-sl2", { x: -35 }, 0.750);
+      tl.set("#s5-sl2", { x: -48 }, 0.833);
+      tl.set("#s5-sl2", { x: -48 }, 0.917);
+      tl.set("#s5-sl3", { x: -40 }, 0.000);
+      tl.set("#s5-sl3", { x: 48 }, 0.083);
+      tl.set("#s5-sl3", { x: 83 }, 0.167);
+      tl.set("#s5-sl3", { x: 70 }, 0.250);
+      tl.set("#s5-sl3", { x: -38 }, 0.333);
+      tl.set("#s5-sl3", { x: -44 }, 0.417);
+      tl.set("#s5-sl3", { x: 86 }, 0.500);
+      tl.set("#s5-sl3", { x: -40 }, 0.583);
+      tl.set("#s5-sl3", { x: 8 }, 0.667);
+      tl.set("#s5-sl3", { x: -14 }, 0.750);
+      tl.set("#s5-sl3", { x: -85 }, 0.833);
+      tl.set("#s5-sl3", { x: 2 }, 0.917);
+      tl.set("#s5-sl4", { x: -53 }, 0.000);
+      tl.set("#s5-sl4", { x: -23 }, 0.083);
+      tl.set("#s5-sl4", { x: -74 }, 0.167);
+      tl.set("#s5-sl4", { x: -6 }, 0.250);
+      tl.set("#s5-sl4", { x: -13 }, 0.333);
+      tl.set("#s5-sl4", { x: 64 }, 0.417);
+      tl.set("#s5-sl4", { x: 60 }, 0.500);
+      tl.set("#s5-sl4", { x: -90 }, 0.583);
+      tl.set("#s5-sl4", { x: 62 }, 0.667);
+      tl.set("#s5-sl4", { x: 83 }, 0.750);
+      tl.set("#s5-sl4", { x: -4 }, 0.833);
+      tl.set("#s5-sl4", { x: -74 }, 0.917);
+      tl.set("#s5-sl5", { x: -12 }, 0.000);
+      tl.set("#s5-sl5", { x: 33 }, 0.083);
+      tl.set("#s5-sl5", { x: 88 }, 0.167);
+      tl.set("#s5-sl5", { x: -10 }, 0.250);
+      tl.set("#s5-sl5", { x: -43 }, 0.333);
+      tl.set("#s5-sl5", { x: 33 }, 0.417);
+      tl.set("#s5-sl5", { x: 30 }, 0.500);
+      tl.set("#s5-sl5", { x: 90 }, 0.583);
+      tl.set("#s5-sl5", { x: -45 }, 0.667);
+      tl.set("#s5-sl5", { x: -76 }, 0.750);
+      tl.set("#s5-sl5", { x: -25 }, 0.833);
+      tl.set("#s5-sl5", { x: -85 }, 0.917);
+      tl.set("#s5-sl6", { x: 13 }, 0.000);
+      tl.set("#s5-sl6", { x: -86 }, 0.083);
+      tl.set("#s5-sl6", { x: 50 }, 0.167);
+      tl.set("#s5-sl6", { x: 17 }, 0.250);
+      tl.set("#s5-sl6", { x: 3 }, 0.333);
+      tl.set("#s5-sl6", { x: 6 }, 0.417);
+      tl.set("#s5-sl6", { x: 58 }, 0.500);
+      tl.set("#s5-sl6", { x: -88 }, 0.583);
+      tl.set("#s5-sl6", { x: 25 }, 0.667);
+      tl.set("#s5-sl6", { x: -79 }, 0.750);
+      tl.set("#s5-sl6", { x: -44 }, 0.833);
+      tl.set("#s5-sl6", { x: 69 }, 0.917);
+      tl.set("#s5-px0", { opacity: 1 }, 0.583); tl.set("#s5-px0", { opacity: 0 }, 0.753);
+      tl.set("#s5-px1", { opacity: 1 }, 0.583); tl.set("#s5-px1", { opacity: 0 }, 0.753);
+      tl.set("#s5-px2", { opacity: 1 }, 0.333); tl.set("#s5-px2", { opacity: 0 }, 0.503);
+      tl.set("#s5-px3", { opacity: 1 }, 0.417); tl.set("#s5-px3", { opacity: 0 }, 0.587);
+      tl.set("#s5-px4", { opacity: 1 }, 0.417); tl.set("#s5-px4", { opacity: 0 }, 0.587);
+      tl.set("#s5-px5", { opacity: 1 }, 0.333); tl.set("#s5-px5", { opacity: 0 }, 0.503);
+      tl.set("#s5-px6", { opacity: 1 }, 0.833); tl.set("#s5-px6", { opacity: 0 }, 1.003);
+      tl.set("#s5-px7", { opacity: 1 }, 0.583); tl.set("#s5-px7", { opacity: 0 }, 0.753);
+      tl.set("#s5-px8", { opacity: 1 }, 0.750); tl.set("#s5-px8", { opacity: 0 }, 0.920);
+      tl.set("#s5-px9", { opacity: 1 }, 0.750); tl.set("#s5-px9", { opacity: 0 }, 0.920);
+      tl.set("#s5-px10", { opacity: 1 }, 0.167); tl.set("#s5-px10", { opacity: 0 }, 0.337);
+      tl.set("#s5-px11", { opacity: 1 }, 0.417); tl.set("#s5-px11", { opacity: 0 }, 0.587);
+      tl.set("#s5-px12", { opacity: 1 }, 0.833); tl.set("#s5-px12", { opacity: 0 }, 1.003);
+      tl.set("#s5-px13", { opacity: 1 }, 0.417); tl.set("#s5-px13", { opacity: 0 }, 0.587);
+      tl.set("#s5-px14", { opacity: 1 }, 0.167); tl.set("#s5-px14", { opacity: 0 }, 0.337);
+      tl.set("#s5-px15", { opacity: 1 }, 0.583); tl.set("#s5-px15", { opacity: 0 }, 0.753);
+      tl.set("#s5-px16", { opacity: 1 }, 0.583); tl.set("#s5-px16", { opacity: 0 }, 0.753);
+      tl.set("#s5-px17", { opacity: 1 }, 0.667); tl.set("#s5-px17", { opacity: 0 }, 0.837);
+      tl.set("#s5-px18", { opacity: 1 }, 0.167); tl.set("#s5-px18", { opacity: 0 }, 0.337);
+      tl.set("#s5-px19", { opacity: 1 }, 0.083); tl.set("#s5-px19", { opacity: 0 }, 0.253);
+      tl.set("#s5-px20", { opacity: 1 }, 0.333); tl.set("#s5-px20", { opacity: 0 }, 0.503);
+      tl.set("#s5-px21", { opacity: 1 }, 0.583); tl.set("#s5-px21", { opacity: 0 }, 0.753);
+      tl.set("#s5-px22", { opacity: 1 }, 0.417); tl.set("#s5-px22", { opacity: 0 }, 0.587);
+      tl.set("#s5-px23", { opacity: 1 }, 0.583); tl.set("#s5-px23", { opacity: 0 }, 0.753);
+      tl.set("#s5-px24", { opacity: 1 }, 0.583); tl.set("#s5-px24", { opacity: 0 }, 0.753);
+      tl.set("#s5-px25", { opacity: 1 }, 0.417); tl.set("#s5-px25", { opacity: 0 }, 0.587);
+      tl.fromTo("#s5-cam", { scale: 1.0, x: 0, y: 0 }, { scale: 1.22, x: 0, y: 0, duration: 1.033, ease: "none" }, 0);
+      // stop-motion jitter: tiles twitch a few px on 12 fps steps (seeded, so every render matches)
+      let seed = 1330392;
+      const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) - 0.5;
+      document.querySelectorAll("#s5 .jit").forEach((el) => {
+        for (let k = 0; k * (1 / 12) < 1.033; k++) {
+          tl.set(el, { x: rnd() * 7, y: rnd() * 7 }, k / 12);
+        }
+      });
+      tl.set({}, {}, 1.032);
+      window.__timelines["s5"] = tl;
+    })();
+  </script>
+</template>
