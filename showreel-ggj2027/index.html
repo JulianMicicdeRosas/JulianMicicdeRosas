@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GGJ Mendoza 2027 — Showreel</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  body { display: grid; place-items: center; font: 14px/1.4 ui-monospace, monospace; color: #9aa3b8; }
+  #out { width: 100vw; height: 56.25vw; max-height: 100vh; max-width: 177.78vh; display: block; background: #070B1A; }
+  #ui { position: fixed; left: 16px; bottom: 12px; display: flex; gap: 12px; align-items: center; opacity: .75; }
+  #ui button { background: #22A9E0; color: #070B1A; border: 0; padding: 6px 12px; font: inherit; font-weight: 700; cursor: pointer; }
+  body.render #ui { display: none; }
+</style>
+</head>
+<body>
+<canvas id="out" width="1920" height="1080"></canvas>
+<div id="ui"><button id="play">▶ PLAY</button><span id="tc">00:00</span><span>· espacio = play/pausa · ←/→ = ±2 s</span></div>
+<audio id="music" src="assets/soundtrack.m4a" preload="auto"></audio>
+<script src="reel.js"></script>
+</body>
+</html>
