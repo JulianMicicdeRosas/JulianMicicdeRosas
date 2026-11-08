@@ -4,6 +4,14 @@ Reel vertical de **60 s (1080 × 1920, 30 fps)** para Instagram / Edits, montado
 del Día de Bolivia (sin fotos), sincronizado con *Simón de corazón* (Karumanta de Bolivia) y con la estética
 de las placas de Adobe Express de FLAT (Semana 4 · Día de Bolivia).
 
+## Archivos finales
+
+- `video_final/DiaDeBolivia_FLAT_reel60s_instagram.mp4` — para subir (H.264, ≈13 Mb/s, 96 MB).
+- `video_final/DiaDeBolivia_FLAT_reel60s_MASTER.mp4` — master de alta calidad (≈30 Mb/s, 222 MB).
+
+> Los videos, el audio y los clips (`*.mp4`, `*.wav`, `*.m4a`) no se suben al repositorio por su peso
+> (ver `.gitignore`): se entregan directamente.
+
 ## Estructura (como cine: cuatro actos)
 
 | Tiempo | Acto | Qué pasa |
