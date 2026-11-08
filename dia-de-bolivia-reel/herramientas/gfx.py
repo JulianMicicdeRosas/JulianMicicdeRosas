@@ -181,7 +181,7 @@ TITLE_BEATS = [0.08, 0.77, 1.49, 2.16, 2.77, 3.38, 3.99, 4.54]
 
 
 def title_card(t):
-    """Cartel 'Día de Bolivia' · FLAT · Embajada de Bolivia (0 → 4.54 s)."""
+    """Cartel 'Día de Bolivia' · FLAT · Consulado de Bolivia (0 → 4.54 s)."""
     b = TITLE_BEATS
     c = background(t)
     # entrada del fondo
@@ -217,7 +217,7 @@ def title_card(t):
             cx = x0 + 44 + f.getlength(shown[li])
             d.rectangle([cx + 6, by + 60 + li * 150, cx + 70, by + 170 + li * 150], fill=INK)
 
-    # Embajada de Bolivia
+    # Consulado de Bolivia
     ey = by + bh + 90
     p2 = (t - b[5]) / 0.3
     if p2 > 0:
@@ -229,7 +229,7 @@ def title_card(t):
             seal_l.putalpha(seal_l.getchannel("A").point(lambda v: int(v * a)))
         c.alpha_composite(seal_l, (x0, int(ey + (1 - a) * 40)))
         fe = font("rob700", 50)
-        txt = "EMBAJADA"
+        txt = "CONSULADO"
         txt2 = "DE BOLIVIA"
         tx = x0 + 150 + 36
         n = int(clamp(p2 * 1.3) * (len(txt) + len(txt2)))

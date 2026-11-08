@@ -16,7 +16,7 @@ de las placas de Adobe Express de FLAT (Semana 4 · Día de Bolivia).
 
 | Tiempo | Acto | Qué pasa |
 |---|---|---|
-| 0:00 – 0:04.5 | **Cartel** | Bloques F·L·A·T entran uno por beat, *Día de Bolivia* se tipea en el bloque salmón, escudo + EMBAJADA DE BOLIVIA, chip lima con fecha y sala. Sale con glitch. |
+| 0:00 – 0:04.5 | **Cartel** | Bloques F·L·A·T entran uno por beat, *Día de Bolivia* se tipea en el bloque salmón, escudo + CONSULADO DE BOLIVIA, chip lima con fecha y sala. Sale con glitch. |
 | 0:04.5 – 0:13.5 | **I · Retratos** | Intro de la canción: cámara lenta (70–80 %), acercamientos lentos. Morenada de perfil, aguayo, quena, zampoña, poesía en quechua con letras proyectadas. |
 | 0:13.5 – 0:26.9 | **II · La sala se enciende** | Corte cada 2 beats; en el último compás, cortes a beat y medio beat hacia el drop. |
 | 0:26.9 – 0:51.1 | **III · Drop** | Entra la banda completa: flash blanco + golpes de zoom en cada beat; cortes a beat alternados con planos de 2 beats en los rostros. Fraternidades: Caporales, Morenada, Morenos, Tinkus, Tobas, Salay, Chicheños, Chapacos. |
