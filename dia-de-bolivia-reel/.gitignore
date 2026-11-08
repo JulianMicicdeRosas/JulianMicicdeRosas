@@ -1,0 +1,7 @@
+# Medios pesados: se entregan aparte (no van al repositorio)
+*.mp4
+*.mov
+*.mkv
+*.wav
+*.m4a
+*.mp3
