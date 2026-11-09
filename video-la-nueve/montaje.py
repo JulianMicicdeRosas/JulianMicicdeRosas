@@ -8,7 +8,7 @@ Uso:
 
 - La música entra en un primer tiempo de compás del medio del tema (cerca de --music-at),
   con fade-in y fade-out.
-- Los cortes caen sobre la grilla: compases (2,047 s a 117 BPM), negras y corcheas.
+- Los cortes caen sobre la grilla: compases (2,047 s a 117 BPM), blancas y negras.
 - Audio de los inserts al 50 %.
 - El logo entra con corte seco en el primer tiempo del compás 5.
 """
@@ -24,18 +24,21 @@ GRADE = ("colorbalance=rs=-0.08:gs=0.03:bs=0.01:rm=-0.06:gm=0.03:rh=-0.03:bh=-0.
 TINT_OPACITY = 0.5
 
 # Cada compás = 8 corcheas. (clip, segundo de entrada, corcheas, punch-in)
-# Cada clip se usa UNA sola vez: ningún cuadro se repite.
+# Ritmo lento: solo negras (2 corcheas) y blancas (4). Cada clip se usa UNA sola vez,
+# y se evitan tomas que se parecen entre sí (08≈07, 18≈17, 20≈10).
 EDL = [
-    # 1 · apertura: la proyección, dos medias notas
-    ("08", 4.0, 4, 0), ("07", 3.0, 4, 0),
-    # 2 · negras + doble corchea
-    ("06", 2.0, 2, 0), ("05", 4.0, 2, 0), ("03", 3.0, 2, 0), ("13", 3.5, 1, 1), ("09", 3.5, 1, 0),
-    # 3 · negras + doble corchea
-    ("10", 3.5, 2, 0), ("11", 2.5, 2, 0), ("16", 2.0, 1, 1), ("19", 2.0, 1, 0), ("15", 3.0, 2, 0),
-    # 4 · ráfaga de corcheas con punch-in alternado, cierre en negra
-    ("20", 3.0, 1, 1), ("17", 2.0, 1, 0), ("14", 1.2, 1, 1), ("01", 3.5, 1, 0),
-    ("04", 8.0, 1, 1), ("18", 2.0, 1, 0), ("21", 5.0, 2, 0),
+    # 1 · apertura: la proyección y el público frente a ella
+    ("07", 3.0, 4, 0), ("06", 2.0, 4, 0),
+    # 2
+    ("05", 4.0, 2, 0), ("13", 3.5, 2, 0), ("09", 3.5, 4, 0),
+    # 3
+    ("16", 2.0, 2, 0), ("19", 2.0, 2, 0), ("15", 3.0, 4, 0),
+    # 4 · cierre hacia el logo
+    ("17", 2.0, 2, 0), ("01", 3.5, 2, 0), ("21", 5.0, 4, 0),
 ]
+# Clips oscuros / pixelados (luma media < 75): más contraste y reducción de ruido suave.
+ENHANCE = {"07", "05", "13", "17", "21", "03", "04"}
+ENHANCE_FX = "hqdn3d=3:3:4:4,eq=contrast=1.28:brightness=0.03:gamma=1.08"
 assert sum(e[2] for e in EDL) == BARS * 8, "el EDL debe sumar BARS compases"
 assert len({e[0] for e in EDL}) == len(EDL), "cada clip se usa una sola vez"
 
@@ -78,7 +81,8 @@ def main():
         z = 1.18 if punch else 1.0
         sw, sh = int(W * z) // 2 * 2, int(H * z) // 2 * 2
         filt.append(f"[{i}:v:0]scale={sw}:{sh}:force_original_aspect_ratio=increase,crop={W}:{H},"
-                    f"setsar=1,fps={FPS},trim=end_frame={nf},setpts=PTS-STARTPTS,{GRADE},format=gbrp[g{i}]")
+                    f"setsar=1,fps={FPS},trim=end_frame={nf},setpts=PTS-STARTPTS,"
+                    f"{ENHANCE_FX + ',' if name in ENHANCE else ''}{GRADE},format=gbrp[g{i}]")
         filt.append(f"color={TINT}:s={W}x{H}:r={FPS},format=gbrp[c{i}]")
         filt.append(f"[g{i}][c{i}]blend=all_mode=screen:all_opacity={TINT_OPACITY}:shortest=1,"
                     f"format=yuv420p[v{i}]")
