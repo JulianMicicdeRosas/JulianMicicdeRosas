@@ -15,7 +15,7 @@ Cada clip se usa una sola vez y se quitaron tomas que se parecían entre sí (08
 |---|---|---|
 | 1 | 2 blancas | 06 · 07 (mirando la pantalla) |
 | 2 | negra, negra, blanca | 05 · 13 · 09 |
-| 3 | negra, negra, blanca | 16 · 19 · 15 |
+| 3 | negra, negra, blanca | 16 · 11 · 15 |
 | 4 | negra, negra, blanca | 17 · 01 · 21 |
 | 5 (8,20 s) | — | aparece el logo; la toma 21 sigue y se funde progresivamente al #15372D puro (último ~0,35 s, color puro) |
 
