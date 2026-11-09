@@ -1,8 +1,8 @@
 #!/bin/bash
-# Arma deploy/GGJMendoza/ (versión HTML animada, sin video) y GGJMendoza.zip para subir al hosting.
+# Arma deploy/GGJ/ (versión HTML animada, sin video) y GGJ.zip para subir al hosting.
 set -euo pipefail
-HERE=$(cd "$(dirname "$0")" && pwd); SRC=$(cd "$HERE/.." && pwd); OUT="$HERE/GGJMendoza"
-rm -rf "$OUT" "$HERE/GGJMendoza.zip"; mkdir -p "$OUT/assets"
+HERE=$(cd "$(dirname "$0")" && pwd); SRC=$(cd "$HERE/.." && pwd); OUT="$HERE/GGJ"
+rm -rf "$OUT" "$HERE/GGJ.zip"; mkdir -p "$OUT/assets"
 cp "$SRC/index.html" "$SRC/reel.js" "$OUT/"
 cp -r "$SRC/assets/photos" "$SRC/assets/fonts" "$SRC/assets/logos" "$OUT/assets/"
 cp "$SRC/assets/soundtrack.m4a" "$SRC/assets/og.jpg" "$OUT/assets/"
@@ -17,5 +17,5 @@ AddType audio/mp4 .m4a
   ExpiresByType audio/mp4 "access plus 30 days"
 </IfModule>
 HT
-(cd "$HERE" && zip -q -r GGJMendoza.zip GGJMendoza)
-echo "Listo: $OUT  ($(du -sh "$OUT" | cut -f1))  y  $HERE/GGJMendoza.zip"
+(cd "$HERE" && zip -q -r GGJ.zip GGJ)
+echo "Listo: $OUT  ($(du -sh "$OUT" | cut -f1))  y  $HERE/GGJ.zip"

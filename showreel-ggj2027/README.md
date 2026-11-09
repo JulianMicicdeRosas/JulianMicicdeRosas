@@ -42,17 +42,17 @@ showreel-ggj2027/
 con la música sincronizada, pantalla de carga, botón de inicio, barra para adelantar, pantalla
 completa (tecla F) y pantalla final con links.
 
-Para publicarla en `elzorroazul.studio/GGJMendoza/`:
+Para publicarla en `elzorroazul.studio/GGJ/`:
 
 ```bash
 deploy/armar_web.sh
 ```
 
-Genera `deploy/GGJMendoza/` (≈15 MB) y `deploy/GGJMendoza.zip`. Se sube por cPanel
+Genera `deploy/GGJ/` (≈15 MB) y `deploy/GGJ.zip`. Se sube por cPanel
 (Administrador de archivos → `public_html` → Cargar el ZIP → Extraer) o por SFTP:
 
 ```bash
-deploy/subir_sftp.sh USUARIO@elzorroazul.studio 21098 public_html
+deploy/subir_sftp.sh        (desde la Mac con la llave flat-namecheap)
 ```
 
 ## Ver el preview en el navegador
