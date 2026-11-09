@@ -13,6 +13,8 @@ Uso:
 - En el primer tiempo del compás 5 aparece el logo; la última toma se funde al color puro.
 """
 import argparse, json, os, subprocess
+import numpy as np
+from PIL import Image
 
 W, H, FPS = 1080, 1920, 30
 TOTAL = 10.0
@@ -23,6 +25,8 @@ GRADE = ("colorbalance=rs=-0.08:gs=0.03:bs=0.01:rm=-0.06:gm=0.03:rh=-0.03:bh=-0.
          "eq=saturation=0.85")
 TINT_OPACITY = 0.5
 COVER_AT = 6.0  # segundo del video usado como portada (toma 15, pared clara)
+COVER_TINT = 0.9  # intensidad del virado verde de la portada
+COVER_LIGHT = (160, 192, 175)  # tono de las luces en el duotono
 COVER_LOGO = (40, 420, 0.41)  # x, y, ancho relativo del logo negro sobre la pared
 
 # Cada compás = 8 corcheas. (clip, segundo de entrada, corcheas, punch-in)
@@ -139,15 +143,26 @@ def main():
            "-c:v", "libx264", "-crf", "18", "-preset", "medium", "-pix_fmt", "yuv420p",
            "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", a.out]
     subprocess.run(cmd, check=True)
-    # portada para Instagram (subir como "Portada" del Reel)
+    # portada para Instagram (subir como "Portada" del Reel): cuadro del segundo COVER_AT,
+    # virado fuerte al verde (duotono #15372D -> verde claro) y logo negro sobre la pared clara,
+    # dentro del recorte 3:4 de la grilla de IG.
     cover = os.path.splitext(a.out)[0] + "_portada.jpg"
-    # con el logo en negro sobre la pared clara, dentro del recorte 3:4 de la grilla de IG
-    cv = ["ffmpeg", "-y", "-v", "error", "-ss", f"{COVER_AT}", "-i", a.out]
+    raw = subprocess.check_output(["ffmpeg", "-v", "error", "-ss", f"{COVER_AT}", "-i", a.out,
+                                   "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"])
+    img = np.frombuffer(raw, np.uint8).reshape(H, W, 3).astype(float) / 255
+    dark = np.array([int(TINT[2:4], 16), int(TINT[4:6], 16), int(TINT[6:8], 16)]) / 255
+    light = np.array(COVER_LIGHT) / 255
+    lum = (img @ [0.299, 0.587, 0.114])[..., None]
+    img = img * (1 - COVER_TINT) + (dark + (light - dark) * lum) * COVER_TINT
+    tinted = os.path.splitext(a.out)[0] + "_portada_base.png"
+    Image.fromarray((np.clip(img, 0, 1) * 255).astype(np.uint8)).save(tinted)
+    cv = ["ffmpeg", "-y", "-v", "error", "-i", tinted]
     if a.logo:
         cv += ["-i", a.logo, "-filter_complex",
                f"[1:v]format=rgba,colorchannelmixer=rr=0:gg=0:bb=0,scale={int(W * COVER_LOGO[2])}:-1[lk];"
                f"[0:v][lk]overlay={COVER_LOGO[0]}:{COVER_LOGO[1]}"]
     subprocess.run(cv + ["-frames:v", "1", "-q:v", "2", cover], check=True)
+    os.remove(tinted)
     print(f"BPM {r['bpm']:.2f} · corchea {eighth:.3f}s · música desde {m0:.2f}s · "
           f"{n} cortes · logo en {logo_t:.2f}s -> {a.out}")
 

@@ -34,6 +34,6 @@ python3 montaje.py --clips <carpeta_clips> --music musica.mp3 --ritmo ritmo.json
 
 ## Portada para Instagram
 `montaje.py` exporta `<salida>_portada.jpg`: el cuadro del **segundo 6** (toma 15, público con la pared clara)
-con el **logo de La Nueve en negro** sobre la pared, dentro del recorte 3:4 de la grilla.
+virado fuerte al verde (duotono #15372D → #A0C0AF al 90 %) y con el **logo de La Nueve en negro** sobre la pared, dentro del recorte 3:4 de la grilla.
 Subirla como **Portada** del Reel (Editar portada → Agregar desde el carrete).
 El video además abre con la toma 06 (mirando la pantalla), así ningún preview queda negro.
