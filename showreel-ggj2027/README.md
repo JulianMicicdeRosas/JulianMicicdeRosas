@@ -17,14 +17,14 @@ quedan sincronizados con la misma grilla rítmica: **85,3 BPM, 32 compases = 90 
 | 0:11 – 0:22 | 5–8 | **02 · MENDOZA** | "MENDOZA" con fotos dentro de las letras, tríptico "Comunidad / Desde 2012", 15 ediciones consecutivas, cuenta 3·2·1 · PRESS START |
 | 0:22 – 0:45 | 9–16 | **03 · COMUNIDAD** (drop) | Grilla de fotos + "Sede Nº1 de Argentina", 120 jammers, 20 juegos, ranking 172° → 45°, 175 capacitados, 41 juegos (con los títulos reales), MEGAJam de Invierno, tormenta de fotos, "El primer paso hacia la industria" |
 | 0:45 – 0:56 | 17–20 | **04 · MEGA** (breakdown) | Qué es MEGA, disciplinas con íconos animados, para quién es, túnel de herramientas → "¿Te sumás?" |
-| 0:56 – 1:19 | 21–28 | **05 · GGJ 2027** (drop 2) | Reveal del logo + MENDOZA 2027, fechas 29·30·31, cronograma jugable de 48 h, objetivos, mosaico de rostros, "Somos comunidad", "Hacemos juegos" |
-| 1:19 – 1:30 | 29–32 | **06 · TE ESPERAMOS** | Lockup GGJ + MEGA, URLs, "¿JUGAMOS?" |
+| 0:56 – 1:19 | 21–28 | **05 · GGJ 2027** (drop 2) | Reveal del logo + MENDOZA 2027, fechas 29·30·31, cronograma jugable de 48 h, objetivos, mosaico de rostros, "Somos comunidad", "Hacemos juegos / Hacemos industria" |
+| 1:19 – 1:30 | 29–32 | **06 · TE ESPERAMOS** | Lockup GGJ + MEGA, Instagram @mendoza.gamedevs y linktree, logo de MEGA y "¿JUGAMOS?" |
 
 ## Archivos
 
 ```
 showreel-ggj2027/
-├── showreel_ggj2027.mp4   Video de la primera versión (60 s; no incluye los cambios posteriores)
+├── showreel_ggj2027.mp4   El reel en video (1:30, H.264 + AAC, 60 fps)
 ├── index.html             Reproductor/preview en el navegador (con música)
 ├── reel.js                Motor de animación: todas las escenas, HUD y post-proceso WebGL
 ├── music.py               Banda sonora original sintetizada (numpy + scipy)
@@ -36,10 +36,16 @@ showreel-ggj2027/
     └── soundtrack.m4a     Música para el preview
 ```
 
+## Documento PDF
+
+`pdf/dossier.html` es la propuesta en 9 hojas 16:9 con la estética del reel; `node pdf/build_pdf.js` genera
+`pdf/GGJ-Mendoza-2027.pdf` (≈1,5 MB). La portada y la última hoja tienen enlaces al showreel.
+
 ## Versión web (HTML animado, sin video)
 
 `index.html` + `reel.js` es la versión que se publica: el reel se dibuja en vivo en el navegador,
-con la música sincronizada, pantalla de carga, botón de inicio, barra para adelantar, pantalla
+con la música sincronizada. La portada es el primer cuadro del reel (logo de MEGA, título, «Ver showreel»
+y «Ver PDF»); al arrancar sigue sin corte. Tiene barra para adelantar, pantalla
 completa (tecla F) y pantalla final con links.
 
 Para publicarla en `elzorroazul.studio/GGJ/`:
