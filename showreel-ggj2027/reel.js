@@ -75,20 +75,27 @@ function tint(img, color) {
   return c;
 }
 
-async function loadAll() {
+async function loadAll(onProgress = () => {}) {
+  const total = 4 + PHOTO_FILES.length * 2 + 2;  // fuentes + fotos + duotonos + logos
+  let done = 0;
+  const tick = () => onProgress(++done / total);
   const fonts = [
     new FontFace('Anton', 'url(assets/fonts/anton.woff2)'),
     new FontFace('Archivo', 'url(assets/fonts/archivo-wdth.woff2)', { weight: '100 900', stretch: '62% 125%' }),
     new FontFace('JBMono', 'url(assets/fonts/jbmono.woff2)', { weight: '100 800' }),
     new FontFace('SpaceG', 'url(assets/fonts/spacegrotesk.woff2)', { weight: '300 700' }),
   ];
-  await Promise.all(fonts.map(f => f.load().then(ff => document.fonts.add(ff))));
-  const imgs = await Promise.all(PHOTO_FILES.map(f => loadImg(`assets/photos/${f}.jpg`)));
-  imgs.forEach((im, i) => {
-    PH[i + 1] = { raw: im, duo: tone(im, '#050817', '#1A5C9A', '#7FD4F5'), mono: tone(im, '#04060F', '#2A3350', '#C9D2E6', 640) };
-  });
-  LOGO.ggj = await loadImg('assets/logos/ggj_light.png');
-  const mega = await loadImg('assets/logos/mega_negative.png');
+  await Promise.all(fonts.map(f => f.load().then(ff => { document.fonts.add(ff); tick(); })));
+  const imgs = await Promise.all(PHOTO_FILES.map(f => loadImg(`assets/photos/${f}.jpg`).then(im => { tick(); return im; })));
+  for (let i = 0; i < imgs.length; i++) {
+    const im = imgs[i];
+    PH[i + 1] = { raw: im, duo: tone(im, '#050817', '#1A5C9A', '#7FD4F5') };
+    if (i + 1 === 14) PH[14].mono = tone(im, '#04060F', '#2A3350', '#C9D2E6', 640);
+    tick();
+    if (i % 4 === 3) await new Promise(r => setTimeout(r));   // deja respirar a la UI
+  }
+  LOGO.ggj = await loadImg('assets/logos/ggj_light.png'); tick();
+  const mega = await loadImg('assets/logos/mega_negative.png'); tick();
   LOGO.mega = mega; LOGO.megaNavy = tint(mega, NAVY);
   // precalentar fuentes en canvas
   for (const f of Object.values(FAM)) { ctx.font = `900 40px ${f}`; ctx.fillText('ÁÉÍÓÚÑ0123', -500, -500); }
@@ -150,7 +157,7 @@ function cover(g, im, x, y, w, h, z = 1, px = 0, py = 0, alpha = 1) {
   g.drawImage(im, ox, oy, dw, dh);
   g.restore();
 }
-const ph = (n, v = 'raw') => PH[n] && PH[n][v];
+const ph = (n, v = 'raw') => { const p = PH[n]; if (!p) return; if (!p[v] && v === 'mono') p.mono = tone(p.raw, '#04060F', '#2A3350', '#C9D2E6', 640); return p[v]; };
 function rect(g, x, y, w, h, c, a = 1) { g.save(); g.globalAlpha *= a; g.fillStyle = c; g.fillRect(x, y, w, h); g.restore(); }
 function bg(g, c) { g.fillStyle = c; g.fillRect(-200, -200, W + 400, H + 400); }
 function rrect(g, x, y, w, h, r, c, a = 1) { g.save(); g.globalAlpha *= a; g.fillStyle = c; g.beginPath(); g.roundRect(x, y, w, h, r); g.fill(); g.restore(); }
@@ -1307,27 +1314,80 @@ function renderFrame(t) {
 
 // ── modos: render (Playwright) o preview (navegador) ──────────────────────
 window.REEL = { W, H, FPS, DUR, ready: false, renderFrame, grab: (q = .93) => out.toDataURL('image/jpeg', q) };
-loadAll().then(() => {
+const isRender = new URLSearchParams(location.search).has('render');
+const $ = id => document.getElementById(id);
+loadAll(k => { if (!isRender && $('bar')) $('bar').style.transform = `scaleX(${k})`; }).then(() => {
   window.REEL.ready = true;
-  if (new URLSearchParams(location.search).has('render')) { document.body.classList.add('render'); renderFrame(0); return; }
-  const audio = document.getElementById('music');
-  const tcEl = document.getElementById('tc'), btn = document.getElementById('play');
-  let playing = false, t0 = 0, tStart = 0;
-  const now = () => playing ? (audio.readyState >= 2 && !audio.paused ? audio.currentTime : (performance.now() - tStart) / 1000 + t0) : t0;
-  const toggle = () => {
-    if (playing) { t0 = now(); audio.pause(); playing = false; btn.textContent = '▶ PLAY'; }
-    else { if (t0 >= DUR - .05) t0 = 0; audio.currentTime = t0; audio.play().catch(() => {}); tStart = performance.now(); playing = true; btn.textContent = '❚❚ PAUSA'; }
+  if (isRender) { document.body.classList.add('render'); renderFrame(0); return; }
+
+  // ── reproductor web ──
+  const audio = $('music'), stage = $('stage');
+  let playing = false, started = false, t0 = 0, tStart = 0, hideTimer = 0;
+  const now = () => playing ? (performance.now() - tStart) / 1000 + t0 : t0;
+  let lastSync = 0;
+  const syncAudio = t => {
+    if (!playing || audio.paused || audio.readyState < 2) return;
+    const pn = performance.now();
+    if (pn - lastSync < 400) return;
+    lastSync = pn;
+    const drift = audio.currentTime - t;
+    // el audio manda si está sano: corremos el reloj hacia él; si se fue lejos (seek fallido), lo reubicamos
+    if (Math.abs(drift) < .25) { tStart -= drift * 1000 * .5; }
+    else { try { audio.currentTime = t; } catch (e) {} }
   };
-  btn.onclick = toggle;
+  const setUI = () => {
+    document.body.classList.toggle('playing', playing);
+    document.body.classList.toggle('started', started);
+    $('pp').textContent = playing ? '❚❚' : '▶';
+    $('pp').setAttribute('aria-label', playing ? 'Pausa' : 'Reproducir');
+  };
+  const play = () => {
+    if (t0 >= DUR - .05) t0 = 0;
+    started = true; playing = true;
+    try { audio.currentTime = t0; } catch (e) {}
+    audio.play().catch(() => {});
+    tStart = performance.now(); lastSync = performance.now();
+    document.body.classList.remove('ended');
+    setUI(); poke();
+  };
+  const pause = () => { t0 = now(); playing = false; audio.pause(); setUI(); poke(); };
+  const toggle = () => playing ? pause() : play();
+  const seek = s => { t0 = clamp(s, 0, DUR - .01); tStart = performance.now(); lastSync = performance.now(); try { audio.currentTime = t0; } catch (e) {} if (!playing) renderFrame(t0); poke(); };
+  const fs = () => {
+    const d = document;
+    if (d.fullscreenElement || d.webkitFullscreenElement) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+    else (stage.requestFullscreen || stage.webkitRequestFullscreen || (() => {})).call(stage);
+  };
+  // los controles se esconden mientras corre
+  const poke = () => { document.body.classList.add('ui'); clearTimeout(hideTimer); if (playing) hideTimer = setTimeout(() => document.body.classList.remove('ui'), 2200); };
+  addEventListener('pointermove', poke);
+
+  $('start').onclick = play;
+  $('replay').onclick = () => { t0 = 0; play(); };
+  $('pp').onclick = toggle;
+  $('fs').onclick = fs;
+  $('out').onclick = () => { if (started) toggle(); };
+  $('scrub').oninput = e => seek(+e.target.value / 1000 * DUR);
   addEventListener('keydown', e => {
-    if (e.code === 'Space') { e.preventDefault(); toggle(); }
-    if (e.code === 'ArrowRight' || e.code === 'ArrowLeft') { t0 = clamp(now() + (e.code === 'ArrowRight' ? 2 : -2), 0, DUR); audio.currentTime = t0; tStart = performance.now(); }
+    if (e.code === 'Space') { e.preventDefault(); started ? toggle() : play(); }
+    else if (e.code === 'ArrowRight') seek(now() + 2);
+    else if (e.code === 'ArrowLeft') seek(now() - 2);
+    else if (e.code === 'KeyF') fs();
   });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && playing) pause(); });
+
+  document.body.classList.add('loaded');
+  renderFrame(38.6);           // portada: el reveal de 2027
+  setUI();
+  let lastDrawn = -1;
   const loop = () => {
     const t = now();
-    if (t >= DUR) { playing = false; t0 = DUR; btn.textContent = '▶ PLAY'; }
-    renderFrame(Math.min(t, DUR - .001));
-    tcEl.textContent = `${t.toFixed(2)} s`;
+    if (playing && t >= DUR - .02) { playing = false; t0 = DUR - .02; audio.pause(); document.body.classList.add('ended'); setUI(); poke(); }
+    syncAudio(t);
+    if (started && (playing || t !== lastDrawn)) { renderFrame(Math.min(t, DUR - .001)); lastDrawn = t; }
+    $('scrub').value = Math.round(t / DUR * 1000);
+    const s = Math.floor(t);
+    $('tc').textContent = `0:${String(Math.min(s, 59)).padStart(2, '0')} / 1:00`;
     requestAnimationFrame(loop);
   };
   loop();

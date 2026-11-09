@@ -36,6 +36,25 @@ showreel-ggj2027/
     └── soundtrack.m4a     Música para el preview
 ```
 
+## Versión web (HTML animado, sin video)
+
+`index.html` + `reel.js` es la versión que se publica: el reel se dibuja en vivo en el navegador,
+con la música sincronizada, pantalla de carga, botón de inicio, barra para adelantar, pantalla
+completa (tecla F) y pantalla final con links.
+
+Para publicarla en `elzorroazul.studio/GGJMendoza/`:
+
+```bash
+deploy/armar_web.sh
+```
+
+Genera `deploy/GGJMendoza/` (≈15 MB) y `deploy/GGJMendoza.zip`. Se sube por cPanel
+(Administrador de archivos → `public_html` → Cargar el ZIP → Extraer) o por SFTP:
+
+```bash
+deploy/subir_sftp.sh USUARIO@elzorroazul.studio 21098 public_html
+```
+
 ## Ver el preview en el navegador
 
 Hace falta servir la carpeta (las fuentes no cargan desde `file://`):

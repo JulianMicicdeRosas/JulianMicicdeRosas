@@ -2,20 +2,98 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GGJ Mendoza 2027 — Showreel</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Global Game Jam Mendoza 2027</title>
+<meta name="description" content="Global Game Jam Mendoza 2027 · 29, 30 y 31 de enero. 48 horas, 1 tema secreto, 1 videojuego. Organiza la Asociación MEGA junto al Gobierno de Mendoza.">
+<meta name="theme-color" content="#070B1A">
+<meta property="og:title" content="Global Game Jam Mendoza 2027">
+<meta property="og:description" content="48 horas · 1 tema secreto · 1 videojuego. 29 — 31 de enero de 2027.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://elzorroazul.studio/GGJMendoza/">
+<meta property="og:image" content="https://elzorroazul.studio/GGJMendoza/assets/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
 <style>
-  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
-  body { display: grid; place-items: center; font: 14px/1.4 ui-monospace, monospace; color: #9aa3b8; }
-  #out { width: 100vw; height: 56.25vw; max-height: 100vh; max-width: 177.78vh; display: block; background: #070B1A; }
-  #ui { position: fixed; left: 16px; bottom: 12px; display: flex; gap: 12px; align-items: center; opacity: .75; }
-  #ui button { background: #22A9E0; color: #070B1A; border: 0; padding: 6px 12px; font: inherit; font-weight: 700; cursor: pointer; }
-  body.render #ui { display: none; }
+  :root { --navy: #070B1A; --navy2: #0E1630; --blue: #22A9E0; --yel: #F3EB33; --white: #F4F6FA; --mute: #8C97B8; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #000; color: var(--white); overflow: hidden; }
+  body { font: 15px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  #stage { position: fixed; inset: 0; display: grid; place-items: center; background: #000; }
+  #out { width: min(100vw, 177.78vh); height: min(56.25vw, 100vh); display: block; background: var(--navy); cursor: pointer; }
+
+  /* pantalla de inicio */
+  #intro { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px 16px;
+           background: radial-gradient(ellipse at center, rgba(7,11,26,.9), rgba(3,5,12,.97)); transition: opacity .5s; }
+  body.started #intro { opacity: 0; pointer-events: none; }
+  .kicker { font-weight: 700; font-size: 12px; letter-spacing: .28em; color: var(--blue); text-transform: uppercase; margin: 0 0 14px; }
+  h1 { font: 900 clamp(30px, 6.4vw, 76px)/0.98 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin: 0 0 10px; letter-spacing: -.01em; }
+  h1 span { color: var(--yel); }
+  .sub { font-size: clamp(13px, 1.8vw, 17px); color: var(--white); opacity: .85; margin: 0 0 30px; letter-spacing: .08em; }
+  #load { width: min(320px, 70vw); height: 3px; background: #1c2748; margin: 0 auto 14px; overflow: hidden; border-radius: 2px; }
+  #bar { height: 100%; background: var(--yel); transform-origin: left; transform: scaleX(0); transition: transform .15s; }
+  #loadtxt { font-size: 12px; letter-spacing: .2em; color: var(--mute); }
+  #start { display: none; margin: 0 auto; align-items: center; gap: 12px; background: var(--yel); color: var(--navy); border: 0; border-radius: 999px;
+           padding: 16px 30px 16px 24px; font: 800 16px/1 inherit; font-family: inherit; letter-spacing: .12em; cursor: pointer; box-shadow: 0 0 0 0 rgba(243,235,51,.5); animation: pulse 2s infinite; }
+  #start svg { width: 18px; height: 18px; }
+  body.loaded #start { display: inline-flex; }
+  body.loaded #load, body.loaded #loadtxt { display: none; }
+  .hint { margin-top: 18px; font-size: 12px; color: var(--mute); letter-spacing: .12em; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(243,235,51,.45); } 70% { box-shadow: 0 0 0 18px rgba(243,235,51,0); } 100% { box-shadow: 0 0 0 0 rgba(243,235,51,0); } }
+
+  /* final */
+  #end { position: absolute; inset: 0; display: none; place-items: center; text-align: center; padding: 24px 16px; background: rgba(3,5,12,.9); }
+  body.ended #end { display: grid; }
+  .links { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 18px; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 18px; border-radius: 999px; font: 700 13px/1 inherit; font-family: inherit;
+         letter-spacing: .08em; text-decoration: none; cursor: pointer; border: 1.5px solid var(--blue); color: var(--blue); background: transparent; }
+  .btn.primary { background: var(--yel); border-color: var(--yel); color: var(--navy); }
+
+  /* controles */
+  #ctl { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 12px; padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+         background: linear-gradient(transparent, rgba(0,0,0,.75)); opacity: 0; transition: opacity .3s; }
+  body.started.ui #ctl, body.started:not(.playing) #ctl { opacity: 1; }
+  #ctl button { background: none; border: 0; color: var(--white); font: 700 16px/1 inherit; font-family: inherit; cursor: pointer; padding: 6px 8px; min-width: 36px; }
+  #scrub { flex: 1; accent-color: var(--yel); height: 4px; cursor: pointer; }
+  #tc { font-size: 12px; color: var(--mute); min-width: 82px; text-align: right; }
+  body.render #intro, body.render #ctl, body.render #end { display: none !important; }
+  body.started.playing:not(.ui) { cursor: none; }
 </style>
 </head>
-<body>
-<canvas id="out" width="1920" height="1080"></canvas>
-<div id="ui"><button id="play">▶ PLAY</button><span id="tc">00:00</span><span>· espacio = play/pausa · ←/→ = ±2 s</span></div>
+<body class="ui">
+<div id="stage">
+  <canvas id="out" width="1920" height="1080" aria-label="Showreel animado de la Global Game Jam Mendoza 2027"></canvas>
+
+  <div id="intro">
+    <div>
+      <p class="kicker">Asociación MEGA · Mendoza Gamedevs</p>
+      <h1>Global Game Jam<br>Mendoza <span>2027</span></h1>
+      <p class="sub">29 · 30 · 31 DE ENERO — 48 HORAS · 1 TEMA SECRETO · 1 VIDEOJUEGO</p>
+      <div id="load"><div id="bar"></div></div>
+      <div id="loadtxt">CARGANDO…</div>
+      <button id="start" type="button">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>
+        VER EL SHOWREEL
+      </button>
+      <div class="hint">CON SONIDO · 60 SEGUNDOS</div>
+    </div>
+  </div>
+
+  <div id="end">
+    <div>
+      <button class="btn primary" id="replay" type="button">↻ VER DE NUEVO</button>
+      <div class="links">
+        <a class="btn" href="https://www.globalgamejammendoza.com/" target="_blank" rel="noopener">globalgamejammendoza.com</a>
+        <a class="btn" href="https://linktr.ee/comunidad.mega" target="_blank" rel="noopener">linktr.ee/comunidad.mega</a>
+      </div>
+    </div>
+  </div>
+
+  <div id="ctl">
+    <button id="pp" type="button" aria-label="Reproducir">▶</button>
+    <input id="scrub" type="range" min="0" max="1000" value="0" aria-label="Posición">
+    <span id="tc">0:00 / 1:00</span>
+    <button id="fs" type="button" aria-label="Pantalla completa">⛶</button>
+  </div>
+</div>
 <audio id="music" src="assets/soundtrack.m4a" preload="auto"></audio>
 <script src="reel.js"></script>
 </body>
