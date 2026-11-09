@@ -51,7 +51,23 @@ const FAM = { anton: 'Anton', arch: 'Archivo', mono: 'JBMono', sg: 'SpaceG' };
 function loadImg(url) { return new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = url; }); }
 
 function rgb(hex) { const v = parseInt(hex.slice(1), 16); return [v >> 16 & 255, v >> 8 & 255, v & 255]; }
+let PIXELS_OK = true;   // false si el navegador no deja leer píxeles (página abierta con file://)
+function toneFast(img, dark, light, w) {
+  const h = Math.round(img.height * w / img.width);
+  const c = mk(w, h), x = c.getContext('2d');
+  x.filter = 'grayscale(1) contrast(1.35)';
+  x.drawImage(img, 0, 0, w, h);
+  x.filter = 'none';
+  x.globalCompositeOperation = 'multiply'; x.fillStyle = light; x.fillRect(0, 0, w, h);
+  x.globalCompositeOperation = 'screen'; x.fillStyle = dark; x.fillRect(0, 0, w, h);
+  return c;
+}
 function tone(img, dark, mid, light, w = 960, contrast = [0.06, 0.9]) {
+  if (!PIXELS_OK) return toneFast(img, dark, light, w);
+  try { return toneExact(img, dark, mid, light, w, contrast); }
+  catch (e) { PIXELS_OK = false; return toneFast(img, dark, light, w); }
+}
+function toneExact(img, dark, mid, light, w, contrast) {
   const h = Math.round(img.height * w / img.width);
   const c = mk(w, h), x = c.getContext('2d');
   x.drawImage(img, 0, 0, w, h);
@@ -1243,8 +1259,22 @@ function hud(g, b, t) {
 }
 
 // ── post-proceso WebGL ────────────────────────────────────────────────────
-const out = document.getElementById('out');
-const gl = out.getContext('webgl', { preserveDrawingBuffer: true, antialias: false });
+let out = document.getElementById('out');
+let gl = null;
+try { gl = out.getContext('webgl', { preserveDrawingBuffer: true, antialias: false }); } catch (e) { gl = null; }
+let POST = !!gl, out2d = null, vigGrad = null;
+// si WebGL no está o no acepta la imagen (file://), se reemplaza el lienzo por uno 2D
+function fallback2D() {
+  POST = false;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H; c.id = 'out';
+  if (out.getAttribute('aria-label')) c.setAttribute('aria-label', out.getAttribute('aria-label'));
+  out.replaceWith(c); out = c;
+  out2d = c.getContext('2d');
+  vigGrad = out2d.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, H * 1.05);
+  vigGrad.addColorStop(0, 'rgba(0,0,0,0)'); vigGrad.addColorStop(1, 'rgba(0,0,0,1)');
+}
+
 const VS = `attribute vec2 p; varying vec2 uv; void main(){ uv = p*.5+.5; uv.y = 1.-uv.y; gl_Position = vec4(p,0.,1.); }`;
 const FS = `precision highp float; varying vec2 uv; uniform sampler2D tex;
 uniform float t, ab, glitch, grain, flash, vig;
@@ -1271,17 +1301,23 @@ void main(){
   c = mix(c, vec3(1.), clamp(flash, 0., 1.));
   gl_FragColor = vec4(c, 1.);
 }`;
-function sh(type, s) { const o = gl.createShader(type); gl.shaderSource(o, s); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw gl.getShaderInfoLog(o); return o; }
-const prog = gl.createProgram();
-gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog); gl.useProgram(prog);
-const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
-const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-const texo = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, texo);
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-const U = {}; for (const n of ['t', 'ab', 'glitch', 'grain', 'flash', 'vig']) U[n] = gl.getUniformLocation(prog, n);
-gl.viewport(0, 0, W, H);
+const U = {};
+let texo = null;
+if (gl) {
+  try {
+  function sh(type, s) { const o = gl.createShader(type); gl.shaderSource(o, s); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw gl.getShaderInfoLog(o); return o; }
+  const prog = gl.createProgram();
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog); gl.useProgram(prog);
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  texo = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, texo);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  for (const n of ['t', 'ab', 'glitch', 'grain', 'flash', 'vig']) U[n] = gl.getUniformLocation(prog, n);
+  gl.viewport(0, 0, W, H);
+  } catch (e) { console.warn('WebGL no disponible, salida 2D', e); POST = false; }
+}
 
 // ── cuadro ────────────────────────────────────────────────────────────────
 function renderFrame(t) {
@@ -1305,8 +1341,16 @@ function renderFrame(t) {
   ctx.restore();
   hud(ctx, b, t);
   // post
-  gl.bindTexture(gl.TEXTURE_2D, texo);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+  if (POST) {
+    try { gl.bindTexture(gl.TEXTURE_2D, texo); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); }
+    catch (e) { fallback2D(); }
+  } else if (!out2d) fallback2D();
+  if (!POST) {
+    out2d.drawImage(src, 0, 0);
+    if (FX.vig > 0) { out2d.globalAlpha = clamp(FX.vig * .6); out2d.fillStyle = vigGrad; out2d.fillRect(0, 0, W, H); out2d.globalAlpha = 1; }
+    if (FX.flash > 0) { out2d.globalAlpha = clamp(FX.flash); out2d.fillStyle = '#fff'; out2d.fillRect(0, 0, W, H); out2d.globalAlpha = 1; }
+    return;
+  }
   gl.uniform1f(U.t, t); gl.uniform1f(U.ab, FX.ab); gl.uniform1f(U.glitch, FX.glitch); gl.uniform1f(U.grain, FX.grain);
   gl.uniform1f(U.flash, FX.flash); gl.uniform1f(U.vig, FX.vig);
   gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -1314,14 +1358,20 @@ function renderFrame(t) {
 
 // ── modos: render (Playwright) o preview (navegador) ──────────────────────
 window.REEL = { W, H, FPS, DUR, ready: false, renderFrame, grab: (q = .93) => out.toDataURL('image/jpeg', q) };
+window.addEventListener('error', e => { const el = document.getElementById('loadtxt'); if (el && !document.body.classList.contains('loaded')) el.textContent = 'ERROR AL CARGAR · ' + (e.message || ''); });
 const isRender = new URLSearchParams(location.search).has('render');
 const $ = id => document.getElementById(id);
-loadAll(k => { if (!isRender && $('bar')) $('bar').style.transform = `scaleX(${k})`; }).then(() => {
+loadAll(k => { if (!isRender && $('bar')) $('bar').style.transform = `scaleX(${k})`; }).catch(e => {
+  console.error(e);
+  if ($('loadtxt')) $('loadtxt').textContent = 'NO SE PUDO CARGAR · ' + (e && e.message ? e.message : e);
+  throw e;
+}).then(() => {
   window.REEL.ready = true;
   if (isRender) { document.body.classList.add('render'); renderFrame(0); return; }
 
   // ── reproductor web ──
   const audio = $('music'), stage = $('stage');
+  renderFrame(38.6);           // portada: el reveal de 2027 (si hace falta, acá se cambia a salida 2D)
   let playing = false, started = false, t0 = 0, tStart = 0, hideTimer = 0;
   const now = () => playing ? (performance.now() - tStart) / 1000 + t0 : t0;
   let lastSync = 0;
@@ -1377,7 +1427,6 @@ loadAll(k => { if (!isRender && $('bar')) $('bar').style.transform = `scaleX(${k
   document.addEventListener('visibilitychange', () => { if (document.hidden && playing) pause(); });
 
   document.body.classList.add('loaded');
-  renderFrame(38.6);           // portada: el reveal de 2027
   setUI();
   let lastDrawn = -1;
   const loop = () => {
