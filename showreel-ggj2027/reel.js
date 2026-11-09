@@ -5,8 +5,8 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 
-const W = 1920, H = 1080, FPS = 60, DUR = 60;
-const BPM = 128, B = 60 / BPM, BAR = 4 * B;
+const W = 1920, H = 1080, FPS = 60, DUR = 90;
+const BPM = 32 * 4 * 60 / DUR, B = 60 / BPM, BAR = 4 * B;   // 85,3 BPM: 32 compases = 90 s
 
 // ── paleta (marca GGJ + navy MEGA) ─────────────────────────────────────────
 const NAVY = '#070B1A', NAVY2 = '#0E1630', NAVY3 = '#16224A';
@@ -48,7 +48,7 @@ const PH = [];          // PH[n] (1-based): { raw, duo, mono }
 const LOGO = {};
 const FAM = { anton: 'Anton', arch: 'Archivo', mono: 'JBMono', sg: 'SpaceG' };
 
-function loadImg(url) { return new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = url; }); }
+function loadImg(url) { return new Promise((ok, ko) => { const i = new Image(); i.decoding = 'async'; i.onload = () => (i.decode ? i.decode().catch(() => {}) : Promise.resolve()).then(() => ok(i)); i.onerror = ko; i.src = url; }); }
 
 function rgb(hex) { const v = parseInt(hex.slice(1), 16); return [v >> 16 & 255, v >> 8 & 255, v & 255]; }
 let PIXELS_OK = true;   // false si el navegador no deja leer píxeles (página abierta con file://)
@@ -91,30 +91,43 @@ function tint(img, color) {
   return c;
 }
 
-async function loadAll(onProgress = () => {}) {
-  const total = 4 + PHOTO_FILES.length * 2 + 2;  // fuentes + fotos + duotonos + logos
-  let done = 0;
-  const tick = () => onProgress(++done / total);
+// orden en que aparece cada foto por primera vez (las primeras se bajan antes)
+const PHOTO_PRIORITY = [34, 39, 16, 20, 60, 21, 27, 37, 46, 30, 52, 45, 11, 49, 3, 31, 28, 14, 33, 18, 44, 9, 36, 38, 50, 23, 12, 54, 53, 47, 24, 5, 43, 13, 2, 42, 1, 4, 6, 35, 19, 40, 29, 26, 17, 55, 51, 7, 61, 41, 22, 58, 62, 59, 56, 15, 10];   // primer uso, trazado con renderFrame
+const CANVAS_FILTER = typeof CanvasRenderingContext2D !== 'undefined' && 'filter' in CanvasRenderingContext2D.prototype;
+function makePhoto(im) {
+  // duotono rápido por composición (GPU) si hay filtros de canvas; si no, el exacto
+  return { raw: im, duo: CANVAS_FILTER ? toneFast(im, '#050817', '#7FD4F5', 960) : tone(im, '#050817', '#1A5C9A', '#7FD4F5') };
+}
+// núcleo liviano (~350 KB): fuentes y logos. Con esto ya se puede arrancar.
+async function loadCore() {
   const fonts = [
     new FontFace('Anton', 'url(assets/fonts/anton.woff2)'),
     new FontFace('Archivo', 'url(assets/fonts/archivo-wdth.woff2)', { weight: '100 900', stretch: '62% 125%' }),
     new FontFace('JBMono', 'url(assets/fonts/jbmono.woff2)', { weight: '100 800' }),
     new FontFace('SpaceG', 'url(assets/fonts/spacegrotesk.woff2)', { weight: '300 700' }),
   ];
-  await Promise.all(fonts.map(f => f.load().then(ff => { document.fonts.add(ff); tick(); })));
-  const imgs = await Promise.all(PHOTO_FILES.map(f => loadImg(`assets/photos/${f}.jpg`).then(im => { tick(); return im; })));
-  for (let i = 0; i < imgs.length; i++) {
-    const im = imgs[i];
-    PH[i + 1] = { raw: im, duo: tone(im, '#050817', '#1A5C9A', '#7FD4F5') };
-    if (i + 1 === 14) PH[14].mono = tone(im, '#04060F', '#2A3350', '#C9D2E6', 640);
-    tick();
-    if (i % 4 === 3) await new Promise(r => setTimeout(r));   // deja respirar a la UI
-  }
-  LOGO.ggj = await loadImg('assets/logos/ggj_light.png'); tick();
-  const mega = await loadImg('assets/logos/mega_negative.png'); tick();
-  LOGO.mega = mega; LOGO.megaNavy = tint(mega, NAVY);
-  // precalentar fuentes en canvas
+  const [ggj, mega] = await Promise.all([
+    loadImg('assets/logos/ggj_light.png'), loadImg('assets/logos/mega_negative.png'),
+    ...fonts.map(f => f.load().then(ff => document.fonts.add(ff))),
+  ]);
+  LOGO.ggj = ggj; LOGO.mega = mega; LOGO.megaNavy = tint(mega, NAVY);
   for (const f of Object.values(FAM)) { ctx.font = `900 40px ${f}`; ctx.fillText('ÁÉÍÓÚÑ0123', -500, -500); }
+}
+// fotos en segundo plano, en orden de aparición, de a 6
+function loadPhotos(onEach = () => {}) {
+  const order = [...new Set([...PHOTO_PRIORITY, ...PHOTO_FILES.map((_, i) => i + 1)])];
+  let next = 0, done = 0;
+  return new Promise(resolve => {
+    const worker = () => {
+      if (next >= order.length) return;
+      const n = order[next++];
+      loadImg(`assets/photos/${PHOTO_FILES[n - 1]}.webp`)
+        .then(im => { PH[n] = makePhoto(im); })
+        .catch(() => {})
+        .then(() => { onEach(++done / order.length); if (done === order.length) resolve(); worker(); });
+    };
+    for (let i = 0; i < 6; i++) worker();
+  });
 }
 
 // ── primitivas de dibujo ───────────────────────────────────────────────────
@@ -173,7 +186,7 @@ function cover(g, im, x, y, w, h, z = 1, px = 0, py = 0, alpha = 1) {
   g.drawImage(im, ox, oy, dw, dh);
   g.restore();
 }
-const ph = (n, v = 'raw') => { const p = PH[n]; if (!p) return; if (!p[v] && v === 'mono') p.mono = tone(p.raw, '#04060F', '#2A3350', '#C9D2E6', 640); return p[v]; };
+const ph = (n, v = 'raw') => { if (window.__phTrace) window.__phTrace(n); const p = PH[n]; if (!p) return; if (!p[v] && v === 'mono') p.mono = tone(p.raw, '#04060F', '#2A3350', '#C9D2E6', 640); return p[v]; };
 function rect(g, x, y, w, h, c, a = 1) { g.save(); g.globalAlpha *= a; g.fillStyle = c; g.fillRect(x, y, w, h); g.restore(); }
 function bg(g, c) { g.fillStyle = c; g.fillRect(-200, -200, W + 400, H + 400); }
 function rrect(g, x, y, w, h, r, c, a = 1) { g.save(); g.globalAlpha *= a; g.fillStyle = c; g.beginPath(); g.roundRect(x, y, w, h, r); g.fill(); g.restore(); }
@@ -304,20 +317,42 @@ function sBoot(g, b, lb) {
   const gr = g.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, 1100);
   gr.addColorStop(0, '#101a3a'); gr.addColorStop(1, '#03050c'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
   dotGrid(g, 48, BLUE, .22, b * B, P(lb, 0, 2.5, ease.outCubic) * 1300);
-  const k1 = P(lb, 0, 1.2);
+  // ident MEGA (beats 0 – 2)
+  if (lb < 2) {
+    const lg = LOGO.mega, lw = 980, lh = lw * lg.height / lg.width;
+    const x0 = W / 2 - lw / 2, y0 = H / 2 - lh / 2 - 40;
+    const out = P(lb, 1.7, .3, ease.inExpo);
+    const cols = 10;
+    g.save(); g.globalAlpha = 1 - out;
+    g.translate(W / 2, H / 2); g.scale(1 + out * .25, 1 + out * .25); g.translate(-W / 2, -H / 2);
+    for (let i = 0; i < cols; i++) {
+      const k = P(lb, .05 + i * .045, .6, ease.outBack);
+      if (k <= 0) continue;
+      const sx = lg.width * i / cols, sw = lg.width / cols;
+      const dx = x0 + lw * i / cols, dw = lw / cols;
+      g.drawImage(lg, sx, 0, sw, lg.height, dx, y0 + (1 - k) * (i % 2 ? 140 : -140), dw + .5, lh);
+    }
+    rect(g, W / 2 - 260 * P(lb, .7, .6), y0 + lh + 60, 520 * P(lb, .7, .6), 8, YEL);
+    txt(g, typeOn('PRESENTA', P(lb, .9, .6, ease.lin)), W / 2, y0 + lh + 125, 30, { fam: 'mono', weight: 700, color: WHITE, track: 18 });
+    g.restore();
+    FX.glitch = lb > 1.6 ? .5 : 0;
+    FX.ab = .3 + hit(lb, .05, .4) * 1.2 + out * 1.5; FX.grain = .08;
+    return;
+  }
+  const k1 = P(lb, 2, 1.2);
   line(g, W / 2 - k1 * W / 2, H / 2, W / 2 + k1 * W / 2, H / 2, WHITE, 1, .25);
   line(g, W / 2, H / 2 - k1 * H / 2, W / 2, H / 2 + k1 * H / 2, WHITE, 1, .25);
-  ring(g, W / 2, H / 2, 40 + P(lb, 0, 1) * 330, 1.5, WHITE, .2 * (1 - P(lb, 2.5, 1.5)));
+  ring(g, W / 2, H / 2, 40 + P(lb, 2, 1) * 330, 1.5, WHITE, .2 * (1 - P(lb, 3.2, .8)));
   // reloj
-  const kc = ease.inCubic(clamp((lb - .3) / 3.2));
+  const kc = ease.inCubic(clamp((lb - 2.05) / 1.4));
   const secs = kc * 48 * 3600;
   const done = lb >= 3.5;
   const s = done ? '48:00:00' : fmtTime(secs);
   const pulse = hit(lb, 3.5, .4);
   g.save(); g.translate(W / 2, H / 2); g.scale(1 + pulse * .12, 1 + pulse * .12);
-  txt(g, s, 0, 0, 190, { fam: 'mono', weight: 700, color: done ? YEL : WHITE, track: 6, alpha: P(lb, 0, .4) });
+  txt(g, s, 0, 0, 190, { fam: 'mono', weight: 700, color: done ? YEL : WHITE, track: 6, alpha: P(lb, 2, .25) });
   g.restore();
-  txt(g, typeOn('TIEMPO DE DESARROLLO', P(lb, .5, 1.2, ease.lin)), W / 2, H / 2 - 160, 26, { fam: 'mono', weight: 500, color: BLUE, track: 8 });
+  txt(g, typeOn('TIEMPO DE DESARROLLO', P(lb, 2.1, .8, ease.lin)), W / 2, H / 2 - 160, 26, { fam: 'mono', weight: 500, color: BLUE, track: 8 });
   const fr = Math.floor((b * B * FPS)) % 60;
   txt(g, `FRAME ${String(fr).padStart(2, '0')}`, W / 2, H / 2 + 150, 22, { fam: 'mono', weight: 500, color: WHITE, track: 6, alpha: .45 });
   FX.ab = .3 + pulse; FX.grain = .08;
@@ -328,14 +363,14 @@ function s48(g, b, lb) {
   bg(g, NAVY);
   const beat = Math.floor(lb);
   const k = P(lb, 0, .45);
-  const sc = lerp(2.2, 1, k) + hit(lb, Math.floor(lb), .25) * .04;
+  const sc = lerp(1.12, 1, k) + hit(lb, Math.floor(lb), .25) * .02;
   const cx = W / 2, cy = H / 2 - 10;
   g.save(); g.translate(cx, cy); g.scale(sc, sc); g.translate(-cx, -cy);
   const o = { fam: 'anton', track: -10 };
-  if (beat === 0) txt(g, '48', cx, cy, 900, { ...o, color: WHITE });
-  else if (beat === 1) { cover(g, ph(34, 'duo'), 0, 0, W, H, 1.25 - lb * .03, 0, 0, .35); photoText(g, '48', cx, cy, 900, o, ph(34), 1.3 - lb * .04); }
-  else if (beat === 2) txt(g, '48', cx, cy, 900, { ...o, color: YEL });
-  else { cover(g, ph(39, 'duo'), 0, 0, W, H, 1.1, 0, 0, .55); txt(g, '48', cx, cy, 900, { ...o, stroke: 10, color: BLUE }); }
+  if (beat === 0) txt(g, '48', cx, cy, 720, { ...o, color: WHITE });
+  else if (beat === 1) { cover(g, ph(34, 'duo'), 0, 0, W, H, 1.25 - lb * .03, 0, 0, .35); photoText(g, '48', cx, cy, 720, o, ph(34), 1.3 - lb * .04); }
+  else if (beat === 2) txt(g, '48', cx, cy, 720, { ...o, color: YEL });
+  else { cover(g, ph(39, 'duo'), 0, 0, W, H, 1.1, 0, 0, .55); txt(g, '48', cx, cy, 720, { ...o, stroke: 10, color: BLUE }); }
   g.restore();
   // banda amarilla con HORAS
   const kb = P(lb, .5, .6, ease.inOutExpo);
@@ -367,8 +402,7 @@ function sOne(g, b, lb) {
     const t0 = i;
     const kIn = P(lb, t0, .3, ease.inOutCubic), kOut = P(lb, t0 + .3, .35, ease.inOutCubic);
     const x0 = 360, wMax = 1300;
-    const sx = -out * (1400 + i * 300);
-    g.save(); g.translate(sx, 0);
+    g.save(); g.globalAlpha = 1 - out; g.translate(-out * 60, 0);
     if (lb >= t0 + .3) {
       txt(g, '1', x0, y + 6, 210, { fam: 'anton', color: YEL, align: 'center' });
       chars(g, w, x0 + 140, y, 180, { fam: 'arch', stretch: 'condensed', weight: 900, color: WHITE, align: 'left', track: 2 }, (j) => ({ dy: 0, a: 1 }));
@@ -422,7 +456,7 @@ function sGlobe(g, b, lb) {
   orbit(true);
   // "GLOBAL GAME JAM" con tracking que se cierra
   const kt = P(lb, 1.2, 2.2, ease.outExpo);
-  txt(g, 'GLOBAL GAME JAM', cx, 870, 112, { fam: 'arch', stretch: 'expanded', weight: 900, color: WHITE, track: lerp(140, 12, kt), alpha: kt });
+  txt(g, 'GLOBAL GAME JAM', cx, 870, 112, { fam: 'arch', stretch: 'expanded', weight: 900, color: WHITE, track: lerp(48, 12, kt), alpha: kt });
   txt(g, 'LA GAME JAM MÁS GRANDE DEL MUNDO', cx, 960, 26, { fam: 'mono', weight: 600, color: BLUE, track: 10, alpha: P(lb, 2.2, .6) });
   FX.flash = ease.inExpo(clamp((lb - 3.4) / .6)) * .95;
   FX.ab = .2 + lb * .15;
@@ -445,7 +479,7 @@ function sMendoza(g, b, lb) {
     txt(g, 'MENDOZA', W / 2, H / 2 - i * e, size, { ...o, stroke: 2.5, color: i % 2 ? BLUE : YEL, alpha: .55 - i * .12 });
   }
   const kin = P(lb, 0, .5);
-  g.save(); g.translate(W / 2, H / 2); g.scale(lerp(1.3, 1, kin), lerp(1.3, 1, kin)); g.translate(-W / 2, -H / 2);
+  g.save(); g.translate(W / 2, H / 2); g.scale(lerp(1.04, 1, kin), lerp(1.04, 1, kin)); g.translate(-W / 2, -H / 2);
   photoText(g, 'MENDOZA', W / 2, H / 2, size, o, im, 1.25 - fract(lb) * .08, 0, 0);
   g.restore();
   txt(g, typeOn('32°53′S  68°50′O', P(lb, .3, 1.2, ease.lin)), W / 2, 150, 30, { fam: 'mono', weight: 600, color: WHITE, track: 10 });
@@ -464,10 +498,11 @@ function sTriptych(g, b, lb) {
     const x = gap + i * (pw + gap);
     const dir = i % 2 ? 1 : -1;
     const kin = P(lb, i * .12, .6, ease.outExpo);
-    const yoff = dir * (1 - kin) * H;
+    const yoff = dir * (1 - kin) * 40;
     const n = sets[beat % 4][i];
     const sw = P(lb, beat + i * .08, .35, ease.inOutCubic);
-    g.save(); g.translate(0, yoff);
+    g.save(); g.translate(0, yoff); g.globalAlpha = kin;
+    g.beginPath(); g.rect(x, gap, pw, H - gap * 2); g.clip();
     cover(g, ph(n), x, gap, pw, H - gap * 2, 1.15 + fract(lb) * .05, 0, dir * .3 * (lb / 4));
     // barrido vertical al cambiar
     if (beat > 0) { const prev = sets[(beat - 1) % 4][i]; g.save(); g.beginPath(); g.rect(x, gap + (H - gap * 2) * sw, pw, (H - gap * 2) * (1 - sw)); g.clip(); cover(g, ph(prev), x, gap, pw, H - gap * 2, 1.2, 0, 0); g.restore(); }
@@ -477,7 +512,8 @@ function sTriptych(g, b, lb) {
   g.save(); g.globalCompositeOperation = 'difference';
   const word = lb < 2 ? 'COMUNIDAD' : 'DESDE 2012';
   const lk = lb < 2 ? P(lb, 0, .5) : P(lb, 2, .5);
-  txt(g, word, W / 2, H / 2, fit(g, word, 1700, 330, { fam: 'anton' }), { fam: 'anton', color: '#fff', track: lerp(60, 6, lk), alpha: lk });
+  const trk = lerp(30, 6, lk);
+  txt(g, word, W / 2, H / 2, fit(g, word, 1640, 330, { fam: 'anton', track: trk }), { fam: 'anton', color: '#fff', track: trk, alpha: lk });
   g.restore();
   txt(g, lb < 2 ? 'DESARROLLADORES · ARTISTAS · MÚSICOS · CURIOSOS' : 'MENDOZA ES SEDE DE LA GGJ AÑO TRAS AÑO', W / 2, H - 120, 26, { fam: 'mono', weight: 700, color: WHITE, track: 6, alpha: lk });
   FX.ab = .3 + hit(lb, beat, .3) * .7;
@@ -545,7 +581,7 @@ function sGrid(g, b, lb) {
   const cols = 4, rows = 3, gap = 10;
   const tw = (W - gap * (cols + 1)) / cols, th = (H - gap * (rows + 1)) / rows;
   const imgs = [36, 52, 9, 46, 34, 23, 12, 50, 38, 27, 54, 44];
-  const zout = lerp(1.18, 1, P(lb, 0, 3.5, ease.outCubic));
+  const zout = lerp(.96, 1, P(lb, 0, 3.5, ease.outCubic));
   g.save(); g.translate(W / 2, H / 2); g.scale(zout, zout); g.translate(-W / 2, -H / 2);
   for (let i = 0; i < cols * rows; i++) {
     const c = i % cols, r = Math.floor(i / cols);
@@ -588,7 +624,7 @@ function sStats(g, b, lb) {
   g.fillStyle = gr; g.fillRect(0, 0, W, H);
   const first = lb < 2;
   const k = first ? P(lb, 0, 1.4, ease.outCubic) : P(lb, 2, 1.2, ease.outCubic);
-  const slide = first ? -P(lb, 1.75, .25, ease.inExpo) * 300 : (1 - P(lb, 2, .3)) * 300;
+  const slide = first ? -P(lb, 1.75, .25, ease.inExpo) * 90 : (1 - P(lb, 2, .3)) * 90;
   g.save(); g.translate(0, slide); g.globalAlpha = first ? 1 - P(lb, 1.8, .2) : P(lb, 2, .15);
   const val = first ? Math.round(k * 120) : Math.round(k * 20);
   txt(g, String(val), 130, 470, 560, { fam: 'anton', color: WHITE, align: 'left' });
@@ -652,7 +688,7 @@ function sCarousel(g, b, lb) {
   const base = -step * (Math.PI * 2 / n) * 1;
   const cards = imgs.map((im, i) => {
     const a = base + i * Math.PI * 2 / n;
-    return { im, x: Math.sin(a) * 760, z: Math.cos(a), i };
+    return { im, x: Math.sin(a) * 600, z: Math.cos(a), i };
   }).sort((p, q) => p.z - q.z);
   const cy = 600;
   for (const c of cards) {
@@ -683,35 +719,40 @@ function sCarousel(g, b, lb) {
 const GAMES = ['BURPOCALYPSE', 'MAGIC BUBBLE GIRL', 'BUGBUBBLE', 'OZONO', 'COBAYO SMASH', 'BOOM', 'BUBBLE TOWER', 'FURBALL', 'BUBBLEMANCER', 'SLIME POPPER', 'RISE OF PATAGONS', 'BURBUJA MENTAL', 'BUBBLE RUBBLE RAT', 'UNDER ZOMOK', 'MASKREATE', 'IN PLAIN SIGHT', 'MASK A CRIME', 'PAZU', 'GOODLES', 'VOID HUNTER VR', 'THE BALLROOM TRADER', 'RUPU ELKA', 'SAPO BASURA', 'FUNNY SLAPPY', "WHO'S NEXT?", 'NO FACE', 'KIVULI', 'SARCOPHAGUS ODYSSEY', 'LIFE IN A BUBBLE', 'ALQUILER IMPAGO'];
 function sMarquee(g, b, lb) {
   bg(g, NAVY);
-  g.save(); g.translate(W / 2, H / 2); g.rotate(-.12); g.scale(1.25, 1.25); g.translate(-W / 2, -H / 2);
-  const rows = 7, rh = 190;
-  for (let r = 0; r < rows; r++) {
-    const y = -140 + r * rh;
-    const dir = r % 2 ? 1 : -1;
-    const speed = 340 + r * 40;
-    const line_ = Array.from({ length: 6 }, (_, j) => GAMES[(r * 5 + j * 7) % GAMES.length]).join('  ·  ') + '  ·  ';
-    setFont(g, 'anton', 150, {});
-    const lw = g.measureText(line_).width;
-    let off = (lb * B * speed * dir) % lw; if (off > 0) off -= lw;
-    for (let k = 0; k < 3; k++) {
-      const style = r % 3;
-      txt(g, line_, off + k * lw - 300, y, 150, { fam: 'anton', align: 'left', color: style === 0 ? WHITE : style === 1 ? BLUE : YEL, stroke: style === 1 ? 3 : 0, alpha: style === 2 ? .9 : .85 });
-    }
-  }
+  dotGrid(g, 48, BLUE, .08, b * B);
+  // cifra
+  const kb = P(lb, 0, .5, ease.outBack);
+  const pul = 1 + kickPulse(b) * .02;
+  g.save(); g.translate(W / 2, 205); g.scale(kb * pul, kb * pul);
+  txt(g, '41 JUEGOS', 0, 0, 190, { fam: 'anton', color: YEL, track: 4 });
   g.restore();
-  vgrad(g, 0, H, 'rgba(7,11,26,.0)', 'rgba(7,11,26,.0)');
-  const kb = P(lb, .4, .5, ease.outBack);
-  const pul = 1 + kickPulse(b) * .03;
-  if (kb > 0) {
-    g.save(); g.translate(W / 2, H / 2); g.scale(kb * pul, kb * pul); g.rotate(.04);
-    rect(g, -470, -230, 940, 460, YEL);
-    rect(g, -470, 230, 940, 18, NAVY, .35);
-    txt(g, '41 JUEGOS', 0, -38, 230, { fam: 'anton', color: NAVY });
-    txt(g, 'EN LAS ÚLTIMAS 2 GLOBAL GAME JAMS', 0, 140, 34, { fam: 'mono', weight: 800, color: NAVY, track: 3 });
-    g.restore();
+  txt(g, 'EN LAS ÚLTIMAS 2 GLOBAL GAME JAMS', W / 2, 340, 30, { fam: 'mono', weight: 800, color: WHITE, track: 5, alpha: P(lb, .3, .4) });
+  // títulos reales en chips, acomodados en filas centradas
+  const size = 34, padX = 26, hgt = 64, gapX = 14, gapY = 16, maxW = W - 200;
+  const items = GAMES.map(t => ({ t, w: measure(g, t, size, { fam: 'anton', track: 1 }) + padX * 2 }));
+  const rows = []; let row = [], rw = 0;
+  for (const it of items) { if (rw + it.w > maxW && row.length) { rows.push([row, rw - gapX]); row = []; rw = 0; } row.push(it); rw += it.w + gapX; }
+  if (row.length) rows.push([row, rw - gapX]);
+  let y = 420, idx = 0;
+  for (const [r, wTot] of rows) {
+    let x = (W - wTot) / 2;
+    for (const it of r) {
+      const k = P(lb, .5 + idx * .07, .45, ease.outBack);
+      if (k > 0) {
+        const style = idx % 3, cx = x + it.w / 2, cy = y + hgt / 2;
+        g.save(); g.translate(cx, cy); g.scale(k, k); g.globalAlpha = clamp(k);
+        if (style === 0) rrect(g, -it.w / 2, -hgt / 2, it.w, hgt, hgt / 2, BLUE);
+        else if (style === 1) { g.strokeStyle = WHITE; g.lineWidth = 2.5; g.beginPath(); g.roundRect(-it.w / 2, -hgt / 2, it.w, hgt, hgt / 2); g.stroke(); }
+        else rrect(g, -it.w / 2, -hgt / 2, it.w, hgt, hgt / 2, NAVY3);
+        txt(g, it.t, 0, 3, size, { fam: 'anton', color: style === 0 ? NAVY : WHITE, track: 1 });
+        g.restore();
+      }
+      x += it.w + gapX; idx++;
+    }
+    y += hgt + gapY;
   }
-  FX.flash = hit(lb, 0, .25) * .5;
-  FX.ab = .3 + kickPulse(b);
+  FX.flash = hit(lb, 0, .25) * .4;
+  FX.ab = .25 + kickPulse(b) * .8;
 }
 
 // 14 · MEGAJAM DE INVIERNO 2025
@@ -760,8 +801,8 @@ function sStorm(g, b, lb) {
   const beat = Math.floor(lb);
   const w = words[beat];
   const k = P(lb, beat, .3);
-  const size = fit(g, w, 1650, 360, { fam: 'arch', stretch: 'extra-condensed', weight: 900 });
-  g.save(); g.translate(W / 2, H / 2); g.scale(lerp(1.25, 1, k), lerp(1.25, 1, k));
+  const size = fit(g, w, 1500, 360, { fam: 'arch', stretch: 'extra-condensed', weight: 900 });
+  g.save(); g.translate(W / 2, H / 2); g.scale(lerp(1.08, 1, k), lerp(1.08, 1, k));
   txt(g, w, 8, 8, size, { fam: 'arch', stretch: 'extra-condensed', weight: 900, color: NAVY, alpha: .6 });
   txt(g, w, 0, 0, size, { fam: 'arch', stretch: 'extra-condensed', weight: 900, color: WHITE });
   rect(g, -300 * k, size * .42, 600 * k, 16, YEL);
@@ -785,10 +826,10 @@ function sSlices(g, b, lb) {
     rect(g, x, i * sh, W, sh + 1, NAVY);
   }
   const kt = P(lb, .8, .5);
-  const zoomOut = ease.inExpo(clamp((lb - 3.2) / .8));
-  g.save(); g.translate(W / 2, H / 2); g.scale(1 + zoomOut * 3, 1 + zoomOut * 3); g.translate(-W / 2, -H / 2);
-  chars(g, 'EL PRIMER PASO', W / 2, 430, 190, { fam: 'anton', color: WHITE, track: 4 }, (i) => ({ dy: (1 - P(lb, .8 + i * .03, .5)) * 160, a: P(lb, .8 + i * .03, .3) }));
-  chars(g, 'HACIA LA INDUSTRIA', W / 2, 640, 150, { fam: 'anton', color: YEL, track: 4 }, (i) => ({ dy: (1 - P(lb, 1.3 + i * .03, .5)) * 160, a: P(lb, 1.3 + i * .03, .3) }));
+  const zoomOut = ease.inCubic(clamp((lb - 3.0) / .6));
+  g.save(); g.globalAlpha = 1 - zoomOut; g.translate(W / 2, H / 2); g.scale(1 + zoomOut * .06, 1 + zoomOut * .06); g.translate(-W / 2, -H / 2);
+  chars(g, 'EL PRIMER PASO', W / 2, 430, 190, { fam: 'anton', color: WHITE, track: 4 }, (i) => ({ dy: (1 - P(lb, .8 + i * .03, .5)) * 60, a: P(lb, .8 + i * .03, .3) }));
+  chars(g, 'HACIA LA INDUSTRIA', W / 2, 640, 150, { fam: 'anton', color: YEL, track: 4 }, (i) => ({ dy: (1 - P(lb, 1.3 + i * .03, .5)) * 60, a: P(lb, 1.3 + i * .03, .3) }));
   txt(g, 'DE LOS VIDEOJUEGOS', W / 2, 800, 32, { fam: 'mono', weight: 700, color: BLUE, track: 14, alpha: kt * P(lb, 1.8, .4) });
   g.restore();
   // círculo blanco que se abre hacia el breakdown
@@ -913,7 +954,7 @@ function sWho(g, b, lb) {
   const cw = 520, ch = 560, gp = 50, x0 = (W - (cw * 3 + gp * 2)) / 2;
   cards.forEach(([im, t1, t2], i) => {
     const k = P(lb, .35 + i * .3, .6, ease.outExpo);
-    const x = x0 + i * (cw + gp), y = 250 + (1 - k) * 700;
+    const x = x0 + i * (cw + gp), y = 250 + (1 - k) * 60;
     g.save(); g.globalAlpha = k;
     g.save(); g.beginPath(); g.roundRect(x, y, cw, ch, 24); g.clip();
     cover(g, ph(im), x, y, cw, ch, 1.15 - lb * .02, 0, -.2);
@@ -942,9 +983,9 @@ function sTunnel(g, b, lb) {
   const imgs = [52, 55, 5, 17, 49, 23, 44, 40];
   for (let i = 7; i >= 0; i--) {
     const z = fract(pos + i / 8);
-    const s = Math.pow(2.6, z * 6) / 30;
+    const s = .06 + .94 * z * z;
     const w = W * s, h = H * s;
-    const a = clamp(z * 4) * clamp((1 - z) * 6);
+    const a = clamp(z * 4) * clamp((1 - z) * 8);
     const n = imgs[(i + Math.floor(pos + i / 8) * 3) % imgs.length];
     g.save(); g.globalAlpha = a;
     cover(g, ph(n, i % 2 ? 'duo' : 'raw'), W / 2 - w / 2, H / 2 - h / 2, w, h, 1.05, 0, 0);
@@ -981,9 +1022,9 @@ function sReveal(g, b, lb) {
   g.restore();
   for (let i = 0; i < 3; i++) { const kk = clamp((lb - i * .12) / 1.2); ring(g, W / 2, 300, ease.outExpo(kk) * 1400, 50 * (1 - kk), [YEL, BLUE, WHITE][i], 1 - kk); }
   particles(g, W / 2, 300, clamp(lb / 2), 90, 20, [YEL, BLUE, WHITE]);
-  chars(g, 'MENDOZA', W / 2, 610, 84, { fam: 'arch', stretch: 'expanded', weight: 900, color: WHITE, track: 46 }, (i, n) => ({ a: P(lb, .3 + Math.abs(i - 3) * .06, .4), dy: (1 - P(lb, .3 + Math.abs(i - 3) * .06, .5)) * 50 }));
+  chars(g, 'MENDOZA', W / 2, 585, 84, { fam: 'arch', stretch: 'expanded', weight: 900, color: WHITE, track: 46 }, (i, n) => ({ a: P(lb, .3 + Math.abs(i - 3) * .06, .4), dy: (1 - P(lb, .3 + Math.abs(i - 3) * .06, .5)) * 50 }));
   const kn = P(lb, .5, 2.2, ease.lin);
-  rollNumber(g, '2027', W / 2, 840, 360, kn, { fam: 'anton', color: YEL });
+  rollNumber(g, '2027', W / 2, 825, 320, kn, { fam: 'anton', color: YEL });
   FX.flash = hit(lb, 0, .3) * .95;
   FX.ab = .4 + kickPulse(b) * 1.1;
   FX.zoom = 1 + kickPulse(b) * .015;
@@ -1001,7 +1042,7 @@ function sDates(g, b, lb) {
     rect(g, x, 0, cw + 1, hh, c);
     g.save(); g.beginPath(); g.rect(x, 0, cw, hh); g.clip();
     const kn = P(lb, i + .1, .55, ease.outBack);
-    txt(g, n, x + cw / 2, lerp(-300, 470, kn), 520, { fam: 'anton', color: NAVY });
+    g.save(); g.globalAlpha = clamp(kn * 1.5); g.translate(x + cw / 2, 470); g.scale(lerp(.82, 1, kn), lerp(.82, 1, kn)); txt(g, n, 0, 0, 500, { fam: 'anton', color: NAVY }); g.restore();
     txt(g, d, x + cw / 2, 140, 52, { fam: 'arch', stretch: 'expanded', weight: 900, color: NAVY, track: 14, alpha: P(lb, i + .2, .3) });
     g.restore();
   });
@@ -1075,8 +1116,8 @@ function sGoals(g, b, lb) {
   cover(g, ph(im, beat === 3 ? 'raw' : 'duo'), 0, H / 2 - bandH / 2, W, bandH, 1.25 - k * .1, (beat % 2 ? 1 : -1) * k * .6, 0);
   g.restore();
   rect(g, 0, H / 2 - bandH / 2, W, bandH, c, beat === 3 ? .35 : .55);
-  const size = fit(g, w, 1760, 400, { fam: 'arch', stretch: 'extra-condensed', weight: 900 });
-  const s = lerp(1.18, 1, ease.outExpo(clamp(k * 2.5)));
+  const size = fit(g, w, 1600, 400, { fam: 'arch', stretch: 'extra-condensed', weight: 900 });
+  const s = lerp(1.06, 1, ease.outExpo(clamp(k * 2.5)));
   g.save(); g.translate(W / 2, H / 2); g.scale(s, s);
   txt(g, w, 0, 10, size, { fam: 'arch', stretch: 'extra-condensed', weight: 900, color: fg });
   g.restore();
@@ -1090,26 +1131,29 @@ function sGoals(g, b, lb) {
 // 25 · MOSAICO DE ROSTROS
 function sMosaic(g, b, lb) {
   bg(g, NAVY);
-  const cols = 10, rows = 6, tw = W / cols, th = H / rows;
-  const focus = 33, fc = 4, fr = 2;
-  const kz = P(lb, 0, 2.6, ease.inOutExpo);
-  const z = lerp(cols, 1, kz);
-  const fx = (fc + .5) * tw, fy = (fr + .5) * th;
-  g.save();
-  g.translate(W / 2, H / 2); g.scale(z, z); g.translate(-lerp(fx, W / 2, kz), -lerp(fy, H / 2, kz));
+  const m = 40, cols = 10, rows = 6, gap = 6;
+  const tw = (W - m * 2 - gap * (cols - 1)) / cols, th = (H - m * 2 - gap * (rows - 1)) / rows;
+  const fc = 4.5, fr = 2.5;
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
     const i = r * cols + c;
-    const n = (c === fc && r === fr) ? focus : 1 + Math.floor(hash(i * 3.7 + 1) * 62);
-    cover(g, ph(n), c * tw + 2, r * th + 2, tw - 4, th - 4, 1.2, 0, 0);
+    const n = 1 + Math.floor(hash(i * 3.7 + 1) * 62);
+    const d = Math.hypot(c - fc, (r - fr) * 1.4);
+    const k = P(lb, d * .28, .5, ease.outBack);
+    if (k <= 0) continue;
+    const x = m + c * (tw + gap), y = m + r * (th + gap);
+    g.save(); g.translate(x + tw / 2, y + th / 2); g.scale(Math.min(k, 1), Math.min(k, 1)); g.translate(-(x + tw / 2), -(y + th / 2));
+    cover(g, ph(n), x, y, tw, th, 1.15, 0, 0);
     const blink = hash(i + Math.floor(lb * 4) * 17);
-    if (blink < .08 && kz > .6) rect(g, c * tw + 2, r * th + 2, tw - 4, th - 4, blink < .04 ? YEL : BLUE, .85);
+    if (blink < .07 && lb > 1.6) rect(g, x, y, tw, th, blink < .035 ? YEL : BLUE, .85);
+    g.restore();
   }
-  g.restore();
   const kb = P(lb, 2.6, .5, ease.outExpo);
   if (kb > 0) {
-    rect(g, 0, H / 2 - 150, W * kb, 300, NAVY, .92);
-    g.save(); g.beginPath(); g.rect(0, H / 2 - 150, W * kb, 300); g.clip();
-    txt(g, 'TU PRIMER JUEGO EMPIEZA ACÁ', W / 2, H / 2 + 8, 150, { fam: 'anton', color: WHITE, track: 2 });
+    const bw = (W - m * 2) * kb;
+    rect(g, m, H / 2 - 140, bw, 280, NAVY, .94);
+    g.save(); g.beginPath(); g.rect(m, H / 2 - 140, bw, 280); g.clip();
+    const tsz = fit(g, 'TU PRIMER JUEGO EMPIEZA ACÁ', W - 260, 150, { fam: 'anton', track: 2 });
+    txt(g, 'TU PRIMER JUEGO EMPIEZA ACÁ', W / 2, H / 2 + 8, tsz, { fam: 'anton', color: WHITE, track: 2 });
     g.restore();
   }
   FX.ab = .3 + kickPulse(b) * .9;
@@ -1124,7 +1168,7 @@ function sGroups(g, b, lb) {
     const k = P(lb, i * .5, .5, ease.outBack);
     if (k <= 0) return;
     const w = 820, h = 560;
-    g.save(); g.translate(W / 2 + x, H / 2 + y + (1 - k) * -900); g.rotate(r * k + (1 - k) * .6);
+    g.save(); g.globalAlpha = clamp(k * 2); g.translate(W / 2 + x, H / 2 + y + (1 - k) * -40); g.rotate(r * k + (1 - k) * .15); g.scale(lerp(1.15, 1, k), lerp(1.15, 1, k));
     rect(g, -w / 2 - 18, -h / 2 - 18, w + 36, h + 90, WHITE);
     rect(g, -w / 2 + 10, -h / 2 + 10, w, h, '#000', .2);
     cover(g, ph(n), -w / 2, -h / 2, w, h, 1.05, 0, 0);
@@ -1149,9 +1193,8 @@ function sHero(g, b, lb) {
   rect(g, 0, 0, W, H, NAVY, .15 + kc * .8);
   g.restore();
   if (kc < .5) {
-    vgrad(g, 0, 420, 'rgba(7,11,26,.85)', 'rgba(7,11,26,0)'); vgrad(g, H - 420, H, 'rgba(7,11,26,0)', 'rgba(7,11,26,.85)');
-    chars(g, 'HACEMOS JUEGOS', W / 2, 190, 200, { fam: 'anton', color: WHITE, track: 6 }, (i) => ({ a: P(lb, i * .04, .3), dy: (1 - P(lb, i * .04, .5)) * -120 }));
-    chars(g, 'HACEMOS AMIGOS', W / 2, 890, 200, { fam: 'anton', color: YEL, track: 6 }, (i) => ({ a: P(lb, 1 + i * .04, .3), dy: (1 - P(lb, 1 + i * .04, .5)) * 120 }));
+    vgrad(g, 0, 420, 'rgba(7,11,26,.85)', 'rgba(7,11,26,0)');
+    chars(g, 'HACEMOS JUEGOS', W / 2, 215, 180, { fam: 'anton', color: WHITE, track: 6 }, (i) => ({ a: P(lb, i * .04, .3), dy: (1 - P(lb, i * .04, .5)) * -120 }));
   }
   FX.ab = .3 + kickPulse(b) * .9;
 }
@@ -1185,8 +1228,6 @@ function sLockup(g, b, lb) {
   txt(g, 'ORGANIZA', 120, 880, 22, { fam: 'mono', weight: 800, color: '#7d89ad', align: 'left', track: 6 });
   const mw = 330, mh = mw * LOGO.mega.height / LOGO.mega.width;
   g.drawImage(LOGO.mega, 112, 900, mw, mh);
-  txt(g, 'JUNTO AL GOBIERNO DE MENDOZA', 560, 880, 22, { fam: 'mono', weight: 800, color: '#7d89ad', align: 'left', track: 6 });
-  txt(g, 'Subsecretaría de Empleo y Capacitación', 560, 930, 30, { fam: 'sg', weight: 500, color: WHITE, align: 'left' });
   g.restore();
   txt(g, typeOn('globalgamejammendoza.com', P(lb, 2, 1.2, ease.lin)), W - 120, 900, 40, { fam: 'mono', weight: 700, color: YEL, align: 'right' });
   txt(g, typeOn('linktr.ee/comunidad.mega', P(lb, 3, 1.2, ease.lin)), W - 120, 960, 30, { fam: 'mono', weight: 600, color: WHITE, align: 'right' });
@@ -1206,7 +1247,7 @@ function sEnd(g, b, lb) {
   g.save(); g.translate(cx, cy - 20); g.scale(lerp(.6, 1, k), lerp(.6, 1, k));
   ring(g, 0, 0, 150, 10, WHITE, .25);
   g.strokeStyle = YEL; g.lineWidth = 10; g.beginPath(); g.arc(0, 0, 150, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * kp); g.stroke();
-  g.fillStyle = YEL; g.globalAlpha = P(lb, .8, .4);
+  g.fillStyle = YEL; g.globalAlpha *= P(lb, .8, .4);
   g.beginPath(); g.moveTo(-40, -65); g.lineTo(75, 0); g.lineTo(-40, 65); g.closePath(); g.fill();
   g.restore();
   chars(g, '¿JUGAMOS?', W / 2, 790, 210, { fam: 'anton', color: WHITE, track: 8 }, (i) => ({ a: P(lb, .6 + i * .05, .3), s: lerp(1.6, 1, P(lb, .6 + i * .05, .5)) }));
@@ -1358,33 +1399,32 @@ function renderFrame(t) {
 
 // ── modos: render (Playwright) o preview (navegador) ──────────────────────
 window.REEL = { W, H, FPS, DUR, ready: false, renderFrame, grab: (q = .93) => out.toDataURL('image/jpeg', q) };
-window.addEventListener('error', e => { const el = document.getElementById('loadtxt'); if (el && !document.body.classList.contains('loaded')) el.textContent = 'ERROR AL CARGAR · ' + (e.message || ''); });
 const isRender = new URLSearchParams(location.search).has('render');
 const $ = id => document.getElementById(id);
-loadAll(k => { if (!isRender && $('bar')) $('bar').style.transform = `scaleX(${k})`; }).catch(e => {
-  console.error(e);
-  if ($('loadtxt')) $('loadtxt').textContent = 'NO SE PUDO CARGAR · ' + (e && e.message ? e.message : e);
-  throw e;
-}).then(() => {
-  window.REEL.ready = true;
-  if (isRender) { document.body.classList.add('render'); renderFrame(0); return; }
+const core = loadCore().catch(e => { console.error(e); throw e; });
 
-  // ── reproductor web ──
+if (isRender) {
+  // render cuadro a cuadro: espera todo
+  Promise.all([core, loadPhotos()]).then(() => { document.body.classList.add('render'); renderFrame(0); window.REEL.ready = true; });
+} else {
+  core.then(() => loadPhotos(), () => loadPhotos());   // fotos en segundo plano, después del núcleo
   const audio = $('music'), stage = $('stage');
-  renderFrame(38.6);           // portada: el reveal de 2027 (si hace falta, acá se cambia a salida 2D)
-  let playing = false, started = false, t0 = 0, tStart = 0, hideTimer = 0;
-  const now = () => playing ? (performance.now() - tStart) / 1000 + t0 : t0;
-  let lastSync = 0;
-  const syncAudio = t => {
-    if (!playing || audio.paused || audio.readyState < 2) return;
+  let coreReady = false, playing = false, started = false, t0 = 0, tStart = 0, hideTimer = 0;
+  let lastAT = -1, lastATperf = 0;
+  // el audio manda: si se demora en cargar, la imagen lo espera (nunca se salta el audio)
+  const now = () => {
+    if (!playing) return t0;
     const pn = performance.now();
-    if (pn - lastSync < 400) return;
-    lastSync = pn;
-    const drift = audio.currentTime - t;
-    // el audio manda si está sano: corremos el reloj hacia él; si se fue lejos (seek fallido), lo reubicamos
-    if (Math.abs(drift) < .25) { tStart -= drift * 1000 * .5; }
-    else { try { audio.currentTime = t; } catch (e) {} }
+    if (!audio.paused && audio.readyState >= 2 && audio.currentTime > 0) {
+      const at = audio.currentTime;
+      if (at !== lastAT) { lastAT = at; lastATperf = pn; }
+      const t = at + Math.min(.12, (pn - lastATperf) / 1000);
+      t0 = t; tStart = pn;            // si el audio se corta, el reloj propio sigue desde acá
+      return t;
+    }
+    return (pn - tStart) / 1000 + t0;
   };
+  const fmt = sec => `${Math.floor(sec / 60)}:${String(Math.floor(sec) % 60).padStart(2, '0')}`;
   const setUI = () => {
     document.body.classList.toggle('playing', playing);
     document.body.classList.toggle('started', started);
@@ -1392,23 +1432,30 @@ loadAll(k => { if (!isRender && $('bar')) $('bar').style.transform = `scaleX(${k
     $('pp').setAttribute('aria-label', playing ? 'Pausa' : 'Reproducir');
   };
   const play = () => {
+    if (!coreReady) { document.body.classList.add('waiting'); core.then(play); return; }
+    document.body.classList.remove('waiting');
     if (t0 >= DUR - .05) t0 = 0;
     started = true; playing = true;
+    lastAT = -1;
     try { audio.currentTime = t0; } catch (e) {}
     audio.play().catch(() => {});
-    tStart = performance.now(); lastSync = performance.now();
+    tStart = performance.now();
     document.body.classList.remove('ended');
     setUI(); poke();
   };
   const pause = () => { t0 = now(); playing = false; audio.pause(); setUI(); poke(); };
   const toggle = () => playing ? pause() : play();
-  const seek = s => { t0 = clamp(s, 0, DUR - .01); tStart = performance.now(); lastSync = performance.now(); try { audio.currentTime = t0; } catch (e) {} if (!playing) renderFrame(t0); poke(); };
+  const seek = sec => {
+    t0 = clamp(sec, 0, DUR - .01); tStart = performance.now(); lastAT = -1;
+    try { audio.currentTime = t0; } catch (e) {}
+    if (!playing && coreReady) renderFrame(t0);
+    poke();
+  };
   const fs = () => {
     const d = document;
     if (d.fullscreenElement || d.webkitFullscreenElement) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
     else (stage.requestFullscreen || stage.webkitRequestFullscreen || (() => {})).call(stage);
   };
-  // los controles se esconden mientras corre
   const poke = () => { document.body.classList.add('ui'); clearTimeout(hideTimer); if (playing) hideTimer = setTimeout(() => document.body.classList.remove('ui'), 2200); };
   addEventListener('pointermove', poke);
 
@@ -1416,28 +1463,30 @@ loadAll(k => { if (!isRender && $('bar')) $('bar').style.transform = `scaleX(${k
   $('replay').onclick = () => { t0 = 0; play(); };
   $('pp').onclick = toggle;
   $('fs').onclick = fs;
-  $('out').onclick = () => { if (started) toggle(); };
+  stage.addEventListener('click', e => { if (started && e.target.id === 'out') toggle(); });
   $('scrub').oninput = e => seek(+e.target.value / 1000 * DUR);
   addEventListener('keydown', e => {
     if (e.code === 'Space') { e.preventDefault(); started ? toggle() : play(); }
-    else if (e.code === 'ArrowRight') seek(now() + 2);
-    else if (e.code === 'ArrowLeft') seek(now() - 2);
+    else if (e.code === 'ArrowRight') seek(now() + 3);
+    else if (e.code === 'ArrowLeft') seek(now() - 3);
     else if (e.code === 'KeyF') fs();
   });
   document.addEventListener('visibilitychange', () => { if (document.hidden && playing) pause(); });
 
-  document.body.classList.add('loaded');
+  core.then(() => {
+    coreReady = true; window.REEL.ready = true;
+    renderFrame(0);                    // portada limpia (si hace falta, acá se pasa a salida 2D)
+    document.body.classList.add('loaded');
+  }).catch(e => { $('start').textContent = 'NO SE PUDO CARGAR · ' + (e && e.message ? e.message : e); });
   setUI();
   let lastDrawn = -1;
   const loop = () => {
     const t = now();
     if (playing && t >= DUR - .02) { playing = false; t0 = DUR - .02; audio.pause(); document.body.classList.add('ended'); setUI(); poke(); }
-    syncAudio(t);
-    if (started && (playing || t !== lastDrawn)) { renderFrame(Math.min(t, DUR - .001)); lastDrawn = t; }
+    if (coreReady && started && (playing || t !== lastDrawn)) { renderFrame(Math.min(t, DUR - .001)); lastDrawn = t; }
     $('scrub').value = Math.round(t / DUR * 1000);
-    const s = Math.floor(t);
-    $('tc').textContent = `0:${String(Math.min(s, 59)).padStart(2, '0')} / 1:00`;
+    $('tc').textContent = `${fmt(Math.min(t, DUR - .5))} / ${fmt(DUR)}`;
     requestAnimationFrame(loop);
   };
   loop();
-});
+}

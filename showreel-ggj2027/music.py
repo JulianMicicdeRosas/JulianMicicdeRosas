@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Banda sonora original del showreel GGJ Mendoza 2027.
 
-Síntesis 100 % procedural (numpy + scipy): 128 BPM, La menor, 32 compases = 60 s exactos.
+Síntesis 100 % procedural (numpy + scipy): 85,3 BPM, La menor, 32 compases = 90 s exactos.
 La grilla (BPM, compases, secciones) es la misma que usa index.html, así cada golpe
 visual cae sobre un golpe de audio.
 
@@ -14,10 +14,10 @@ import numpy as np
 from scipy.signal import butter, sosfilt, fftconvolve
 
 SR = 44100
-BPM = 128
+DUR = 90.0
+BPM = 32 * 4 * 60 / DUR   # 85,3 BPM: 32 compases = 90 s
 B = 60 / BPM            # negra
 BAR = 4 * B             # compás
-DUR = 60.0
 N = int(DUR * SR)
 rng = np.random.default_rng(2027)
 
@@ -393,6 +393,9 @@ for t0 in [bt(b, beat) for (b, beat) in [(1, 0), (2, 0), (3, 0), (5, 0), (6, 0),
     add(fx, whoosh(0.45), t0 - 0.3, 0.45, pan=float(rng.uniform(-0.6, 0.6)))
 
 # ── sidechain ───────────────────────────────────────────────────────────
+# bombeo suave: con más profundidad (antes 0.78) los acordes se oían cortados, como un trémolo
+SC_DEPTH = 0.35
+SC_RELEASE = 0.14
 t_all = np.arange(N) / SR
 sc = np.ones(N)
 for bar in range(32):
@@ -402,7 +405,7 @@ for bar in range(32):
             i0 = int(t0 * SR)
             i1 = min(N, i0 + int(B * SR))
             tt = t_all[i0:i1] - t0
-            sc[i0:i1] = np.minimum(sc[i0:i1], 1 - 0.78 * np.exp(-tt / 0.09) * np.clip(tt / 0.004, 0, 1) - 0.0)
+            sc[i0:i1] = np.minimum(sc[i0:i1], 1 - SC_DEPTH * np.exp(-tt / SC_RELEASE) * np.clip(tt / 0.012, 0, 1))
 sc2 = sc[:, None]
 
 # ── reverb (convolución con IR sintética) ───────────────────────────────
@@ -412,12 +415,13 @@ ir = lp(hp(ir, 250), 7000)
 ir /= np.sqrt((ir ** 2).sum(axis=0))
 wet = np.stack([fftconvolve(rev_send[:, ch], ir[:, ch])[:N] for ch in range(2)], axis=1)
 
+sc_soft = np.sqrt(sc2)      # los colchones bombean todavía menos
 mix = (drums * 0.95
        + bass_bus * sc2 * 0.9
        + synth * sc2 * 0.8
-       + pads * sc2 * 0.75
+       + pads * sc_soft * 0.75
        + fx * 0.8
-       + wet * 0.35 * sc2)
+       + wet * 0.35 * sc_soft)
 mix = hp(mix, 28)
 
 # master: compresión suave + saturación + limitador simple

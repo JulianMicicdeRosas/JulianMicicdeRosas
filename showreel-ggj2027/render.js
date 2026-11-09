@@ -21,7 +21,7 @@ const WORKERS = +opt('workers', 4);
 const STILLS = opt('stills', null);
 const FROM = +opt('from', 0), TO = +opt('to', 60);
 
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.jpg': 'image/jpeg', '.png': 'image/png', '.woff2': 'font/woff2', '.m4a': 'audio/mp4', '.wav': 'audio/wav' };
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.png': 'image/png', '.woff2': 'font/woff2', '.m4a': 'audio/mp4', '.wav': 'audio/wav' };
 function serve() {
   return new Promise(ok => {
     const srv = http.createServer((req, res) => {
