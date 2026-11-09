@@ -22,6 +22,8 @@ TINT = "0x15372D"  # verde de la imagen de referencia
 GRADE = ("colorbalance=rs=-0.08:gs=0.03:bs=0.01:rm=-0.06:gm=0.03:rh=-0.03:bh=-0.01,"
          "eq=saturation=0.85")
 TINT_OPACITY = 0.5
+COVER_AT = 6.0  # segundo del video usado como portada (toma 15, pared clara)
+COVER_LOGO = (40, 420, 0.41)  # x, y, ancho relativo del logo negro sobre la pared
 
 # Cada compás = 8 corcheas. (clip, segundo de entrada, corcheas, punch-in)
 # Ritmo lento: solo negras (2 corcheas) y blancas (4). Cada clip se usa UNA sola vez,
@@ -137,9 +139,15 @@ def main():
            "-c:v", "libx264", "-crf", "18", "-preset", "medium", "-pix_fmt", "yuv420p",
            "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", a.out]
     subprocess.run(cmd, check=True)
-    # portada para Instagram: primer cuadro (subir como "Portada" del Reel)
+    # portada para Instagram (subir como "Portada" del Reel)
     cover = os.path.splitext(a.out)[0] + "_portada.jpg"
-    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", a.out, "-frames:v", "1", "-q:v", "2", cover], check=True)
+    # con el logo en negro sobre la pared clara, dentro del recorte 3:4 de la grilla de IG
+    cv = ["ffmpeg", "-y", "-v", "error", "-ss", f"{COVER_AT}", "-i", a.out]
+    if a.logo:
+        cv += ["-i", a.logo, "-filter_complex",
+               f"[1:v]format=rgba,colorchannelmixer=rr=0:gg=0:bb=0,scale={int(W * COVER_LOGO[2])}:-1[lk];"
+               f"[0:v][lk]overlay={COVER_LOGO[0]}:{COVER_LOGO[1]}"]
+    subprocess.run(cv + ["-frames:v", "1", "-q:v", "2", cover], check=True)
     print(f"BPM {r['bpm']:.2f} · corchea {eighth:.3f}s · música desde {m0:.2f}s · "
           f"{n} cortes · logo en {logo_t:.2f}s -> {a.out}")
 

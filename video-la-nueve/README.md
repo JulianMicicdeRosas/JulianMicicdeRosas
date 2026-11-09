@@ -33,6 +33,7 @@ python3 montaje.py --clips <carpeta_clips> --music musica.mp3 --ritmo ritmo.json
 `--music-at N` elige otro punto del tema (se ajusta al downbeat más cercano).
 
 ## Portada para Instagram
-El primer cuadro es la toma 06 (público mirando la pantalla), así la vista previa no queda negra.
-`montaje.py` además exporta `<salida>_portada.jpg` para subir como **Portada** del Reel
-(Editar portada → Agregar desde el carrete).
+`montaje.py` exporta `<salida>_portada.jpg`: el cuadro del **segundo 6** (toma 15, público con la pared clara)
+con el **logo de La Nueve en negro** sobre la pared, dentro del recorte 3:4 de la grilla.
+Subirla como **Portada** del Reel (Editar portada → Agregar desde el carrete).
+El video además abre con la toma 06 (mirando la pantalla), así ningún preview queda negro.
