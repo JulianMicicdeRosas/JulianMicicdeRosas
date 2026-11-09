@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Global Game Jam Mendoza 2027 · Propuesta</title>
+<style>
+  @font-face { font-family: Anton; src: url(../assets/fonts/anton.woff2) format('woff2'); }
+  @font-face { font-family: Archivo; src: url(../assets/fonts/archivo-wdth.woff2) format('woff2'); font-weight: 100 900; font-stretch: 62% 125%; }
+  @font-face { font-family: JBMono; src: url(../assets/fonts/jbmono.woff2) format('woff2'); font-weight: 100 800; }
+  @font-face { font-family: SpaceG; src: url(../assets/fonts/spacegrotesk.woff2) format('woff2'); font-weight: 300 700; }
+  @page { size: 1920px 1080px; margin: 0; }
+  :root { --navy: #070B1A; --navy2: #0E1630; --navy3: #16224A; --blue: #22A9E0; --yel: #F3EB33; --white: #F4F6FA; --mute: #8C97B8; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--navy); color: var(--white); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: SpaceG, sans-serif; }
+  a { color: inherit; text-decoration: none; }
+
+  .page { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: var(--navy); page-break-after: always; break-after: page; }
+  .page:last-child { page-break-after: auto; break-after: auto; }
+  .dots { position: absolute; inset: 0; background-image: radial-gradient(rgba(34,169,224,.22) 1.6px, transparent 1.8px); background-size: 48px 48px; background-position: 24px 24px; }
+  .glow { position: absolute; inset: 0; background: radial-gradient(ellipse at 30% 40%, rgba(22,34,74,.9), rgba(3,5,12,0) 70%); }
+  .corners::before, .corners::after, .corners > i::before, .corners > i::after { content: ''; position: absolute; width: 60px; height: 60px; border: 3px solid rgba(244,246,250,.75); }
+  .corners { position: absolute; inset: 44px; pointer-events: none; }
+  .corners::before { left: 0; top: 0; border-right: 0; border-bottom: 0; }
+  .corners::after { right: 0; top: 0; border-left: 0; border-bottom: 0; }
+  .corners > i::before { left: 0; bottom: 0; border-right: 0; border-top: 0; }
+  .corners > i::after { right: 0; bottom: 0; border-left: 0; border-top: 0; }
+  .hud { position: absolute; left: 96px; right: 96px; bottom: 58px; display: flex; justify-content: space-between; align-items: center;
+         font: 600 20px/1 JBMono, monospace; letter-spacing: 4px; text-transform: uppercase; color: rgba(244,246,250,.85); }
+  .hud b { color: var(--yel); font-weight: 800; margin-right: 12px; }
+  .hud .bar { position: absolute; left: 0; right: 0; bottom: -18px; height: 2px; background: rgba(244,246,250,.18); }
+  .hud .bar span { display: block; height: 100%; background: var(--yel); }
+  .light .hud { color: var(--navy); } .light .hud b { color: var(--blue); } .light .hud .bar { background: rgba(7,11,26,.15); } .light .hud .bar span { background: var(--blue); }
+  .light .corners::before, .light .corners::after, .light .corners > i::before, .light .corners > i::after { border-color: rgba(7,11,26,.6); }
+
+  .kicker { font: 700 24px/1 JBMono, monospace; letter-spacing: 8px; text-transform: uppercase; color: var(--blue); }
+  .anton { font-family: Anton, sans-serif; font-weight: 400; line-height: .95; }
+  .arch { font-family: Archivo, sans-serif; font-weight: 900; }
+  .yel { color: var(--yel); } .blue { color: var(--blue); }
+  .h2 { font-family: Archivo, sans-serif; font-weight: 900; font-stretch: 75%; font-size: 112px; line-height: .95; letter-spacing: 1px; text-transform: uppercase; }
+  .lead { font: 500 34px/1.38 SpaceG, sans-serif; color: rgba(244,246,250,.92); }
+  .mono { font-family: JBMono, monospace; }
+  .chip { display: inline-flex; align-items: center; height: 54px; padding: 0 26px; border-radius: 27px; font: 800 22px/1 JBMono, monospace; letter-spacing: 3px; text-transform: uppercase; }
+  .chip.y { background: var(--yel); color: var(--navy); } .chip.b { background: var(--blue); color: var(--navy); } .chip.o { border: 2px solid var(--white); color: var(--white); }
+  .photo { position: absolute; background-size: cover; background-position: center; }
+  .shade-l { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(7,11,26,.96) 0%, rgba(7,11,26,.88) 46%, rgba(7,11,26,.25) 78%, rgba(7,11,26,.05) 100%); }
+  .ybar { height: 10px; background: var(--yel); }
+
+  /* 1 · portada */
+  .cover .photo { inset: 0 0 0 46%; }
+  .cover .fade { position: absolute; inset: 0 0 0 40%; background: linear-gradient(90deg, var(--navy) 0%, rgba(7,11,26,.4) 30%, rgba(7,11,26,0) 60%); }
+  .cover .content { position: absolute; left: 120px; top: 110px; width: 1080px; }
+  .cover .ggj { width: 270px; display: block; margin: 40px 0 30px; }
+  .cover .top { display: flex; align-items: center; gap: 30px; }
+  .cover .top img { width: 200px; }
+  .cover h1 { font-family: Anton, sans-serif; font-weight: 400; text-transform: uppercase; line-height: .9; }
+  .cover h1 .l1 { display: block; font-size: 116px; letter-spacing: 2px; }
+  .cover h1 .l2 { display: block; font-size: 186px; }
+  .cover .dates { margin-top: 30px; font: 900 52px/1 Archivo, sans-serif; font-stretch: 75%; letter-spacing: 3px; color: var(--blue); text-transform: uppercase; }
+  .cover .chips { margin-top: 30px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .cover .watch { position: absolute; right: 120px; bottom: 120px; }
+
+  /* 2 · qué es */
+  .what .photo { inset: 0; }
+  .what .content { position: absolute; left: 120px; top: 150px; width: 980px; }
+  .what .big48 { font-family: Anton, sans-serif; font-size: 360px; line-height: .8; color: var(--yel); }
+  .what .big48 small { font-family: Archivo, sans-serif; font-weight: 900; font-stretch: 125%; font-size: 64px; letter-spacing: 18px; color: var(--white); vertical-align: top; margin-left: 24px; position: relative; top: 30px; }
+  .what .three { margin-top: 42px; display: grid; grid-template-columns: repeat(3, auto); gap: 18px 30px; justify-content: start; }
+  .what .three div { font: 900 40px/1 Archivo, sans-serif; font-stretch: 75%; text-transform: uppercase; }
+  .what .three span { font-family: Anton, sans-serif; color: var(--yel); margin-right: 12px; }
+  .what .lead { margin-top: 42px; }
+
+  /* 3 · sede */
+  .sede .photo { right: 0; top: 0; bottom: 0; width: 560px; }
+  .sede .photo::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, var(--navy), rgba(7,11,26,.1) 45%); }
+  .sede .content { position: absolute; left: 120px; top: 110px; width: 1240px; }
+  .stats { margin-top: 40px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .stat { background: var(--navy2); border-radius: 18px; padding: 24px 28px 22px; min-height: 0; }
+  .stat .n { font-family: Anton, sans-serif; font-size: 80px; line-height: 1; color: var(--yel); }
+  .stat .l { margin-top: 10px; font: 900 30px/1.05 Archivo, sans-serif; font-stretch: 75%; text-transform: uppercase; }
+  .stat .s { margin-top: 10px; font: 600 18px/1.3 JBMono, monospace; letter-spacing: 2px; color: var(--mute); text-transform: uppercase; }
+  .stat.hl { background: var(--blue); } .stat.hl .n { color: var(--white); } .stat.hl .l { color: var(--navy); } .stat.hl .s { color: var(--navy); }
+
+  /* 4 · objetivos */
+  .goals { background: var(--white); color: var(--navy); }
+  .goals .content { position: absolute; left: 120px; right: 120px; top: 110px; }
+  .goals .grid { margin-top: 54px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 26px; }
+  .goal { background: var(--navy); color: var(--white); border-radius: 22px; overflow: hidden; height: 640px; display: flex; flex-direction: column; }
+  .goal .img { height: 250px; background-size: cover; background-position: center; }
+  .goal .body { padding: 28px 30px 30px; display: flex; flex-direction: column; flex: 1; }
+  .goal .num { font: 800 20px/1 JBMono, monospace; letter-spacing: 6px; color: var(--yel); }
+  .goal h3 { margin-top: 16px; font: 900 35px/1 Archivo, sans-serif; font-stretch: 75%; text-transform: uppercase; }
+  .goal p { margin-top: 18px; font: 500 24px/1.38 SpaceG, sans-serif; color: rgba(244,246,250,.86); }
+
+  /* 5 · público */
+  .who .content { position: absolute; left: 120px; right: 120px; top: 110px; }
+  .who .cards { margin-top: 50px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+  .card { position: relative; height: 470px; border-radius: 24px; overflow: hidden; background-size: cover; background-position: center 30%; }
+  .card::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(7,11,26,0) 30%, rgba(7,11,26,.96) 72%); }
+  .card .txt { position: absolute; left: 34px; right: 34px; bottom: 32px; z-index: 1; }
+  .card h3 { font: 400 62px/1 Anton, sans-serif; text-transform: uppercase; }
+  .card p { margin-top: 14px; font: 500 23px/1.36 SpaceG, sans-serif; color: rgba(244,246,250,.9); }
+  .who .chips { margin-top: 30px; display: flex; gap: 14px; }
+
+  /* 6 · cronograma */
+  .sched .content { position: absolute; left: 120px; right: 120px; top: 110px; }
+  .sched .line { position: absolute; left: 120px; right: 120px; top: 600px; height: 14px; border-radius: 7px; background: linear-gradient(90deg, var(--yel), var(--yel) 82%, var(--navy3) 82%); }
+  .sched .days { position: absolute; left: 120px; right: 120px; top: 290px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 60px; }
+  .day { position: relative; }
+  .day .img { height: 270px; border-radius: 18px; border: 4px solid var(--yel); background-size: cover; background-position: center; }
+  .day .node { position: absolute; left: 50%; top: 296px; width: 44px; height: 44px; margin-left: -22px; border-radius: 50%; background: var(--yel); box-shadow: 0 0 0 10px rgba(243,235,51,.25); }
+  .day .info { margin-top: 110px; text-align: center; }
+  .day .chip { height: 48px; font-size: 22px; }
+  .day .hr { margin-top: 18px; font: 400 104px/1 Anton, sans-serif; }
+  .day p { margin-top: 12px; font: 900 32px/1.12 Archivo, sans-serif; font-stretch: 75%; text-transform: uppercase; color: #c9d2e6; }
+  .sched .fmt { position: absolute; right: 120px; top: 128px; }
+
+  /* 7 · beneficios */
+  .ben .photo { left: 0; top: 0; bottom: 0; width: 600px; }
+  .ben .photo::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(7,11,26,0) 40%, var(--navy)); }
+  .ben .content { position: absolute; left: 660px; right: 110px; top: 100px; }
+  .ben .list { margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px 26px; }
+  .item { display: flex; gap: 22px; background: var(--navy2); border-radius: 16px; padding: 22px 26px; }
+  .item .i { flex: 0 0 auto; font: 400 52px/1 Anton, sans-serif; color: var(--yel); width: 46px; }
+  .item h4 { font: 900 30px/1.05 Archivo, sans-serif; font-stretch: 75%; text-transform: uppercase; }
+  .item p { margin-top: 8px; font: 500 20px/1.36 SpaceG, sans-serif; color: rgba(244,246,250,.85); }
+
+  /* 8 · MEGA y producción */
+  .prod { background: var(--white); color: var(--navy); }
+  .prod .left { position: absolute; left: 120px; top: 120px; width: 820px; }
+  .prod .megalogo { width: 470px; display: block; }
+  .prod .lead { color: var(--navy); margin-top: 34px; font-size: 29px; }
+  .prod .right { position: absolute; left: 1040px; right: 120px; top: 120px; }
+  .prod .team { margin-top: 26px; display: grid; gap: 14px; }
+  .prod .team div { background: var(--navy); color: var(--white); border-radius: 14px; padding: 18px 26px; font: 900 34px/1 Archivo, sans-serif; font-stretch: 75%; text-transform: uppercase; }
+  .prod .tasks { margin-top: 26px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .prod .tasks div { border: 2px solid var(--navy); border-radius: 12px; padding: 16px 20px; font: 700 21px/1.25 JBMono, monospace; letter-spacing: 1px; text-transform: uppercase; }
+  .prod .photo { left: 120px; bottom: 120px; width: 820px; height: 250px; border-radius: 20px; }
+
+  /* 9 · final */
+  .end .photo { inset: 0; opacity: .5; }
+  .end .center { position: absolute; left: 120px; right: 120px; top: 140px; text-align: center; }
+  .end .play { display: inline-flex; flex-direction: column; align-items: center; }
+  .end .ring { width: 300px; height: 300px; border-radius: 50%; border: 12px solid var(--yel); display: grid; place-items: center; background: rgba(7,11,26,.55); }
+  .end .ring svg { width: 130px; height: 130px; margin-left: 22px; }
+  .end h2 { margin-top: 40px; font: 400 200px/1 Anton, sans-serif; }
+  .end .cta { margin-top: 30px; display: inline-flex; align-items: center; gap: 18px; height: 96px; padding: 0 54px; border-radius: 48px; background: var(--yel); color: var(--navy);
+              font: 800 36px/1 JBMono, monospace; letter-spacing: 6px; }
+  .end .url { margin-top: 22px; font: 700 26px/1 JBMono, monospace; letter-spacing: 3px; color: var(--blue); }
+  .end .links { position: absolute; left: 120px; right: 120px; bottom: 120px; display: flex; justify-content: space-between; align-items: flex-end; }
+  .end .links .mono { font-size: 26px; font-weight: 700; letter-spacing: 2px; line-height: 1.6; text-align: right; }
+</style>
+</head>
+<body>
+
+<!-- 1 · PORTADA -->
+<section class="page cover">
+  <div class="photo" style="background-image:url(img/cover.jpg)"></div>
+  <div class="fade"></div>
+  <div class="dots" style="right:54%"></div>
+  <div class="content">
+    <div class="top"><img src="../assets/logos/mega_negative.png" alt="MEGA · Mendoza Gamedevs"><div class="kicker">Propuesta</div></div>
+    <img class="ggj" src="../assets/logos/ggj_light.png" alt="Global Game Jam">
+    <h1><span class="l1">Global Game Jam</span><span class="l2">Mendoza <span class="yel">2027</span></span></h1>
+    <div class="dates">29 · 30 · 31 de enero · Presencial</div>
+    <div class="chips"><span class="chip y">48 horas</span><span class="chip b">1 tema secreto</span><span class="chip o">1 videojuego</span></div>
+  </div>
+  <a class="watch chip y" href="https://elzorroazul.studio/GGJ/">▶&nbsp; Ver el showreel</a>
+  <div class="corners"><i></i></div>
+</section>
+
+<!-- 2 · QUÉ ES -->
+<section class="page what">
+  <div class="photo" style="background-image:url(img/ggj.jpg)"></div>
+  <div class="shade-l"></div>
+  <div class="content">
+    <div class="kicker">01 — ¿Qué es la Global Game Jam?</div>
+    <div class="big48" style="margin-top:44px">48<small>HORAS</small></div>
+    <div class="three"><div><span>1</span>tema secreto</div><div><span>1</span>equipo</div><div><span>1</span>videojuego</div></div>
+    <p class="lead">Es la game jam más grande del mundo: en equipos, quienes participan tienen 48 horas para diseñar y desarrollar un videojuego a partir de un tema que se revela al inicio, en simultáneo en todo el planeta. Programación, arte, sonido, narrativa y diseño trabajan juntos, con mentores que acompañan a cada equipo.</p>
+  </div>
+  <div class="hud"><span><b>01</b>48 horas</span><span>02 / 09</span><div class="bar"><span style="width:22%"></span></div></div>
+  <div class="corners"><i></i></div>
+</section>
+
+<!-- 3 · SEDE -->
+<section class="page sede">
+  <div class="dots"></div>
+  <div class="photo" style="background-image:url(img/sede.jpg)"></div>
+  <div class="content">
+    <div class="kicker">02 — Mendoza, sede de referencia</div>
+    <h2 class="h2" style="margin-top:22px; font-size:88px">Desde 2012,<br><span class="yel">15 ediciones</span> consecutivas</h2>
+    <div class="stats">
+      <div class="stat hl"><div class="n">Nº1</div><div class="l">Sede de Argentina</div><div class="s">GGJ 2025 · mayor convocatoria del país</div></div>
+      <div class="stat"><div class="n">120</div><div class="l">Jammers</div><div class="s">GGJ 2025 · el doble que en 2024</div></div>
+      <div class="stat"><div class="n">45°</div><div class="l">Ranking mundial</div><div class="s">GGJ 2025 · antes 172° · 6° en Sudamérica</div></div>
+      <div class="stat"><div class="n">41</div><div class="l">Juegos publicados</div><div class="s">20 en 2025 · 21 en 2026</div></div>
+      <div class="stat"><div class="n">175</div><div class="l">Personas capacitadas</div><div class="s">7 talleres previos a la GGJ 2026</div></div>
+      <div class="stat"><div class="n">130</div><div class="l">MEGAJam de Invierno</div><div class="s">2025 · 14 juegos · 87 en talleres</div></div>
+    </div>
+  </div>
+  <div class="hud"><span><b>02</b>Mendoza</span><span>03 / 09</span><div class="bar"><span style="width:33%"></span></div></div>
+  <div class="corners"><i></i></div>
+</section>
+
+<!-- 4 · OBJETIVOS -->
+<section class="page goals light">
+  <div class="content">
+    <div class="kicker">03 — Objetivos</div>
+    <h2 class="h2" style="margin-top:22px">Para qué hacemos la jam</h2>
+    <div class="grid">
+      <div class="goal"><div class="img" style="background-image:url(img/obj1.jpg)"></div><div class="body"><div class="num">OBJETIVO 01</div><h3>Aprender</h3><p>Un espacio práctico para adquirir conocimientos fundamentales y aplicarlos directamente en el desarrollo de un videojuego.</p></div></div>
+      <div class="goal"><div class="img" style="background-image:url(img/obj2.jpg)"></div><div class="body"><div class="num">OBJETIVO 02</div><h3>Conectar</h3><p>Comunidad y networking entre participantes, mentores y profesionales de la industria local e internacional.</p></div></div>
+      <div class="goal"><div class="img" style="background-image:url(img/obj3.jpg)"></div><div class="body"><div class="num">OBJETIVO 03</div><h3>Colaborar</h3><p>Equipos multidisciplinarios: arte 2D y 3D, programación, diseño de sonido y game design trabajando juntos.</p></div></div>
+      <div class="goal"><div class="img" style="background-image:url(img/obj4.jpg)"></div><div class="body"><div class="num">OBJETIVO 04</div><h3>Profesionalizarse</h3><p>El primer paso para que entusiastas y personas de otras áreas comiencen un camino profesional en los videojuegos.</p></div></div>
+    </div>
+  </div>
+  <div class="hud"><span><b>03</b>Objetivos</span><span>04 / 09</span><div class="bar"><span style="width:44%"></span></div></div>
+  <div class="corners"><i></i></div>
+</section>
+
+<!-- 5 · PÚBLICO -->
+<section class="page who">
+  <div class="dots"></div>
+  <div class="content">
+    <div class="kicker">04 — Público</div>
+    <h2 class="h2" style="margin-top:22px; font-size:94px">Para quien quiera <span class="yel">empezar de cero</span></h2>
+    <div class="cards">
+      <div class="card" style="background-image:url(img/pub1.jpg)"><div class="txt"><h3 class="yel">Profesionales</h3><p>De otras industrias que, sin experiencia en videojuegos, quieren conocer las áreas clave: visual, sonido, arte 2D y 3D.</p></div></div>
+      <div class="card" style="background-image:url(img/pub2.jpg)"><div class="txt"><h3 class="blue">Principiantes</h3><p>Quienes quieren explorar la industria y vivir su primera experiencia práctica y guiada.</p></div></div>
+      <div class="card" style="background-image:url(img/pub3.jpg)"><div class="txt"><h3>Estudiantes</h3><p>Y entusiastas que quieren conocer y practicar las herramientas y metodologías del desarrollo de videojuegos.</p></div></div>
+    </div>
+    <div class="chips"><span class="chip y">+18 años</span><span class="chip b">Sin experiencia previa</span><span class="chip o">Con mentores</span></div>
+  </div>
+  <div class="hud"><span><b>04</b>Público</span><span>05 / 09</span><div class="bar"><span style="width:55%"></span></div></div>
+  <div class="corners"><i></i></div>
+</section>
+
+<!-- 6 · CRONOGRAMA -->
+<section class="page sched">
+  <div class="dots"></div>
+  <div class="content">
+    <div class="kicker">05 — Cronograma</div>
+    <h2 class="h2" style="margin-top:22px">3 días · 48 horas</h2>
+  </div>
+  <div class="fmt"><span class="chip y">Presencial · Mendoza</span></div>
+  <div class="line"></div>
+  <div class="days">
+    <div class="day"><div class="img" style="background-image:url(img/cro1.jpg)"></div><div class="node"></div><div class="info"><span class="chip b">Viernes 29/01</span><div class="hr">17–21 h</div><p>Presentación del tema<br>y armado de equipos</p></div></div>
+    <div class="day"><div class="img" style="background-image:url(img/cro2.jpg)"></div><div class="node"></div><div class="info"><span class="chip y">Sábado 30/01</span><div class="hr">9–19 h</div><p>Día de trabajo y<br>avance de los proyectos</p></div></div>
+    <div class="day"><div class="img" style="background-image:url(img/cro3.jpg)"></div><div class="node"></div><div class="info"><span class="chip o">Domingo 31/01</span><div class="hr">9–19 h</div><p>Finalización y<br>exposición de los juegos</p></div></div>
+  </div>
+  <div class="hud"><span><b>05</b>Cronograma</span><span>06 / 09</span><div class="bar"><span style="width:66%"></span></div></div>
+  <div class="corners"><i></i></div>
+</section>
+
+<!-- 7 · BENEFICIOS -->
+<section class="page ben">
+  <div class="photo" style="background-image:url(img/ben.jpg)"></div>
+  <div class="content">
+    <div class="kicker">06 — Beneficios para participantes</div>
+    <h2 class="h2" style="margin-top:22px">Lo que se llevan</h2>
+    <div class="list">
+      <div class="item"><div class="i">1</div><div><h4>Conocimientos iniciales</h4><p>Introducción práctica al arte 2D y 3D, sonido y tecnología.</p></div></div>
+      <div class="item"><div class="i">2</div><div><h4>Experiencia práctica</h4><p>Actividades en vivo para aplicar lo aprendido en el momento.</p></div></div>
+      <div class="item"><div class="i">3</div><div><h4>Herramientas clave</h4><p>Uso de herramientas profesionales como Blender y Godot.</p></div></div>
+      <div class="item"><div class="i">4</div><div><h4>Preparación para la jam</h4><p>Las bases para participar en su primer proyecto, aun sin experiencia.</p></div></div>
+      <div class="item"><div class="i">5</div><div><h4>Networking</h4><p>Conexiones con profesionales y otros participantes para futuros proyectos.</p></div></div>
+      <div class="item"><div class="i">6</div><div><h4>Material de referencia</h4><p>Contenido de apoyo para seguir practicando después.</p></div></div>
+      <div class="item" style="grid-column: span 2"><div class="i">7</div><div><h4>El inicio de una carrera</h4><p>Una puerta de entrada para explorar o empezar un camino profesional en la industria, sin importar la experiencia previa.</p></div></div>
+    </div>
+  </div>
+  <div class="hud"><span><b>06</b>Beneficios</span><span>07 / 09</span><div class="bar"><span style="width:77%"></span></div></div>
+  <div class="corners"><i></i></div>
+</section>
+
+<!-- 8 · MEGA Y PRODUCCIÓN -->
+<section class="page prod light">
+  <div class="left">
+    <img class="megalogo" src="img/mega_navy.png" alt="MEGA · Mendoza Gamedevs">
+    <p class="lead">Somos la comunidad de desarrolladores de videojuegos de Mendoza: desarrolladores, artistas y emprendedores locales. Nuestro objetivo es promover actividades que fortalezcan la profesionalización de todos los sectores de la industria.</p>
+  </div>
+  <div class="photo" style="background-image:url(img/mega.jpg)"></div>
+  <div class="right">
+    <div class="kicker">07 — Producción del evento</div>
+    <h2 class="h2" style="margin-top:22px; font-size:62px">Grupo de Tareas de Capacitaciones<br><span class="blue">GGJ Mendoza</span></h2>
+    <div class="team"><div>Julián Micic de Rosas</div><div>Agustín Pérez Burgos</div><div>Guillermo Nuñez</div></div>
+    <div class="tasks"><div>Selección y coordinación de talleres</div><div>Selección de capacitadores</div><div>Asistencia técnica en los talleres</div><div>Gestión del espacio</div></div>
+  </div>
+  <div class="hud"><span><b>07</b>MEGA</span><span>08 / 09</span><div class="bar"><span style="width:88%"></span></div></div>
+  <div class="corners"><i></i></div>
+</section>
+
+<!-- 9 · FINAL -->
+<section class="page end">
+  <div class="photo" style="background-image:url(img/fin.jpg)"></div>
+  <div class="glow"></div>
+  <div class="center">
+    <a class="play" href="https://elzorroazul.studio/GGJ/">
+      <span class="ring"><svg viewBox="0 0 24 24" fill="#F3EB33" aria-hidden="true"><path d="M5 3.5v17l15-8.5z"/></svg></span>
+    </a>
+    <h2>¿JUGAMOS?</h2>
+    <a class="cta" href="https://elzorroazul.studio/GGJ/">▶&nbsp; VER EL SHOWREEL</a>
+    <div class="url"><a href="https://elzorroazul.studio/GGJ/">elzorroazul.studio/GGJ</a></div>
+  </div>
+  <div class="links">
+    <img src="../assets/logos/mega_negative.png" alt="MEGA · Mendoza Gamedevs" style="width:280px">
+    <div class="mono"><a class="yel" href="https://www.globalgamejammendoza.com/">globalgamejammendoza.com</a><br><a href="https://linktr.ee/comunidad.mega">linktr.ee/comunidad.mega</a></div>
+  </div>
+  <div class="corners"><i></i></div>
+</section>
+
+</body>
+</html>

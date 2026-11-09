@@ -132,9 +132,25 @@ function loadPhotos(onEach = () => {}) {
 
 // ── primitivas de dibujo ───────────────────────────────────────────────────
 function setFont(g, fam, size, o = {}) {
-  g.font = `${o.italic ? 'italic ' : ''}${o.weight || (fam === 'arch' ? 900 : fam === 'mono' ? 600 : 400)} ${size}px ${FAM[fam]}`;
-  g.fontStretch = o.stretch || 'normal';
+  const st = o.stretch || 'normal';
+  // el ancho va en la abreviatura CSS (Safari/Firefox) y en fontStretch (Chrome)
+  g.font = `${o.italic ? 'italic ' : ''}${o.weight || (fam === 'arch' ? 900 : fam === 'mono' ? 600 : 400)} ${st !== 'normal' ? st + ' ' : ''}${size}px ${FAM[fam]}`;
+  if ('fontStretch' in g) g.fontStretch = st;
   g.letterSpacing = (o.track || 0) + 'px';
+}
+// red de seguridad: si un texto (medido tal como lo dibuja este navegador) no entra
+// en el cuadro con margen, se achica alrededor de su punto de anclaje
+const SAFE = 44;
+function fitScale(g, left, right, ax, y) {
+  const m = g.getTransform();
+  const sx = v => m.a * v + m.c * y + m.e;
+  let L = sx(left), R = sx(right); if (L > R) [L, R] = [R, L];
+  const A = sx(ax);
+  let f = 1;
+  if (R > W - SAFE && R > A) f = Math.min(f, (W - SAFE - A) / (R - A));
+  if (L < SAFE && L < A) f = Math.min(f, (A - SAFE) / (A - L));
+  if (A <= SAFE || A >= W - SAFE) f = Math.min(f, (W - 2 * SAFE) / Math.max(1, R - L));
+  return clamp(f, .15, 1);
 }
 function txt(g, s, x, y, size, o = {}) {
   g.save();
@@ -143,6 +159,12 @@ function txt(g, s, x, y, size, o = {}) {
   g.textBaseline = o.base || 'middle';
   if (o.alpha !== undefined) g.globalAlpha *= o.alpha;
   const dx = (o.align || 'center') === 'center' ? (o.track || 0) / 2 : 0;
+  if (!o.noFit) {
+    const w = g.measureText(s).width, al = o.align || 'center';
+    const left = al === 'left' ? x : al === 'right' ? x - w : x + dx - w / 2;
+    const f = fitScale(g, left, left + w, x, y);
+    if (f < 1) { g.translate(x, y); g.scale(f, f); g.translate(-x, -y); }
+  }
   if (o.stroke) { g.lineWidth = o.stroke; g.lineJoin = 'round'; g.strokeStyle = o.color || WHITE; g.strokeText(s, x + dx, y); }
   else { g.fillStyle = o.color || WHITE; g.fillText(s, x + dx, y); }
   g.restore();
@@ -157,6 +179,7 @@ function chars(g, s, x, y, size, o, fn) {
   const ws = [...s].map(c => g.measureText(c).width);
   const total = ws.reduce((a, b) => a + b, 0) + tr * (ws.length - 1);
   let cx = (o.align === 'left') ? x : (o.align === 'right' ? x - total : x - total / 2);
+  if (!o.noFit) { const f = fitScale(g, cx, cx + total, x, y); if (f < 1) { g.translate(x, y); g.scale(f, f); g.translate(-x, -y); } }
   g.textAlign = 'center'; g.textBaseline = o.base || 'middle';
   [...s].forEach((c, i) => {
     const f = fn(i, ws.length) || {};

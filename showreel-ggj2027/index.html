@@ -8,7 +8,6 @@
 <meta name="theme-color" content="#070B1A">
 <link rel="preload" href="assets/fonts/anton.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="assets/fonts/archivo-wdth.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="assets/logos/mega_negative.png" as="image">
 <meta property="og:title" content="Global Game Jam Mendoza 2027">
 <meta property="og:description" content="48 horas · 1 tema secreto · 1 videojuego. 29 — 31 de enero de 2027.">
 <meta property="og:type" content="website">
@@ -28,7 +27,7 @@
            background: radial-gradient(ellipse at center, rgba(7,11,26,.9), rgba(3,5,12,.97)); transition: opacity .5s; }
   body.started #intro { opacity: 0; pointer-events: none; }
   .kicker { font-weight: 700; font-size: 12px; letter-spacing: .28em; color: var(--blue); text-transform: uppercase; margin: 0 0 14px; }
-  h1 { font: 900 clamp(26px, 6.4vw, 76px)/0.98 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin: 0 0 10px; letter-spacing: -.01em; }
+  h1 { font: 900 clamp(30px, 7.2vw, 92px)/0.98 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin: 0 0 34px; letter-spacing: -.01em; }
   h1 span { color: var(--yel); }
   #intro > div, #end > div { width: 100%; max-width: 900px; min-width: 0; }
   .sub { line-height: 1.7; overflow-wrap: anywhere; font-size: clamp(12px, 1.8vw, 17px); color: var(--white); opacity: .85; margin: 0 0 30px; letter-spacing: .08em; }
@@ -40,7 +39,7 @@
   .hint { margin-top: 18px; font-size: 12px; color: var(--mute); letter-spacing: .12em; }
   @media (max-height: 560px) {
     .mega { width: min(170px, 40vw); margin-bottom: 12px; }
-    h1 { font-size: min(6.4vw, 10vh); margin-bottom: 6px; }
+    h1 { font-size: min(7vw, 13vh); margin-bottom: 20px; }
     .sub { margin-bottom: 14px; line-height: 1.5; }
     #start { padding: 12px 22px 12px 18px; font-size: 14px; }
     .hint { margin-top: 10px; }
@@ -73,14 +72,11 @@
 
   <div id="intro">
     <div>
-      <img class="mega" src="assets/logos/mega_negative.png" alt="MEGA · Mendoza Gamedevs" width="1600" height="744">
       <h1>Global Game Jam<br>Mendoza <span>2027</span></h1>
-      <p class="sub">29 · 30 · 31 DE ENERO<br>48 HORAS · 1 TEMA SECRETO · 1 VIDEOJUEGO</p>
       <button id="start" type="button">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>
         VER EL SHOWREEL
       </button>
-      <div class="hint">CON SONIDO · 1:30</div>
     </div>
   </div>
 

@@ -6,6 +6,7 @@ rm -rf "$OUT" "$HERE/GGJ.zip"; mkdir -p "$OUT/assets"
 cp "$SRC/index.html" "$SRC/reel.js" "$OUT/"
 cp -r "$SRC/assets/photos" "$SRC/assets/fonts" "$SRC/assets/logos" "$OUT/assets/"
 cp "$SRC/assets/soundtrack.m4a" "$SRC/assets/og.jpg" "$OUT/assets/"
+cp "$SRC/pdf/GGJ-Mendoza-2027.pdf" "$OUT/"
 cat > "$OUT/.htaccess" <<'HT'
 AddType font/woff2 .woff2
 AddType audio/mp4 .m4a
