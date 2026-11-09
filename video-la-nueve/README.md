@@ -13,15 +13,15 @@ Cada clip se usa una sola vez y se quitaron tomas que se parecían entre sí (08
 
 | Compás | Figuras | Clips |
 |---|---|---|
-| 1 | 2 blancas | 07 · 06 (la proyección) |
+| 1 | 2 blancas | 06 · 07 (mirando la pantalla) |
 | 2 | negra, negra, blanca | 05 · 13 · 09 |
 | 3 | negra, negra, blanca | 16 · 19 · 15 |
 | 4 | negra, negra, blanca | 17 · 01 · 21 |
-| 5 (8,20 s) | — | corte seco al verde + logo de La Nueve |
+| 5 (8,20 s) | — | aparece el logo; la toma 21 sigue y se funde progresivamente al #15372D puro (último ~0,35 s, color puro) |
 
 - Clips oscuros o pixelados (luma < 75): reducción de ruido suave y contraste +28 %.
 - Color: corrección hacia verde/cian + capa #15372D en modo *screen* al 50 % y saturación al 85 %.
-  La placa final usa ese mismo verde de fondo.
+  La placa final termina en ese verde puro, sin fundido a negro.
 - Audio de los inserts al **50 %**.
 - El logo (PNG con transparencia) no se usa en el montaje, solo en la placa final.
 
@@ -31,3 +31,8 @@ python3 ritmo.py musica.mp3 --json ritmo.json
 python3 montaje.py --clips <carpeta_clips> --music musica.mp3 --ritmo ritmo.json --logo logo_la_nueve.png --out la_nueve_10s.mp4
 ```
 `--music-at N` elige otro punto del tema (se ajusta al downbeat más cercano).
+
+## Portada para Instagram
+El primer cuadro es la toma 06 (público mirando la pantalla), así la vista previa no queda negra.
+`montaje.py` además exporta `<salida>_portada.jpg` para subir como **Portada** del Reel
+(Editar portada → Agregar desde el carrete).

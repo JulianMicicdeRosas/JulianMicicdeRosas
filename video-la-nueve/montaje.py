@@ -10,7 +10,7 @@ Uso:
   con fade-in y fade-out.
 - Los cortes caen sobre la grilla: compases (2,047 s a 117 BPM), blancas y negras.
 - Audio de los inserts al 50 %.
-- El logo entra con corte seco en el primer tiempo del compás 5.
+- En el primer tiempo del compás 5 aparece el logo; la última toma se funde al color puro.
 """
 import argparse, json, os, subprocess
 
@@ -27,8 +27,8 @@ TINT_OPACITY = 0.5
 # Ritmo lento: solo negras (2 corcheas) y blancas (4). Cada clip se usa UNA sola vez,
 # y se evitan tomas que se parecen entre sí (08≈07, 18≈17, 20≈10).
 EDL = [
-    # 1 · apertura: la proyección y el público frente a ella
-    ("07", 3.0, 4, 0), ("06", 2.0, 4, 0),
+    # 1 · apertura: el público mirando la pantalla (primer cuadro = portada en IG, con luz)
+    ("06", 2.0, 4, 0), ("07", 3.0, 4, 0),
     # 2
     ("05", 4.0, 2, 0), ("13", 3.5, 2, 0), ("09", 3.5, 4, 0),
     # 3
@@ -75,37 +75,55 @@ def main():
     logo_t = logo_f / FPS
 
     inputs, filt, labels = [], [], []
-    for i, ((name, start, _, punch), f0, f1) in enumerate(zip(EDL, cuts, cuts[1:])):
-        nf = f1 - f0; d = nf / FPS
-        inputs += ["-ss", f"{start:.3f}", "-t", f"{d + 0.2:.3f}", "-i", os.path.join(a.clips, name + ".mp4")]
+
+    def graded(i, name, nf, punch=0):
         z = 1.18 if punch else 1.0
         sw, sh = int(W * z) // 2 * 2, int(H * z) // 2 * 2
         filt.append(f"[{i}:v:0]scale={sw}:{sh}:force_original_aspect_ratio=increase,crop={W}:{H},"
                     f"setsar=1,fps={FPS},trim=end_frame={nf},setpts=PTS-STARTPTS,"
                     f"{ENHANCE_FX + ',' if name in ENHANCE else ''}{GRADE},format=gbrp[g{i}]")
         filt.append(f"color={TINT}:s={W}x{H}:r={FPS},format=gbrp[c{i}]")
-        filt.append(f"[g{i}][c{i}]blend=all_mode=screen:all_opacity={TINT_OPACITY}:shortest=1,"
-                    f"format=yuv420p[v{i}]")
+        filt.append(f"[g{i}][c{i}]blend=all_mode=screen:all_opacity={TINT_OPACITY}:shortest=1[t{i}]")
+
+    def insert_audio(i, d, fade_out=0.008):
         filt.append(f"[{i}:a:0]aresample=48000,aformat=channel_layouts=stereo,atrim=duration={d:.4f},"
-                    f"asetpts=PTS-STARTPTS,afade=in:d=0.008,afade=out:st={d - 0.008:.4f}:d=0.008,"
+                    f"asetpts=PTS-STARTPTS,afade=in:d=0.008,afade=out:st={d - fade_out:.4f}:d={fade_out},"
                     f"volume={INSERT_VOL}[a{i}]")
+
+    for i, ((name, start, _, punch), f0, f1) in enumerate(zip(EDL, cuts, cuts[1:])):
+        nf = f1 - f0; d = nf / FPS
+        inputs += ["-ss", f"{start:.3f}", "-t", f"{d + 0.2:.3f}", "-i", os.path.join(a.clips, name + ".mp4")]
+        graded(i, name, nf, punch)
+        filt.append(f"[t{i}]format=yuv420p[v{i}]")
+        insert_audio(i, d)
         labels.append(f"[v{i}][a{i}]")
     n = len(EDL)
-    filt.append("".join(labels) + f"concat=n={n}:v=1:a=1[vc][ac]")
 
-    # tarjeta final: corte seco al verde en el downbeat, logo aparece en una corchea
+    # placa final: la última toma sigue (cuadros nuevos, sin repetir) y se funde
+    # progresivamente al color puro de referencia; el logo aparece encima.
     end_d = TOTAL - logo_t
-    filt.append(f"color={TINT}:s={W}x{H}:r={FPS}:d={end_d:.4f},format=yuv420p[bg]")
+    end_nf = round(end_d * FPS)
+    last, lstart, ln, _ = EDL[-1]
     idx = n
+    inputs += ["-ss", f"{lstart + ln * eighth:.3f}", "-t", f"{end_d + 0.2:.3f}",
+               "-i", os.path.join(a.clips, last + ".mp4")]
+    graded(idx, last, end_nf)
+    ramp = end_d - 0.35  # al final quedan ~0,35 s de color puro
+    filt.append(f"color={TINT}:s={W}x{H}:r={FPS},format=gbrp[pure]")
+    filt.append(f"[t{idx}][pure]blend=all_expr='A*(1-min(T/{ramp:.3f},1))+B*min(T/{ramp:.3f},1)'"
+                f":shortest=1[bg]")
+    insert_audio(idx, end_d, fade_out=min(1.0, end_d))
+    labels.append(f"[end][a{idx}]")
+    idx += 1
     if a.logo:
         inputs += ["-loop", "1", "-t", f"{end_d:.4f}", "-i", a.logo]
-        filt.append(f"[{idx}:v]format=rgba,scale={int(W * 0.75)}:-1,fade=in:st=0:d={eighth:.3f}:alpha=1[lg]")
+        filt.append(f"[{idx}:v]format=rgba,scale={int(W * 0.75)}:-1,fade=in:st=0:d={2 * eighth:.3f}:alpha=1[lg]")
         filt.append("[bg][lg]overlay=(W-w)/2:(H-h)/2,format=yuv420p[end]")
         idx += 1
     else:
-        filt.append("[bg]null[end]")
-    filt.append(f"[vc][end]concat=n=2:v=1:a=0,trim=duration={TOTAL},"
-                f"fade=out:st={TOTAL - 0.4}:d=0.4[vout]")
+        filt.append("[bg]format=yuv420p[end]")
+    filt.append("".join(labels) + f"concat=n={n + 1}:v=1:a=1[vc][ac]")
+    filt.append(f"[vc]trim=duration={TOTAL}[vout]")
     filt.append(f"[ac]apad,atrim=duration={TOTAL}[ins]")
 
     # música: desde un downbeat del medio del tema, fade-in 1 s y fade-out durante el logo
@@ -119,6 +137,9 @@ def main():
            "-c:v", "libx264", "-crf", "18", "-preset", "medium", "-pix_fmt", "yuv420p",
            "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", a.out]
     subprocess.run(cmd, check=True)
+    # portada para Instagram: primer cuadro (subir como "Portada" del Reel)
+    cover = os.path.splitext(a.out)[0] + "_portada.jpg"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", a.out, "-frames:v", "1", "-q:v", "2", cover], check=True)
     print(f"BPM {r['bpm']:.2f} · corchea {eighth:.3f}s · música desde {m0:.2f}s · "
           f"{n} cortes · logo en {logo_t:.2f}s -> {a.out}")
 
