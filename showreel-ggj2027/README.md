@@ -55,6 +55,12 @@ Genera `deploy/GGJ/` (≈15 MB) y `deploy/GGJ.zip`. Se sube por cPanel
 deploy/subir_sftp.sh        (desde la Mac con la llave flat-namecheap)
 ```
 
+### Publicado
+
+Está en **https://elzorroazul.studio/GGJ/**, publicado con el workflow «Publicar en Namecheap» del repo
+`JulianMicicdeRosas/FLAT-Desarrollos`: la carpeta `deploy/GGJ/` se copia a `web/elzorroazul.studio/GGJ/` y
+se hace push a `main`. Ese repo ignora `*.m4a`, así que la música se agrega con `git add -f`.
+
 ## Ver el preview en el navegador
 
 Hace falta servir la carpeta (las fuentes no cargan desde `file://`):
