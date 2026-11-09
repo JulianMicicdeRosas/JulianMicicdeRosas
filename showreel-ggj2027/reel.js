@@ -9,6 +9,8 @@ const W = 1920, H = 1080, FPS = 60, DUR = 90;
 const BPM = 32 * 4 * 60 / DUR, B = 60 / BPM, BAR = 4 * B;   // 85,3 BPM: 32 compases = 90 s
 
 // ── paleta (marca GGJ + navy MEGA) ─────────────────────────────────────────
+const INTRO_LOGO_W = 560, INTRO_LOGO_CY = 330;   // logo de la portada (en píxeles del lienzo)
+let AMB = 0;   // tiempo ambiente: anima la portada antes de arrancar sin mover el reel
 const NAVY = '#070B1A', NAVY2 = '#0E1630', NAVY3 = '#16224A';
 const BLUE = '#22A9E0', YEL = '#F3EB33', WHITE = '#F4F6FA', RED = '#FF4D5E';
 
@@ -237,7 +239,7 @@ function dotGrid(g, gap, color, a, t, reveal = 99999, cx = W / 2, cy = H / 2) {
   for (let y = gap / 2; y < H; y += gap) for (let x = gap / 2; x < W; x += gap) {
     const d = Math.hypot(x - cx, y - cy);
     if (d > reveal) continue;
-    const wob = .5 + .5 * Math.sin(d * .02 - t * 3);
+    const wob = .5 + .5 * Math.sin(d * .02 - (t + AMB) * 3);
     g.globalAlpha = a * (.4 + .6 * wob);
     g.fillRect(x - 1.5, y - 1.5, 3, 3);
   }
@@ -340,26 +342,23 @@ function sBoot(g, b, lb) {
   const gr = g.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, 1100);
   gr.addColorStop(0, '#101a3a'); gr.addColorStop(1, '#03050c'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
   dotGrid(g, 48, BLUE, .22, b * B, P(lb, 0, 2.5, ease.outCubic) * 1300);
-  // ident MEGA (beats 0 – 2)
+  // ident MEGA (beats 0 – 2). En lb = 0 es la portada de la web: logo quieto, más chico y más arriba;
+  // al arrancar crece hasta el centro, así el paso de la portada al reel no tiene corte.
   if (lb < 2) {
-    const lg = LOGO.mega, lw = 980, lh = lw * lg.height / lg.width;
-    const x0 = W / 2 - lw / 2, y0 = H / 2 - lh / 2 - 40;
+    const lg = LOGO.mega;
+    const grow = P(lb, 0, 1, ease.inOutCubic);
+    const lw = lerp(INTRO_LOGO_W, 980, grow), lh = lw * lg.height / lg.width;
+    const cy = lerp(INTRO_LOGO_CY, H / 2 - 40, grow);
     const out = P(lb, 1.7, .3, ease.inExpo);
-    const cols = 10;
     g.save(); g.globalAlpha = 1 - out;
     g.translate(W / 2, H / 2); g.scale(1 + out * .25, 1 + out * .25); g.translate(-W / 2, -H / 2);
-    for (let i = 0; i < cols; i++) {
-      const k = P(lb, .05 + i * .045, .6, ease.outBack);
-      if (k <= 0) continue;
-      const sx = lg.width * i / cols, sw = lg.width / cols;
-      const dx = x0 + lw * i / cols, dw = lw / cols;
-      g.drawImage(lg, sx, 0, sw, lg.height, dx, y0 + (1 - k) * (i % 2 ? 140 : -140), dw + .5, lh);
-    }
-    rect(g, W / 2 - 260 * P(lb, .7, .6), y0 + lh + 60, 520 * P(lb, .7, .6), 8, YEL);
-    txt(g, typeOn('PRESENTA', P(lb, .9, .6, ease.lin)), W / 2, y0 + lh + 125, 30, { fam: 'mono', weight: 700, color: WHITE, track: 18 });
+    g.drawImage(lg, W / 2 - lw / 2, cy - lh / 2, lw, lh);
+    const y0 = cy + lh / 2;
+    rect(g, W / 2 - 260 * P(lb, .8, .6), y0 + 60, 520 * P(lb, .8, .6), 8, YEL);
+    txt(g, typeOn('PRESENTA', P(lb, 1, .5, ease.lin)), W / 2, y0 + 125, 30, { fam: 'mono', weight: 700, color: WHITE, track: 18 });
     g.restore();
     FX.glitch = lb > 1.6 ? .5 : 0;
-    FX.ab = .3 + hit(lb, .05, .4) * 1.2 + out * 1.5; FX.grain = .08;
+    FX.ab = .25 + hit(lb, .9, .4) * .8 + out * 1.5; FX.grain = .08;
     return;
   }
   const k1 = P(lb, 2, 1.2);
@@ -1216,7 +1215,8 @@ function sHero(g, b, lb) {
   rect(g, 0, 0, W, H, NAVY, .15 + kc * .8);
   g.restore();
   if (kc < .5) {
-    vgrad(g, 0, 420, 'rgba(7,11,26,.85)', 'rgba(7,11,26,0)');
+    vgrad(g, 0, 420, 'rgba(7,11,26,.85)', 'rgba(7,11,26,0)'); vgrad(g, H - 420, H, 'rgba(7,11,26,0)', 'rgba(7,11,26,.85)');
+    chars(g, 'HACEMOS INDUSTRIA', W / 2, 870, 180, { fam: 'anton', color: YEL, track: 6 }, (i) => ({ a: P(lb, 1 + i * .04, .3), dy: (1 - P(lb, 1 + i * .04, .5)) * 60 }));
     chars(g, 'HACEMOS JUEGOS', W / 2, 215, 180, { fam: 'anton', color: WHITE, track: 6 }, (i) => ({ a: P(lb, i * .04, .3), dy: (1 - P(lb, i * .04, .5)) * -120 }));
   }
   FX.ab = .3 + kickPulse(b) * .9;
@@ -1252,7 +1252,7 @@ function sLockup(g, b, lb) {
   const mw = 330, mh = mw * LOGO.mega.height / LOGO.mega.width;
   g.drawImage(LOGO.mega, 112, 900, mw, mh);
   g.restore();
-  txt(g, typeOn('globalgamejammendoza.com', P(lb, 2, 1.2, ease.lin)), W - 120, 900, 40, { fam: 'mono', weight: 700, color: YEL, align: 'right' });
+  txt(g, typeOn('@mendoza.gamedevs', P(lb, 2, 1.2, ease.lin)), W - 120, 900, 40, { fam: 'mono', weight: 700, color: YEL, align: 'right' });
   txt(g, typeOn('linktr.ee/comunidad.mega', P(lb, 3, 1.2, ease.lin)), W - 120, 960, 30, { fam: 'mono', weight: 600, color: WHITE, align: 'right' });
   FX.flash = hit(lb, 0, .3) * .9;
   FX.ab = .2 + kickPulse(b) * .6;
@@ -1265,13 +1265,11 @@ function sEnd(g, b, lb) {
   const fade = 1 - P(lb, 5.6, 1.6, ease.inOutCubic);
   g.save(); g.globalAlpha = fade;
   const cx = W / 2, cy = 470;
-  // botón play que se dibuja
-  const kp = P(lb, .2, .9, ease.inOutCubic);
-  g.save(); g.translate(cx, cy - 20); g.scale(lerp(.6, 1, k), lerp(.6, 1, k));
-  ring(g, 0, 0, 150, 10, WHITE, .25);
-  g.strokeStyle = YEL; g.lineWidth = 10; g.beginPath(); g.arc(0, 0, 150, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * kp); g.stroke();
-  g.fillStyle = YEL; g.globalAlpha *= P(lb, .8, .4);
-  g.beginPath(); g.moveTo(-40, -65); g.lineTo(75, 0); g.lineTo(-40, 65); g.closePath(); g.fill();
+  // logo de MEGA
+  const lg = LOGO.mega, lw = 720, lh = lw * lg.height / lg.width;
+  const kl = P(lb, .1, .9, ease.outCubic);
+  g.save(); g.globalAlpha *= kl; g.translate(cx, cy - 40); g.scale(lerp(.92, 1, kl), lerp(.92, 1, kl));
+  g.drawImage(lg, -lw / 2, -lh / 2, lw, lh);
   g.restore();
   chars(g, '¿JUGAMOS?', W / 2, 790, 210, { fam: 'anton', color: WHITE, track: 8 }, (i) => ({ a: P(lb, .6 + i * .05, .3), s: lerp(1.6, 1, P(lb, .6 + i * .05, .5)) }));
   txt(g, 'GLOBAL GAME JAM MENDOZA · 29—31.01.2027', W / 2, 950, 26, { fam: 'mono', weight: 700, color: BLUE, track: 8, alpha: P(lb, 1.6, .6) });
@@ -1415,7 +1413,7 @@ function renderFrame(t) {
     if (FX.flash > 0) { out2d.globalAlpha = clamp(FX.flash); out2d.fillStyle = '#fff'; out2d.fillRect(0, 0, W, H); out2d.globalAlpha = 1; }
     return;
   }
-  gl.uniform1f(U.t, t); gl.uniform1f(U.ab, FX.ab); gl.uniform1f(U.glitch, FX.glitch); gl.uniform1f(U.grain, FX.grain);
+  gl.uniform1f(U.t, t + AMB); gl.uniform1f(U.ab, FX.ab); gl.uniform1f(U.glitch, FX.glitch); gl.uniform1f(U.grain, FX.grain);
   gl.uniform1f(U.flash, FX.flash); gl.uniform1f(U.vig, FX.vig);
   gl.drawArrays(gl.TRIANGLES, 0, 6);
 }
@@ -1438,14 +1436,18 @@ if (isRender) {
   const now = () => {
     if (!playing) return t0;
     const pn = performance.now();
-    if (!audio.paused && audio.readyState >= 2 && audio.currentTime > 0) {
+    const clockT = (pn - tStart) / 1000 + t0;
+    if (!audio.paused && !audio.ended) {
+      // la música está cargando: la imagen la espera
+      if (audio.seeking || audio.readyState < 3) { tStart = pn; return t0; }
       const at = audio.currentTime;
       if (at !== lastAT) { lastAT = at; lastATperf = pn; }
       const t = at + Math.min(.12, (pn - lastATperf) / 1000);
-      t0 = t; tStart = pn;            // si el audio se corta, el reloj propio sigue desde acá
-      return t;
+      // el audio manda mientras esté donde corresponde; si un salto no se pudo hacer
+      // (servidor sin rangos), la imagen sigue con su propio reloj
+      if (Math.abs(t - clockT) < .75) { t0 = t; tStart = pn; return t; }
     }
-    return (pn - tStart) / 1000 + t0;
+    return clockT;
   };
   const fmt = sec => `${Math.floor(sec / 60)}:${String(Math.floor(sec) % 60).padStart(2, '0')}`;
   const setUI = () => {
@@ -1458,13 +1460,16 @@ if (isRender) {
     if (!coreReady) { document.body.classList.add('waiting'); core.then(play); return; }
     document.body.classList.remove('waiting');
     if (t0 >= DUR - .05) t0 = 0;
+    const first = !started;
+    if (first) { quietUntil = performance.now() + 2500; document.body.classList.remove('ui'); clearTimeout(hideTimer); }   // el paso de la portada al reel, sin controles
     started = true; playing = true;
     lastAT = -1;
     try { audio.currentTime = t0; } catch (e) {}
     audio.play().catch(() => {});
     tStart = performance.now();
     document.body.classList.remove('ended');
-    setUI(); poke();
+    setUI();
+    if (!first) poke();    // la primera vez, sin controles: el reel sigue desde la portada
   };
   const pause = () => { t0 = now(); playing = false; audio.pause(); setUI(); poke(); };
   const toggle = () => playing ? pause() : play();
@@ -1479,7 +1484,8 @@ if (isRender) {
     if (d.fullscreenElement || d.webkitFullscreenElement) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
     else (stage.requestFullscreen || stage.webkitRequestFullscreen || (() => {})).call(stage);
   };
-  const poke = () => { document.body.classList.add('ui'); clearTimeout(hideTimer); if (playing) hideTimer = setTimeout(() => document.body.classList.remove('ui'), 2200); };
+  let quietUntil = 0;
+  const poke = () => { if (performance.now() < quietUntil) return; document.body.classList.add('ui'); clearTimeout(hideTimer); if (playing) hideTimer = setTimeout(() => document.body.classList.remove('ui'), 2200); };
   addEventListener('pointermove', poke);
 
   $('start').onclick = play;
@@ -1496,9 +1502,17 @@ if (isRender) {
   });
   document.addEventListener('visibilitychange', () => { if (document.hidden && playing) pause(); });
 
+  // el texto de la portada se acomoda sobre el lienzo (que mantiene 16:9)
+  const layout = () => {
+    const r = $('out').getBoundingClientRect();
+    for (const [k, v] of [['--cl', r.left], ['--ct', r.top], ['--cw', r.width], ['--ch', r.height]]) stage.style.setProperty(k, v + 'px');
+  };
+  addEventListener('resize', layout); layout();
   core.then(() => {
     coreReady = true; window.REEL.ready = true;
-    renderFrame(0);                    // portada limpia (si hace falta, acá se pasa a salida 2D)
+    AMB = performance.now() / 1000;
+    renderFrame(0);                    // portada: el logo de MEGA (si hace falta, acá se pasa a salida 2D)
+    layout();
     document.body.classList.add('loaded');
   }).catch(e => { $('start').textContent = 'NO SE PUDO CARGAR · ' + (e && e.message ? e.message : e); });
   setUI();
@@ -1506,7 +1520,8 @@ if (isRender) {
   const loop = () => {
     const t = now();
     if (playing && t >= DUR - .02) { playing = false; t0 = DUR - .02; audio.pause(); document.body.classList.add('ended'); setUI(); poke(); }
-    if (coreReady && started && (playing || t !== lastDrawn)) { renderFrame(Math.min(t, DUR - .001)); lastDrawn = t; }
+    if (coreReady && !started) { AMB = performance.now() / 1000; renderFrame(0); }      // portada viva
+    else if (coreReady && started && (playing || t !== lastDrawn)) { renderFrame(Math.min(t, DUR - .001)); lastDrawn = t; }
     $('scrub').value = Math.round(t / DUR * 1000);
     $('tc').textContent = `${fmt(Math.min(t, DUR - .5))} / ${fmt(DUR)}`;
     requestAnimationFrame(loop);

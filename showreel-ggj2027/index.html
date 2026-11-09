@@ -8,6 +8,7 @@
 <meta name="theme-color" content="#070B1A">
 <link rel="preload" href="assets/fonts/anton.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="assets/fonts/archivo-wdth.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/logos/mega_negative.png" as="image">
 <meta property="og:title" content="Global Game Jam Mendoza 2027">
 <meta property="og:description" content="48 horas · 1 tema secreto · 1 videojuego. 29 — 31 de enero de 2027.">
 <meta property="og:type" content="website">
@@ -15,50 +16,43 @@
 <meta property="og:image" content="https://elzorroazul.studio/GGJ/assets/og.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <style>
+  @font-face { font-family: Anton; src: url(assets/fonts/anton.woff2) format('woff2'); font-display: swap; }
+  @font-face { font-family: Archivo; src: url(assets/fonts/archivo-wdth.woff2) format('woff2'); font-weight: 100 900; font-stretch: 62% 125%; font-display: swap; }
+  @font-face { font-family: JBMono; src: url(assets/fonts/jbmono.woff2) format('woff2'); font-weight: 100 800; font-display: swap; }
   :root { --navy: #070B1A; --navy2: #0E1630; --blue: #22A9E0; --yel: #F3EB33; --white: #F4F6FA; --mute: #8C97B8; }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: #000; color: var(--white); overflow: hidden; }
-  body { font: 15px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
-  #stage { position: fixed; inset: 0; display: grid; place-items: center; background: #000; }
-  #out { width: min(100vw, 177.78vh); height: min(56.25vw, 100vh); display: block; background: var(--navy); cursor: pointer; }
+  html, body { margin: 0; height: 100%; background: var(--navy); color: var(--white); overflow: hidden; }
+  body { font: 15px/1.4 JBMono, ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  #stage { position: fixed; inset: 0; display: grid; place-items: center; background: var(--navy); --cl: 0px; --ct: 0px; --cw: 100vw; --ch: 56.25vw; }
+  #out { width: min(100vw, 177.78vh); height: min(56.25vw, 100vh); display: block; background: var(--navy); cursor: pointer; opacity: 0; transition: opacity .9s ease; }
+  body.loaded #out, body.render #out { opacity: 1; }
 
-  /* pantalla de inicio */
-  #intro { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px 16px;
-           background: radial-gradient(ellipse at center, rgba(7,11,26,.9), rgba(3,5,12,.97)); transition: opacity .5s; }
-  body.started #intro { opacity: 0; pointer-events: none; }
-  .kicker { font-weight: 700; font-size: 12px; letter-spacing: .28em; color: var(--blue); text-transform: uppercase; margin: 0 0 14px; }
-  h1 { font: 900 clamp(30px, 7.2vw, 92px)/0.98 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin: 0 0 34px; letter-spacing: -.01em; }
-  h1 span { color: var(--yel); }
-  #intro > div, #end > div { width: 100%; max-width: 900px; min-width: 0; }
-  .sub { line-height: 1.7; overflow-wrap: anywhere; font-size: clamp(12px, 1.8vw, 17px); color: var(--white); opacity: .85; margin: 0 0 30px; letter-spacing: .08em; }
-  .mega { display: block; width: min(300px, 56vw); height: auto; margin: 0 auto 26px; }
-  #start { display: inline-flex; margin: 0 auto; align-items: center; gap: 12px; background: var(--yel); color: var(--navy); border: 0; border-radius: 999px;
-           padding: 16px 30px 16px 24px; font: 800 16px/1 inherit; font-family: inherit; letter-spacing: .12em; cursor: pointer; box-shadow: 0 0 0 0 rgba(243,235,51,.5); animation: pulse 2s infinite; }
-  #start svg { width: 18px; height: 18px; }
-  body.waiting #start { opacity: .75; animation: none; }
-  .hint { margin-top: 18px; font-size: 12px; color: var(--mute); letter-spacing: .12em; }
-  @media (max-height: 560px) {
-    .mega { width: min(170px, 40vw); margin-bottom: 12px; }
-    h1 { font-size: min(7vw, 13vh); margin-bottom: 20px; }
-    .sub { margin-bottom: 14px; line-height: 1.5; }
-    #start { padding: 12px 22px 12px 18px; font-size: 14px; }
-    .hint { margin-top: 10px; }
-  }
-  @media (max-height: 380px) { .hint { display: none; } }
-  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(243,235,51,.45); } 70% { box-shadow: 0 0 0 18px rgba(243,235,51,0); } 100% { box-shadow: 0 0 0 0 rgba(243,235,51,0); } }
+  /* portada: el texto vive sobre el lienzo, debajo del logo que dibuja el reel */
+  #intro { position: absolute; left: var(--cl); width: var(--cw); top: calc(var(--ct) + var(--ch) * .52); text-align: center; padding: 0 16px;
+           transition: opacity .7s ease, transform .9s cubic-bezier(.2,.7,.2,1), filter .7s ease; }
+  body.started #intro { opacity: 0; transform: translateY(calc(var(--ch) * .05)); filter: blur(8px); pointer-events: none; }
+  #intro .l1 { display: block; font: 900 clamp(13px, calc(var(--cw) * .03), 60px)/1 Archivo, sans-serif; font-stretch: 125%; letter-spacing: .14em; text-transform: uppercase; }
+  #intro .l2 { display: block; margin-top: .12em; font: 400 clamp(30px, calc(var(--cw) * .072), 140px)/.95 Anton, Impact, sans-serif; text-transform: uppercase; letter-spacing: .02em; }
+  #intro .l2 span { color: var(--yel); }
+  #intro h1 { margin: 0; }
+  .actions { margin-top: clamp(16px, calc(var(--ch) * .05), 48px); display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; gap: 10px; padding: .95em 1.6em; border-radius: 999px; font: 800 clamp(13px, calc(var(--cw) * .0105), 19px)/1 JBMono, monospace;
+         letter-spacing: .14em; text-transform: uppercase; text-decoration: none; cursor: pointer; border: 2px solid var(--blue); color: var(--blue); background: rgba(7,11,26,.4); }
+  .btn svg { width: 1.05em; height: 1.05em; }
+  .btn.primary { background: var(--yel); border-color: var(--yel); color: var(--navy); }
+  .btn:focus-visible { outline: 3px solid var(--white); outline-offset: 3px; }
+  body.waiting #start { opacity: .75; }
 
   /* final */
-  #end { position: absolute; inset: 0; display: none; place-items: center; text-align: center; padding: 24px 16px; background: rgba(3,5,12,.9); }
-  body.ended #end { display: grid; }
-  .links { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 18px; }
-  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 18px; border-radius: 999px; font: 700 13px/1 inherit; font-family: inherit;
-         letter-spacing: .08em; text-decoration: none; cursor: pointer; border: 1.5px solid var(--blue); color: var(--blue); background: transparent; }
-  .btn.primary { background: var(--yel); border-color: var(--yel); color: var(--navy); }
+  #end { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px 16px; background: rgba(7,11,26,.94); opacity: 0; pointer-events: none; transition: opacity .8s ease; }
+  body.ended #end { opacity: 1; pointer-events: auto; }
+  #end .actions { margin-top: 0; max-width: 760px; margin-inline: auto; }
+  .endlogo { display: block; width: min(340px, 60vw); height: auto; margin: 0 auto clamp(20px, 5vh, 44px); }
 
   /* controles */
   #ctl { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 12px; padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
-         background: linear-gradient(transparent, rgba(0,0,0,.75)); opacity: 0; transition: opacity .3s; }
-  body.started.ui #ctl, body.started:not(.playing) #ctl { opacity: 1; }
+         background: linear-gradient(transparent, rgba(0,0,0,.75)); opacity: 0; pointer-events: none; transition: opacity .4s; }
+  body.started.ui #ctl, body.started:not(.playing) #ctl { opacity: 1; pointer-events: auto; }
   #ctl button { background: none; border: 0; color: var(--white); font: 700 16px/1 inherit; font-family: inherit; cursor: pointer; padding: 6px 8px; min-width: 36px; }
   #scrub { flex: 1; accent-color: var(--yel); height: 4px; cursor: pointer; }
   #tc { font-size: 12px; color: var(--mute); min-width: 82px; text-align: right; }
@@ -66,28 +60,26 @@
   body.started.playing:not(.ui) { cursor: none; }
 </style>
 </head>
-<body class="ui">
+<body>
 <div id="stage">
   <canvas id="out" width="1920" height="1080" aria-label="Showreel animado de la Global Game Jam Mendoza 2027"></canvas>
 
   <div id="intro">
-    <div>
-      <h1>Global Game Jam<br>Mendoza <span>2027</span></h1>
-      <button id="start" type="button">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>
-        VER EL SHOWREEL
-      </button>
+    <h1><span class="l1">Global Game Jam</span><span class="l2">Mendoza <span>2027</span></span></h1>
+    <div class="actions">
+      <button class="btn primary" id="start" type="button"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>Ver showreel</button>
+      <a class="btn" href="GGJ-Mendoza-2027.pdf" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg>Ver PDF</a>
     </div>
   </div>
 
   <div id="end">
-    <div>
-      <button class="btn primary" id="replay" type="button">↻ VER DE NUEVO</button>
-      <div class="links">
-        <a class="btn" href="https://www.globalgamejammendoza.com/" target="_blank" rel="noopener">globalgamejammendoza.com</a>
-        <a class="btn" href="https://linktr.ee/comunidad.mega" target="_blank" rel="noopener">linktr.ee/comunidad.mega</a>
-      </div>
-    </div>
+    <div class="endbox"><img class="endlogo" src="assets/logos/mega_negative.png" alt="MEGA · Mendoza Gamedevs" width="1600" height="744">
+    <div class="actions">
+      <button class="btn primary" id="replay" type="button">↻ Ver de nuevo</button>
+      <a class="btn" href="GGJ-Mendoza-2027.pdf" target="_blank" rel="noopener">Ver PDF</a>
+      <a class="btn" href="https://www.instagram.com/mendoza.gamedevs" target="_blank" rel="noopener">Instagram @mendoza.gamedevs</a>
+      <a class="btn" href="https://linktr.ee/comunidad.mega" target="_blank" rel="noopener">linktr.ee/comunidad.mega</a>
+    </div></div>
   </div>
 
   <div id="ctl">

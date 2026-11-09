@@ -49,6 +49,17 @@ srv.listen(0, '127.0.0.1', async () => {
   }
   const out = path.join(__dirname, 'GGJ-Mendoza-2027.pdf');
   await page.pdf({ path: out, width: '1920px', height: '1080px', printBackground: true, preferCSSPageSize: true });
+  // compresión sin pérdida de los flujos (pypdf)
+  try {
+    require('child_process').execFileSync('python3', ['-c', `
+import sys, warnings; warnings.simplefilter('ignore')
+from pypdf import PdfReader, PdfWriter
+w = PdfWriter(clone_from=PdfReader(sys.argv[1]))
+for p in w.pages: p.compress_content_streams(level=9)
+w.compress_identical_objects(remove_identicals=True, remove_orphans=True)
+w.add_metadata({'/Title': 'Global Game Jam Mendoza 2027 · Propuesta', '/Author': 'Asociación MEGA'})
+w.write(sys.argv[1])`, out], { stdio: ['ignore', 'ignore', 'ignore'] });
+  } catch (e) { console.warn('sin compresión extra (falta pypdf)'); }
   console.log('PDF →', out, (fs.statSync(out).size / 1e6).toFixed(2), 'MB');
   await b.close(); srv.close();
 });

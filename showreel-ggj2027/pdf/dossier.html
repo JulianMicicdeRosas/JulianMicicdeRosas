@@ -139,16 +139,16 @@
 
   /* 9 · final */
   .end .photo { inset: 0; opacity: .5; }
-  .end .center { position: absolute; left: 120px; right: 120px; top: 140px; text-align: center; }
-  .end .play { display: inline-flex; flex-direction: column; align-items: center; }
-  .end .ring { width: 300px; height: 300px; border-radius: 50%; border: 12px solid var(--yel); display: grid; place-items: center; background: rgba(7,11,26,.55); }
-  .end .ring svg { width: 130px; height: 130px; margin-left: 22px; }
-  .end h2 { margin-top: 40px; font: 400 200px/1 Anton, sans-serif; }
+  .end .center { position: absolute; left: 120px; right: 120px; top: 110px; text-align: center; }
+  .end .endlogo { display: block; width: 640px; margin: 0 auto; }
+  .end h2 { margin-top: 30px; font: 400 200px/1 Anton, sans-serif; }
   .end .cta { margin-top: 30px; display: inline-flex; align-items: center; gap: 18px; height: 96px; padding: 0 54px; border-radius: 48px; background: var(--yel); color: var(--navy);
               font: 800 36px/1 JBMono, monospace; letter-spacing: 6px; }
   .end .url { margin-top: 22px; font: 700 26px/1 JBMono, monospace; letter-spacing: 3px; color: var(--blue); }
-  .end .links { position: absolute; left: 120px; right: 120px; bottom: 120px; display: flex; justify-content: space-between; align-items: flex-end; }
-  .end .links .mono { font-size: 26px; font-weight: 700; letter-spacing: 2px; line-height: 1.6; text-align: right; }
+  .end .links { position: absolute; left: 120px; right: 120px; bottom: 110px; display: flex; justify-content: space-between; align-items: center; }
+  .end .links .ig { display: inline-flex; align-items: center; gap: 16px; font: 800 32px/1 JBMono, monospace; letter-spacing: 2px; color: var(--yel); }
+  .end .links .ig svg { width: 44px; height: 44px; }
+  .end .links .mono { font-size: 28px; font-weight: 700; letter-spacing: 2px; }
 </style>
 </head>
 <body>
@@ -296,16 +296,14 @@
   <div class="photo" style="background-image:url(img/fin.jpg)"></div>
   <div class="glow"></div>
   <div class="center">
-    <a class="play" href="https://elzorroazul.studio/GGJ/">
-      <span class="ring"><svg viewBox="0 0 24 24" fill="#F3EB33" aria-hidden="true"><path d="M5 3.5v17l15-8.5z"/></svg></span>
-    </a>
+    <img class="endlogo" src="../assets/logos/mega_negative.png" alt="MEGA · Mendoza Gamedevs">
     <h2>¿JUGAMOS?</h2>
     <a class="cta" href="https://elzorroazul.studio/GGJ/">▶&nbsp; VER EL SHOWREEL</a>
     <div class="url"><a href="https://elzorroazul.studio/GGJ/">elzorroazul.studio/GGJ</a></div>
   </div>
   <div class="links">
-    <img src="../assets/logos/mega_negative.png" alt="MEGA · Mendoza Gamedevs" style="width:280px">
-    <div class="mono"><a class="yel" href="https://www.globalgamejammendoza.com/">globalgamejammendoza.com</a><br><a href="https://linktr.ee/comunidad.mega">linktr.ee/comunidad.mega</a></div>
+    <a class="ig" href="https://www.instagram.com/mendoza.gamedevs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor" stroke="none"/></svg>@mendoza.gamedevs</a>
+    <a class="mono" href="https://linktr.ee/comunidad.mega">linktr.ee/comunidad.mega</a>
   </div>
   <div class="corners"><i></i></div>
 </section>
