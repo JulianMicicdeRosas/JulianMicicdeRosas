@@ -199,7 +199,7 @@ async function initTF(){
 async function detectLoop(){
   while (running) {
     const t0 = performance.now();
-    if (!simMode) { await ensureDetector();
+    if (!simMode && !(typeof Sync !== 'undefined' && Sync.running)) { await ensureDetector();
       for (const src of sources) { if (!DET.detector || src.video.readyState < 2) continue;
         try { src.poses = await detectSource(src); } catch (e) { DET.error = e.message; } } }
     inferBudgetMs = inferBudgetMs * .9 + (performance.now() - t0) * .1;

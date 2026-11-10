@@ -65,6 +65,7 @@ Sin internet en la sala el programa arranca igual: las librerías **y el modelo 
 | **Sesión** | Nombre, guardar/duplicar/exportar/importar, notas; lista de sesiones; **canciones de la sesión** (agregar archivos, carpeta `canciones/`, orden, reproducir). |
 | **Plantillas** | 12 estéticas con tecla rápida (1‑9, 0). Se aplican encima y después se ajustan. |
 | **Módulos** | Cada módulo con su interruptor, descripción y controles; esqueleto y enlaces; **fuente de la silueta** (esqueleto / brillo / fondo); ecos; posproceso. |
+| **Sincronizar** (naranja) | Sincronización automática proyección ↔ cámara con puntos, verificación con la cámara superpuesta, ajuste fino de tamaño (altura real / cámara / fija), altura, posición y separación. |
 | **Cámaras** | Zonas (hasta 4 cámaras), disposición (columnas / filas / a mano), espejo por zona, video en la imagen, **detección** (cuerpos máximos —1 de fábrica—, sensibilidad, partes de la imagen, resolución, confianza, vista previa con lo que ve el modelo), **exposición dinámica / blancos / negros** de la imagen que analiza el modelo, **ajustes de la cámara física**. |
 | **Audio** | Fuente (apagado / micrófono / canción), micrófono, ganancia, suavizado, medidores en vivo, tempo estimado, y **qué mueve la música** (tamaño ← graves, bloom y destello ← golpe, color ← agudos, ecos ← nivel…). |
 | **Proyección** | Formato de salida, **zoom de la imagen proyectada**, **colorimetría de todo lo proyectado** (y por pared/proyector, con patrón de color), cantidad de proyectores y fundido de bordes, patrón de ajuste con franjas numeradas, negro, esquinas (keystone), pantalla completa, opción B por ventanas, **grabación**. |
@@ -74,7 +75,7 @@ Todo lo que tocás se autoguarda en la sesión actual. **Exportá la sesión** (
 
 ### Teclas
 
-`H` panel · `F` pantalla completa · `C` mover esquinas · `K` calibrar cámara · `E` ver esqueletos encima de todo · `+`/`−` zoom de salida · `Z` zoom 1× · `B` negro · `Shift+B` aprender fondo · `X` limpiar ecos · `V` rotar cámaras · `R` grabar/parar · `M` micrófono sí/no · `Espacio` canción play/pausa · `↑/↓` canción anterior/siguiente · `1‑9, 0` plantillas · `G/L` exportar/importar sesión · `Esc`/`⌫` diapositivas.
+`H` panel · `F` pantalla completa · `C` mover esquinas · `K` calibrar cámara · `S` cámara sobre la proyección · `E` ver esqueletos encima de todo · `+`/`−` zoom de salida · `Z` zoom 1× · `B` negro · `Shift+B` aprender fondo · `X` limpiar ecos · `V` rotar cámaras · `R` grabar/parar · `M` micrófono sí/no · `Espacio` canción play/pausa · `↑/↓` canción anterior/siguiente · `1‑9, 0` plantillas · `G/L` exportar/importar sesión · `Esc`/`⌫` diapositivas.
 
 ## Las dos versiones de audio
 
@@ -141,6 +142,21 @@ Con calibración, el video de la cámara no se dibuja sobre las paredes y la sil
 - En una prueba con la foto de la sala oscurecida y cuatro personas a distintas distancias: imagen entera → 1 bailarín; 2 mitades → 3; 3 partes → 4 (y el operador en la zona ignorada).
 
 **Luz.** La cámara tiene que ver a los bailarines, no a la proyección. En sala oscura la solución estándar es **luz infrarroja**: focos IR (850 nm) y una cámara sin filtro IR (o una cámara de seguridad USB "IR"); el público no la ve y el proyector no la contamina. La silueta por defecto se arma desde el esqueleto justamente para no depender del brillo de la imagen.
+
+## Sincronizar la proyección con los cuerpos (pestaña naranja)
+
+Para que el esqueleto o la figura caiga donde está la persona real, Mirador necesita saber en qué lugar de la imagen de la cámara aparece cada parte de lo que se proyecta. Si eso viene de la foto de referencia y la cámara o la proyección no están exactamente igual, las figuras salen corridas, amontonadas o de otro tamaño.
+
+**1 · Sincronizar con la cámara (automático).** Con la cámara en su lugar definitivo, la proyección ya alineada (formato, esquinas, zoom), la sala oscura y nadie delante de las paredes: *Sincronizar → ▶ Sincronizar ahora*. Mirador oculta el panel, fija la exposición y el balance de blancos de la cámara (si el navegador lo permite), proyecta todo negro y uno por uno puntos blancos en cada pared del lienzo (3 × 2 por pared de fábrica), los busca en la imagen de la cámara y calcula la homografía de cada pared. Con eso rehace las líneas de arriba y abajo de la calibración (las de la vista K), ahora medidas sobre la proyección real. En una PC con placa de video tarda unos 10 segundos. Esc cancela. Al terminar muestra cuántos puntos vio por pared y el error. Si una pared no se ve, conserva su calibración anterior.
+- Funciona con cualquier reparto: si el lienzo de tres paredes se proyecta entero sobre una sola pared (como en una prueba con un proyector), cada parte del lienzo queda medida donde realmente cae.
+- Si después cambiás el zoom, el corrimiento o las esquinas, avisa que hay que volver a sincronizar.
+
+**2 · Verificar.** *Ver la cámara sobre la proyección* (tecla `S`) proyecta la imagen de la cámara llevada por la sincronización: si los bordes y las paredes proyectados coinciden con los reales, está bien. Una lista en vivo dice, para cada cuerpo, en qué pared cae, en qué parte del ancho y qué alto tiene.
+
+**3 · Ajuste fino.** Por cámara y guardado en la sesión:
+- *Tamaño de la figura*: **altura real** (de fábrica: una persona de 1,70 m frente a una pared de 2,50 m ocupa ~68 % del alto, esté cerca o lejos de la cámara; la escala sale de cómo achica la perspectiva el alto de las paredes), **como la ve la cámara** (relativo al alto de la pared detrás: los que están cerca de la cámara salen enormes) o **todas iguales**.
+- *Tamaño* (multiplica el alto), *altura* (dónde apoyan los pies), *correr ← →*, *separación entre cuerpos* (si salen amontonados, subirla).
+- *Punto de la cámara en el piso: automático*: el punto desde donde se trazan las rectas a las paredes. Sale de donde se cruzan las verticales de la proyección medidas al sincronizar (sin sincronizar, del horizonte de la sala y un ángulo típico de webcam). Apagado, se arrastra a mano en la vista K.
 
 ## Un cuerpo, zoom y colorimetría
 

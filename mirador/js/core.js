@@ -208,6 +208,7 @@ uniform float uBloomAmt,uChroma,uGlitch,uBlocks,uTime,uVig,uGamma,uFlash,uSlices
 uniform vec3 uZoom;                                   /* zoom, desplazamiento x, y */
 uniform int uCMode,uTest,uNSeg;uniform vec3 uC0,uC1,uBal;uniform float uMix,uExpo,uCon,uSat,uCGam,uBlk,uWht;
 uniform vec4 uSeg[8];uniform vec3 uSegRGB[8];          /* tramos (paredes/proyectores): u0,u1,ganancia,negro · RGB */
+uniform int uSyncMode;uniform vec3 uMark;uniform vec2 uCRes;   /* sincronización: 1 negro, 2 negro + punto blanco (x,y en uv, radio en px) */
 float hash(vec2 v){return fract(sin(dot(v,vec2(12.9898,78.233)))*43758.5453);}
 vec3 pattern(vec2 p,float u0,float u1){float x=clamp((p.x-u0)/max(u1-u0,1e-4),0.,1.),y=1.-p.y;
   if(y<.45)return vec3(floor(x*11.)/10.);
@@ -215,6 +216,7 @@ vec3 pattern(vec2 p,float u0,float u1){float x=clamp((p.x-u0)/max(u1-u0,1e-4),0.
   float k=floor(x*5.);return vec3(k<1.?0.:k<2.?.02:k<3.?.05:k<4.?.1:.2);}
 void main(){vec2 uv=(v_uv-.5-uZoom.yz)/uZoom.x+.5;
   float ins=(uv.x<0.||uv.x>1.||uv.y<0.||uv.y>1.)?0.:1.;uv=clamp(uv,0.,1.);
+  if(uSyncMode>0){float on=0.;if(uSyncMode==2)on=1.-smoothstep(uMark.z-1.5,uMark.z+.5,length((uv-uMark.xy)*uCRes));gl_FragColor=vec4(vec3(on*ins),1.);return;}
   if(uGlitch>.001){float row=floor(uv.y*uBlocks),seed=floor(uTime*14.),r=hash(vec2(row,seed));
     if(r>1.-uGlitch*.55){uv.x+=(hash(vec2(row,seed+7.))-.5)*uGlitch*.22;uv.y+=(hash(vec2(row,seed+3.))-.5)*uGlitch*.012;}}
   vec2 d=uv-.5;float ca=uChroma*.012*(.35+length(d));
@@ -232,6 +234,11 @@ void main(){vec2 uv=(v_uv-.5-uZoom.yz)/uZoom.x+.5;
   c=clamp(c*uBal,0.,1.)*srgb*sg;
   c=uBlk+sb+c*(uWht-uBlk-sb);c=pow(clamp(c,0.,1.),vec3(1./uCGam));
   gl_FragColor=vec4(clamp(c,0.,1.),1.);}`;
+/* la imagen de la cámara llevada a la proyección por la calibración de una pared (para verificar la sincronización) */
+const FS_CAMWARP = `precision mediump float;varying vec2 v_uv;uniform sampler2D uVid;uniform mat3 uHi;uniform vec2 uRange;uniform vec3 uZoom;uniform float uAlpha;
+void main(){vec2 uv=(v_uv-.5-uZoom.yz)/uZoom.x+.5;if(uv.x<uRange.x||uv.x>uRange.y||uv.y<0.||uv.y>1.)discard;
+  vec3 q=uHi*vec3((uv.x-uRange.x)/max(uRange.y-uRange.x,1e-5),1.-uv.y,1.);vec2 c=q.xy/q.z;if(q.z<=0.||c.x<0.||c.x>1.||c.y<0.||c.y>1.)discard;
+  gl_FragColor=vec4(texture2D(uVid,vec2(c.x,1.-c.y)).rgb,uAlpha);}`;
 const FS_FINAL = `precision mediump float;varying vec2 v_uv;uniform sampler2D uTex;
 void main(){vec2 uv=v_uv;if(uv.x<0.||uv.x>1.||uv.y<0.||uv.y>1.){gl_FragColor=vec4(0.,0.,0.,1.);return;}gl_FragColor=vec4(texture2D(uTex,uv).rgb,1.);}`;
 /* silueta sólida a partir de la máscara (dibuja en el pase GL aditivo) */
@@ -264,11 +271,11 @@ void main(){vec2 d=gl_PointCoord-.5;float r=dot(d,d);if(r>.25)discard;float a=(1
   float h=fract((uHue+v_z*180.+v_b*uSpread)/360.);gl_FragColor=vec4(hsv(h,.85,1.)*a,a);}`;
 
 const VS_TILE = `attribute vec2 a_pos;uniform vec2 uOff,uScale;varying vec2 v_uv;void main(){v_uv=(a_pos*.5+.5)*uScale+uOff;gl_Position=vec4(a_pos,0.,1.);}`;
-let pBlit, pMask, pFeed, pBright, pBlur, pComp, pFinal, pPoints, pSil, pTile;
+let pBlit, pMask, pFeed, pBright, pBlur, pComp, pFinal, pPoints, pSil, pTile, pCamWarp;
 try {
   pBlit = prog(FS_BLIT, VS_QUAD); pMask = prog(FS_MASK, VS_QUAD); pFeed = prog(FS_FEED, VS_QUAD);
   pBright = prog(FS_BRIGHT, VS_QUAD); pBlur = prog(FS_BLUR, VS_QUAD); pComp = prog(FS_COMP, VS_QUAD); pFinal = prog(FS_FINAL, VS_KEY);
-  pSil = prog(FS_SIL, VS_QUAD); pTile = prog(FS_BLIT, VS_TILE);
+  pSil = prog(FS_SIL, VS_QUAD); pTile = prog(FS_BLIT, VS_TILE); pCamWarp = prog(FS_CAMWARP, VS_QUAD);
   if (EXT_VTF) pPoints = prog(FS_POINTS, VS_POINTS);
 } catch (e) { fail('Fallo al compilar shaders: ' + e.message); }
 

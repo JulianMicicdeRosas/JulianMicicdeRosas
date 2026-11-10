@@ -66,7 +66,7 @@ async function start(sim){
   const audioSel = $('gateAudio').value; if (audioSel !== 'off' || P.audio.source !== 'off') { await Audio_.setSource(audioSel !== 'off' ? audioSel : P.audio.source); }
   await Playlist.autoFolder('canciones');
   if (audioParam && audioParam !== 'mic') { Playlist.fromUrlParam(audioParam); Playlist.play(); }
-  syncModulesFromP(); UI.init(); Calib.init(); $('gate').remove(); document.body.classList.add('show-hint');
+  syncModulesFromP(); UI.init(); Calib.init(); $('gate').remove(); document.body.classList.add('show-hint'); setTimeout(() => { if (document.body.classList.contains('panel-hidden')) document.body.classList.remove('show-hint'); }, 8000);
   if (urlParams.get('panel') === '1') UI.togglePanel(true);
   started = true; running = true; Sessions.dirty = false; Sessions.updateName(); Playlist.updateCue();
   detectLoop(); requestAnimationFrame(loop);
@@ -99,6 +99,7 @@ addEventListener('keydown', e => {
   else if (k === 'h') UI.togglePanel();
   else if (k === 'c') { P.map.calibrate = !P.map.calibrate; uiCanvas.classList.toggle('calibrating', P.map.calibrate); UI.refresh('proyeccion'); }
   else if (k === 'k') Calib.toggle();
+  else if (k === 's') { Sync.overlay = !Sync.overlay; toast(Sync.overlay ? 'cámara sobre la proyección (S)' : 'cámara sobre la proyección: no'); UI.refresh('sync'); }
   else if (k === '+' || k === '=') { P.view.zoom = clamp(+(P.view.zoom * 1.05).toFixed(3), .25, 4); toast('zoom ' + P.view.zoom.toFixed(2) + '×'); Sessions.touch(); }
   else if (k === '-' || k === '_') { P.view.zoom = clamp(+(P.view.zoom / 1.05).toFixed(3), .25, 4); toast('zoom ' + P.view.zoom.toFixed(2) + '×'); Sessions.touch(); }
   else if (k === 'z') { Object.assign(P.view, { zoom:1, x:0, y:0 }); toast('zoom 1×'); Sessions.touch(); UI.refresh('proyeccion'); }

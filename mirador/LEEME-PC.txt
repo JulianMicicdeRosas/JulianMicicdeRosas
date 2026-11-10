@@ -39,7 +39,7 @@ PRIMERA PRUEBA
   5. Audio: fuente "micrófono" + música en el parlante; o "canción" con un mp3 de la sesión (Espacio).
 
 TECLAS
-  H panel · F pantalla completa · C esquinas · K calibrar camara a las paredes · E ver esqueletos · +/- zoom · Z zoom 1x · B negro · Shift+B aprender fondo · X limpiar ecos
+  H panel · F pantalla completa · C esquinas · K calibrar camara a las paredes · S camara sobre la proyeccion · E ver esqueletos · +/- zoom · Z zoom 1x · B negro · Shift+B aprender fondo · X limpiar ecos
   V rotar cámaras · R grabar (.webm) · M micrófono · Espacio canción · flechas arriba/abajo cambiar canción
   1-9 y 0 plantillas · G / L exportar / importar sesión · Esc / Retroceso diapositivas
 
@@ -56,6 +56,9 @@ SI ALGO FALLA
     ve el modelo (verde en uso, rojo ignorado, gris descartado). Probar sensibilidad "maxima", bajar la
     confianza del cuerpo. En "Imagen para la deteccion" dejar la exposicion dinamica, o fijar a mano
     negros/blancos/medios tonos. En "Camara fisica" (si aparece) poner exposicion manual fija. E muestra los esqueletos aunque la plantilla los oculte. Los bailarines tienen que estar iluminados.
+  - Los esqueletos no caen sobre las personas (corridos, amontonados, otro tamano): pestana naranja
+    Sincronizar > Sincronizar ahora (sala oscura, nadie delante de las paredes). Verificar con S.
+    Ajuste fino: separacion, altura, tamano. Tamano "altura real" = proporcional a cada persona.
   - Colores distintos entre paredes: Proyeccion > Colorimetria > patron de color, y ajustar cada pared
     (brillo, nivel de negro, rojo/verde/azul). Proyectores todos en el mismo modo (sRGB, 6500 K).
   Más detalle: README.md (puesta en marcha, OBS, 7 proyectores) y REVISION.md.

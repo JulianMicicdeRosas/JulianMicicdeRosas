@@ -12,6 +12,26 @@ function setColorUniforms(){
   const segs = colorSegments(), a = new Float32Array(32), b = new Float32Array(24);
   segs.forEach((s, i) => { a.set([s.u0, s.u1, s.c.gain, s.c.black], i * 4); b.set([s.c.r, s.c.g, s.c.b], i * 3); });
   gl.uniform1i(U(pComp, 'uNSeg'), segs.length); gl.uniform4fv(U(pComp, 'uSeg[0]'), a); gl.uniform3fv(U(pComp, 'uSegRGB[0]'), b);
+  // sincronización con la cámara (sync.js): negro y un punto blanco en coordenadas del lienzo
+  const m = typeof Sync !== 'undefined' ? Sync.mark : null;
+  gl.uniform1i(U(pComp, 'uSyncMode'), typeof Sync !== 'undefined' && Sync.running ? (m ? 2 : 1) : 0);
+  gl.uniform2f(U(pComp, 'uCRes'), W, H); if (m) gl.uniform3f(U(pComp, 'uMark'), m.x, 1 - m.y, m.r * H);
+}
+/* la cámara sobre la proyección, por la calibración de cada pared: si coincide con la sala, la sincronización está bien */
+function drawCamOverlay(){
+  if (typeof Sync === 'undefined' || !Sync.overlay || Sync.running) return;
+  const V = P.view, z = clamp(+V.zoom || 1, .1, 10);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  for (const src of sources) if (src._calH && src.video.readyState >= 2) { gl.bindTexture(gl.TEXTURE_2D, src.videoTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src.video); }
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  gl.useProgram(pCamWarp); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.uniform3f(U(pCamWarp, 'uZoom'), z, +V.x || 0, -(+V.y || 0)); gl.uniform1f(U(pCamWarp, 'uAlpha'), clamp(Sync.overlayAlpha, 0, 1));
+  for (const src of sources) { if (!src._calH || src.video.readyState < 2) continue; useTex(0, src.videoTex, pCamWarp, 'uVid');
+    const c = src.cell, x0 = c.x / W, x1 = (c.x + c.w) / W;
+    for (const t of src._calH) { if (!t.Hi) continue; const h = t.Hi, u0 = x0 + calU(src, t.u0) * (x1 - x0), u1 = x0 + calU(src, t.u1) * (x1 - x0);
+      gl.uniformMatrix3fv(U(pCamWarp, 'uHi'), false, new Float32Array([h[0], h[3], h[6], h[1], h[4], h[7], h[2], h[5], h[8]]));
+      gl.uniform2f(U(pCamWarp, 'uRange'), Math.min(u0, u1), Math.max(u0, u1)); drawQuad(pCamWarp); } }
+  gl.disable(gl.BLEND);
 }
 
 /* =====================================================================
@@ -65,7 +85,7 @@ function render(t){
   gl.uniform1f(U(pComp, 'uGlitch'), prof.allowGlitch ? P.fx.glitch : 0); gl.uniform1f(U(pComp, 'uBlocks'), P.fx.glitchBlocks);
   gl.uniform1f(U(pComp, 'uTime'), t); gl.uniform1f(U(pComp, 'uVig'), P.fx.vignette); gl.uniform1f(U(pComp, 'uGamma'), P.fx.gamma);
   gl.uniform1f(U(pComp, 'uFlash'), P.map.blackout ? 0 : AM.flash); gl.uniform1f(U(pComp, 'uSlices'), P.map.slices); gl.uniform1f(U(pComp, 'uBlend'), P.map.blend);
-  setColorUniforms(); drawQuad(pComp);
+  setColorUniforms(); drawQuad(pComp); drawCamOverlay();
   if (mosaicActive() && fbKey) {
     // 1) panorama con keystone a un FBO; 2) cada franja a su baldosa del cuadro 8K
     gl.useProgram(pFinal); bindFBO(fbKey); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);

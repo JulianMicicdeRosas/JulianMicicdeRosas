@@ -7,7 +7,7 @@
    ===================================================================== */
 const UI = {
   tab:'plantillas', built:false, liveFns:[],
-  TABS:[['sesion', 'Sesión'], ['plantillas', 'Plantillas'], ['modulos', 'Módulos'], ['camaras', 'Cámaras'], ['audio', 'Audio'], ['proyeccion', 'Proyección'], ['sistema', 'Sistema']],
+  TABS:[['sesion', 'Sesión'], ['plantillas', 'Plantillas'], ['modulos', 'Módulos'], ['sync', 'Sincronizar'], ['camaras', 'Cámaras'], ['audio', 'Audio'], ['proyeccion', 'Proyección'], ['sistema', 'Sistema']],
   init(){
     const nav = $('tabs'); nav.innerHTML = '';
     for (const [id, label] of this.TABS) { const b = document.createElement('button'); b.textContent = label; b.dataset.tab = id; b.setAttribute('role', 'tab'); b.onclick = () => this.show(id); nav.appendChild(b); }
@@ -235,6 +235,7 @@ const UI = {
       if (!(cal.useWalls && nw === cal.top.length - 1)) cal.shares.forEach((_, i) => this.range(gc, cal.shares, i, 0, 10, .1, `tramo ${i + 1}: peso`, upd));
       this.buttons(gc, [[Calib.on ? 'Cerrar vista (K)' : 'Abrir vista de calibración (K)', () => Calib.toggle(), Calib.on ? 'on' : 'primary'], ['Valores de la foto', () => { Calib.reset(); this.refresh('camaras'); }]]);
       this.buttons(gc, [['+ zona ignorada', () => { Calib.addIgnore(); this.refresh('camaras'); }], ['Quitar zonas ignoradas', () => { Calib.clearIgnore(); this.refresh('camaras'); }]]);
+      this.note(gc, '<b style="color:var(--sync)">Más fácil: pestaña Sincronizar</b> mide estas líneas solas con la cámara, proyectando puntos.');
       this.note(gc, `En la vista: arrastrá los puntos verdes (líneas), el amarillo (cámara en el piso, fuera de cuadro) y los rojos (zona ignorada: el operador sentado abajo a la izquierda). Cada bailarín muestra la recta que lo lleva a su pared. Zonas ignoradas: <b>${cal.ignore.length}</b>.`);
       if (cal.enabled) this.note(gc, 'Con calibración, el video de cámara no se dibuja sobre las paredes y la silueta sale del esqueleto.'); }
     sources.forEach((src, i) => { const gz = this.group(body, `Zona ${i + 1} · ${src.label}`, { closed:LAYOUT.orient !== 'libre' });
@@ -343,6 +344,57 @@ const UI = {
   },
 
   /* =================== Sistema =================== */
+  /* =================== Sincronizar (naranja): proyección ↔ cuerpos reales =================== */
+  tab_sync(body){
+    const s = sources[Calib.zone] || sources[0];
+    if (!s) { this.note(body, 'Sin cámara.'); return; }
+    if (sources.length > 1) { const g0 = this.group(body, 'Cámara'); g0.parentElement.classList.add('sync'); const zs = {}; sources.forEach((x, i) => zs[i] = `zona ${i + 1} · ${x.label}`); this.select(g0, Calib, 'zone', zs, 'sincronizar', () => this.refresh('sync')); }
+    if (!s.cal) { s.cal = salaCal(); calPrepare(s); } s.cal = normCal(s.cal); const cal = s.cal, upd = () => { calPrepare(s); clearFeedback(); Sessions.touch(); };
+    // 1) automática con la cámara
+    const ga = this.group(body, '1 · Sincronizar con la cámara (automático)', { desc:'Mirador toma la cámara conectada, proyecta puntos blancos sobre cada pared y los busca en la imagen. Así aprende dónde cae cada parte de la proyección vista por la cámara, y los esqueletos aparecen donde están los cuerpos.' });
+    ga.parentElement.classList.add('sync');
+    this.note(ga, 'Antes: sala lo más oscura posible, nadie delante de las paredes, la cámara en su lugar definitivo y la proyección ya alineada (formato, esquinas, zoom). Tarda unos segundos; la proyección se pone negra con puntos. <b>Esc</b> cancela.');
+    const O = Sync.opts;
+    this.select(ga, O, 'cols', [[2, '2'], [3, '3'], [4, '4'], [5, '5']], 'puntos a lo ancho (por pared)');
+    this.select(ga, O, 'rows', [[2, '2'], [3, '3']], 'puntos a lo alto');
+    this.range(ga, O, 'radius', .015, .12, .005, 'tamaño de los puntos');
+    this.range(ga, O, 'wait', 200, 1500, 10, 'espera por punto (ms)');
+    this.buttons(ga, [['▶ Sincronizar ahora', () => Sync.run(s), 'sync']]);
+    const box = document.createElement('div'); box.className = 'syncbox'; ga.appendChild(box);
+    const L = Sync.last, sy = cal.synced, vw = s.video.videoWidth || 1280;
+    if (L) box.innerHTML = `<b>Última sincronización</b>: ${L.okN} de ${L.n} ${L.n === 1 ? 'tramo' : 'paredes'}, ${L.total}/${L.de} puntos vistos.<br>` + L.report.map(r => `${esc(r.nombre)}: ${r.vistos}/${r.de} ` + (r.ok ? `<span class="ok">✓</span> error ${(r.err * vw).toFixed(1)} px` : '<span class="bad">sin datos (quedó la calibración anterior)</span>')).join('<br>')
+      + (L.mismatch > .02 ? `<br><span class="bad">Las esquinas entre paredes no coinciden (${(L.mismatch * 100).toFixed(1)} % de la imagen): ¿la proyección cruza una esquina? Revisá el formato o las esquinas.</span>` : '');
+    else if (sy) box.innerHTML = `<b>Sincronizado</b> el ${new Date(sy.t).toLocaleString()} · ${sy.okN} de ${sy.n} ${sy.n === 1 ? 'tramo' : 'paredes'}.`;
+    else box.innerHTML = '<b>Sin sincronizar.</b> La calibración actual viene de la foto de referencia de la sala; si la cámara o la proyección no están exactamente así, los esqueletos no caen sobre los cuerpos.';
+    if (Sync.stale(s)) box.innerHTML += '<br><span class="bad">Cambiaste el zoom, el corrimiento o las esquinas después de sincronizar: volvé a sincronizar.</span>';
+    // 2) verificación
+    const gv = this.group(body, '2 · Verificar', { desc:'La cámara, llevada a la proyección con la sincronización: si las paredes y los bordes proyectados coinciden con los reales, está bien. Con gente en la sala, la imagen de cada persona tiene que caer sobre su sombra.' });
+    gv.parentElement.classList.add('sync');
+    const ov = { v:Sync.overlay }; this.toggle(gv, ov, 'v', 'ver la cámara sobre la proyección (S)', v => { Sync.overlay = v; });
+    this.range(gv, Sync, 'overlayAlpha', .1, 1, .01, 'opacidad');
+    const ve = { v:verEsqueletos }; this.toggle(gv, ve, 'v', 'ver esqueletos encima de todo (E)', v => { verEsqueletos = v; });
+    const live = document.createElement('div'); live.className = 'syncbox'; gv.appendChild(live);
+    this.liveFns.push(() => { const now = performance.now(), rows = [];
+      for (const [id, d] of s._calDbg || []) { if (now - d.t > 600) continue; rows.push(`cuerpo ${esc(String(id).split(':').pop())}: <b>${esc(d.wall || '—')}</b> · posición ${(d.u * 100).toFixed(0)} % del ancho · alto ${(d.h * 100).toFixed(0)} % de la pared · ${d.mode === 'real' ? 'altura real' : d.mode === 'camara' ? 'como la cámara' : 'fija'}`); }
+      live.innerHTML = rows.length ? rows.join('<br>') : 'Sin cuerpos en la cámara (o la calibración está apagada).'; });
+    // 3) ajuste fino
+    const gf = this.group(body, '3 · Ajuste fino: posición, altura y tamaño', { desc:'Para terminar de calzar las figuras con los cuerpos reales. Se guarda en la sesión, por cámara.' });
+    gf.parentElement.classList.add('sync');
+    this.toggle(gf, cal, 'enabled', 'usar la sincronización', upd);
+    this.select(gf, cal, 'mode', [['piso', 'piso: la figura parada en la pared, detrás del cuerpo'], ['vista', 'vista: exactamente como lo ve la cámara (sombra)']], 'modo', () => { upd(); this.refresh('sync'); });
+    if (cal.mode !== 'vista') {
+      const K = s._calK, okK = K && K.ok;
+      this.select(gf, cal, 'size', [['real', 'altura real de cada persona' + (okK ? '' : ' (falta profundidad: usa "cámara")')], ['camara', 'como la ve la cámara'], ['fija', 'todas iguales']], 'tamaño de la figura', () => { upd(); this.refresh('sync'); });
+      this.range(gf, cal, 'scale', .3, 2.5, .01, 'tamaño', upd);
+      if (cal.size === 'fija') { this.range(gf, cal, 'figH', .2, 1.2, .01, 'alto de la figura', upd); this.range(gf, cal, 'depth', 0, 1, .01, 'más chica lejos', upd); }
+      this.range(gf, cal, 'base', .5, 1.15, .005, 'altura (línea del piso)', upd);
+    }
+    if (cal.mode !== 'vista') this.toggle(gf, cal, 'centerAuto', 'punto de la cámara en el piso: automático', () => { upd(); this.refresh('sync'); });
+    this.range(gf, cal, 'dx', -.5, .5, .001, 'correr ← →', upd);
+    this.range(gf, cal, 'spread', .3, 3, .005, 'separación entre cuerpos', upd);
+    this.buttons(gf, [['Restablecer ajuste fino', () => { Object.assign(cal, { scale:1, dx:0, spread:1, base:.97, size:'real' }); upd(); this.refresh('sync'); }], ['Líneas a mano (K)', () => Calib.toggle()]]);
+    this.note(gf, '<b>Separación</b>: si los esqueletos salen amontonados respecto de las personas, subila; si salen más abiertos, bajala. <b>Altura</b>: dónde apoyan los pies. <b>Tamaño</b>: multiplica el alto de todas las figuras. Con "altura real" una persona de 1,70 m en una pared de 2,50 m ocupa ~68 % del alto, esté donde esté.');
+  },
   tab_sistema(body){
     const g = this.group(body, 'Rendimiento');
     const pr = { v:Object.keys(PROFILES).find(k => PROFILES[k].name === prof.name) || 'medida' };

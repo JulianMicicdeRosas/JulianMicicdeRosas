@@ -50,7 +50,9 @@ const SALA_FOTO = {
 function defaultCal(n = 3){
   const top = [], bottom = [];
   for (let i = 0; i <= n; i++) { const x = .08 + .84 * i / n; top.push({ x, y:.12 }); bottom.push({ x, y:.75 }); }
-  return { enabled:false, mode:'piso', top, bottom, shares:new Array(n).fill(1), useWalls:true, center:{ x:.5, y:1.4 }, ignore:[], figH:.82, base:.97, depth:0 };
+  return { enabled:false, mode:'piso', top, bottom, shares:new Array(n).fill(1), useWalls:true, center:{ x:.5, y:1.4 }, ignore:[], figH:.82, base:.97, depth:0,
+    // sincronización con los cuerpos reales: tamaño ('real' = altura real de la persona respecto de la pared, 'camara' = como lo ve la cámara, 'fija' = figH)
+    size:'real', scale:1, dx:0, spread:1, synced:null, centerAuto:true };
 }
 function salaCal(){ const c = defaultCal(3); Object.assign(c, deepClone(SALA_FOTO)); c.enabled = true; return c; }
 function normCal(c){ const d = defaultCal(Math.max(1, (c?.top?.length || 4) - 1)); return Object.assign(d, c || {}); }
@@ -65,10 +67,50 @@ function calPrepare(src){
   const tot = shares.slice(0, n).reduce((a, b) => a + Math.max(0, b), 0) || 1; let u0 = 0; const Hs = [];
   for (let i = 0; i < n; i++) { const sh = Math.max(0, shares[i] ?? 1) / tot;
     const quad = [cal.top[i], cal.top[i + 1], cal.bottom[i + 1], cal.bottom[i]].map(p => ({ x:p.x * vw, y:p.y * vh }));
-    Hs.push({ H:computeHomography(quad, UNIT), u0, u1:u0 + sh, nombre:(cal.useWalls && walls[i]) ? walls[i].nombre : '' }); u0 += sh; }
-  src._calH = Hs; src._calB = cal.bottom.map(p => ({ x:p.x * vw, y:p.y * vh })); src._calC = { x:cal.center.x * vw, y:cal.center.y * vh };
+    const qn = [cal.top[i], cal.top[i + 1], cal.bottom[i + 1], cal.bottom[i]];
+    Hs.push({ H:computeHomography(quad, UNIT), Hi:computeHomography(UNIT, qn), u0, u1:u0 + sh, nombre:(cal.useWalls && walls[i]) ? walls[i].nombre : '' }); u0 += sh; }
+  src._calH = Hs; src._calK = horizonFit(cal, vh); src._calB = cal.bottom.map(p => ({ x:p.x * vw, y:p.y * vh })); src._calC = { x:cal.center.x * vw, y:cal.center.y * vh };
+  // punto de la cámara en el piso: donde se cruzan en la imagen las verticales (esquinas de las paredes / bordes de la proyección)
+  let vp = null;
+  if (cal.centerAuto !== false) {
+    if (cal.synced) vp = verticalVP(cal, vw, vh);              // bordes de la proyección medidos por la cámara
+    const K = src._calK;                                          // si no: por el horizonte y un ángulo típico de webcam (~75°)
+    if (!vp && K && K.ok && K.yh < vh / 2 - 10) { const f = .65 * vw; vp = { x:vw / 2, y:vh / 2 + f * f / (vh / 2 - K.yh) }; }
+  }
+  src._calC = vp || { x:cal.center.x * vw, y:cal.center.y * vh }; src._calCauto = !!vp;
   if (!src._calS) src._calS = new Map(); if (!src._calDbg) src._calDbg = new Map();
 }
+/* escala de la imagen según la profundidad: un objeto del alto de la pared, parado en un punto del piso que se ve a la
+   altura y (px), mide en la imagen k·(y − yh). Se ajusta con los vértices de las líneas (alto de la pared vs. su base).
+   Necesita paredes a distintas profundidades (bases a distinta altura en la imagen); si no, ok=false. */
+function horizonFit(cal, vh){
+  const pts = cal.top.map((t, i) => ({ y:cal.bottom[i].y * vh, h:(cal.bottom[i].y - t.y) * vh })).filter(p => p.h > 4);
+  if (pts.length < 2) return { ok:false };
+  const my = pts.reduce((a, p) => a + p.y, 0) / pts.length, mh = pts.reduce((a, p) => a + p.h, 0) / pts.length;
+  let sxy = 0, sxx = 0; for (const p of pts) { sxy += (p.y - my) * (p.h - mh); sxx += (p.y - my) ** 2; }
+  const spread = Math.sqrt(sxx / pts.length) / vh; if (spread < .03 || sxx < 1e-6) return { ok:false };
+  const k = sxy / sxx, yh = my - mh / k; return { ok:k > .15 && k < 6, k, yh };
+}
+/* punto de fuga de las verticales (= la cámara proyectada en el piso). Usa los vértices interiores de las líneas
+   (esquinas) y los extremos que no tocan el borde de la imagen. Si las verticales son casi paralelas, queda muy lejos. */
+function verticalVP(cal, vw, vh){
+  const n = cal.top.length - 1, L = [];
+  for (let i = 0; i <= n; i++) { const a = cal.top[i], b = cal.bottom[i]; const inner = i > 0 && i < n, edge = a.x > .02 && a.x < .98 && b.x > .02 && b.x < .98;
+    if (!(inner || edge)) continue; const ax = a.x * vw, ay = a.y * vh, bx = b.x * vw, by = b.y * vh, dx = bx - ax, dy = by - ay, l = Math.hypot(dx, dy); if (l < 10 || dy <= 0) continue;
+    L.push({ ax, ay, nx:-dy / l, ny:dx / l, dx:dx / l, dy:dy / l }); }
+  if (L.length < 2) return null;
+  let a11 = 0, a12 = 0, a22 = 0, b1 = 0, b2 = 0;
+  for (const l of L) { const c = l.nx * l.ax + l.ny * l.ay; a11 += l.nx * l.nx; a12 += l.nx * l.ny; a22 += l.ny * l.ny; b1 += l.nx * c; b2 += l.ny * c; }
+  const det = a11 * a22 - a12 * a12, maxB = Math.max(...cal.bottom.map(p => p.y)) * vh;
+  let p = null; if (Math.abs(det) > 1e-6 * L.length * L.length) p = { x:(a22 * b1 - a12 * b2) / det, y:(a11 * b2 - a12 * b1) / det };
+  if (!p || p.y < maxB + 10 || Math.hypot(p.x, p.y) > 1e6) {   // paralelas o hacia arriba: muy lejos hacia abajo, en la dirección media
+    const dx = L.reduce((s, l) => s + l.dx, 0) / L.length, dy = L.reduce((s, l) => s + l.dy, 0) / L.length, mx = L.reduce((s, l) => s + l.ax, 0) / L.length, my = L.reduce((s, l) => s + l.ay, 0) / L.length;
+    if (p && p.y < maxB + 10 && Math.abs(det) > 1e-6 * L.length * L.length) return null;   // se cruzan arriba (cámara mirando hacia arriba): queda el punto manual
+    p = { x:mx + dx * 1e5, y:my + dy * 1e5 }; }
+  return p;
+}
+/* posición horizontal del lienzo (0–1) con el ajuste fino: separación alrededor del centro y corrimiento */
+function calU(src, u){ const c = src.cal || {}; return .5 + (u - .5) * (c.spread ?? 1) + (c.dx || 0); }
 /* modo vista: un punto de la cámara (px) a la salida (px), por el tramo que lo contiene (o el más cercano) */
 function calMap(src, x, y){
   const Hs = src._calH, c = src.cell; let best = null, bd = Infinity;
@@ -76,7 +118,7 @@ function calMap(src, x, y){
     const d = Math.max(0, -p.x, p.x - 1) + Math.max(0, -p.y, p.y - 1) * .5;
     if (d < bd) { bd = d; best = { t, p }; } if (d === 0) break; }
   if (!best) return { x:c.x, y:c.y };
-  const { t, p } = best; const u = t.u0 + clamp(p.x, -.25, 1.25) * (t.u1 - t.u0);
+  const { t, p } = best; const u = calU(src, t.u0 + clamp(p.x, -.25, 1.25) * (t.u1 - t.u0));
   return { x:c.x + u * c.w, y:c.y + p.y * c.h };
 }
 /* intersección de la recta C + t·d (t>0) con la base de las paredes (los tramos de las puntas se prolongan) */
@@ -104,14 +146,22 @@ function calMapPose(src, pose, id){
   if (!F) return null;
   const cal = src.cal, c = src.cell, hit = calRayHit(src, F), t = src._calH[hit.i];
   if (!t || !t.H) return null;
-  const pw = applyH(t.H, hit.x, hit.y), u = clamp(t.u0 + clamp(pw.x, -.5, 1.5) * (t.u1 - t.u0), 0, 1);
+  const pw = applyH(t.H, hit.x, hit.y), u = calU(src, clamp(t.u0 + clamp(pw.x, -.5, 1.5) * (t.u1 - t.u0), 0, 1));
   const X0 = c.x + u * c.w, Yb = c.y + cal.base * c.h;
-  // escala: altura de pie estimada en la imagen (torso × 3.4) → figH del alto de la pared
-  const hImg = Math.max(24, torso ? torso * 3.4 : (F.y - Math.min(...kp.filter((k, i) => ok(i)).map(k => k.y))) * 1.05);
-  const near = clamp(Math.hypot(F.x - src._calC.x, F.y - src._calC.y) / Math.max(1, Math.hypot(hit.x - src._calC.x, hit.y - src._calC.y)), 0, 1);
-  let s = cal.figH * c.h / hImg * (1 - cal.depth * (1 - near) * .6);
+  // escala imagen → lienzo (el alto de la pared en el lienzo es c.h)
+  let s, mode = cal.size || 'real';
+  const K = src._calK; if (mode === 'real' && !(K && K.ok && F.y - K.yh > 8)) mode = 'camara';
+  if (mode === 'real') s = c.h / (K.k * (F.y - K.yh));                    // altura real: lo que mide un objeto del alto de la pared parado donde está el bailarín
+  else if (mode === 'camara') { const n = src._calB.length - 1, T = cal.top, vw = src.video.videoWidth || 1280, vh = src.video.videoHeight || 720;
+    const a = src._calB[hit.i], b = src._calB[Math.min(n, hit.i + 1)], f = clamp(Math.hypot(hit.x - a.x, hit.y - a.y) / Math.max(1, Math.hypot(b.x - a.x, b.y - a.y)), 0, 1);
+    const ty = (T[hit.i].y + (T[Math.min(n, hit.i + 1)].y - T[hit.i].y) * f) * vh, wallImg = Math.max(8, hit.y - ty);
+    s = c.h / wallImg; }                                                    // como lo ve la cámara: relativo al alto de la pared detrás
+  else { const hImg = Math.max(24, torso ? torso * 3.4 : (F.y - Math.min(...kp.filter((k, i) => ok(i)).map(k => k.y))) * 1.05);
+    const near = clamp(Math.hypot(F.x - src._calC.x, F.y - src._calC.y) / Math.max(1, Math.hypot(hit.x - src._calC.x, hit.y - src._calC.y)), 0, 1);
+    s = cal.figH * c.h / hImg * (1 - cal.depth * (1 - near) * .6); }       // fija: todas las figuras del mismo alto
+  s *= cal.scale ?? 1;
   const prev = src._calS.get(id); if (prev) s = prev + (s - prev) * .12; src._calS.set(id, s);
-  src._calDbg.set(id, { F, hit, t:performance.now() });
+  src._calDbg.set(id, { F, hit, t:performance.now(), u, wall:t.nombre, h:s * Math.max(1, F.y - Math.min(...kp.filter((k, i) => ok(i)).map(k => k.y))) / c.h, mode });
   return kp.map(k => ({ x:X0 + (k.x - F.x) * s, y:Yb + (k.y - F.y) * s }));
 }
 /* cuerpos dentro de una zona ignorada (en la imagen de la cámara) */
@@ -135,21 +185,21 @@ const Calib = {
   fit(){ if (!this.on) return; this.cv.width = innerWidth * Math.min(devicePixelRatio || 1, 2); this.cv.height = innerHeight * Math.min(devicePixelRatio || 1, 2); },
   /* rectángulo donde se dibuja la cámara, dejando lugar abajo para el punto de la cámara en el piso */
   frame(){ const s = this.src(); const vw = s?.video.videoWidth || 1280, vh = s?.video.videoHeight || 720; const W_ = this.cv.width, H_ = this.cv.height, k = W_ / innerWidth, m = 30 * k, top = 40 * k;
-    const extra = Math.max(.06, (s?.cal?.center?.y || 1) - 1 + .08);
+    const extra = Math.max(.06, (s?._calCauto ? 1.45 : (s?.cal?.center?.y || 1)) - 1 + .08);
     const sc = Math.min((W_ - 2 * m) / vw, (H_ - top - m) / (vh * (1 + extra))); const w = vw * sc, h = vh * sc; return { x:(W_ - w) / 2, y:top, w, h }; },
   toScreen(p){ const f = this.frame(); return { x:f.x + p.x * f.w, y:f.y + p.y * f.h }; },
   fromScreen(x, y){ const f = this.frame(); return { x:clamp((x - f.x) / f.w, -.3, 1.3), y:clamp((y - f.y) / f.h, -.3, 2) }; },
   pos(e){ const r = this.cv.getBoundingClientRect(); return { x:(e.clientX - r.left) / r.width * this.cv.width, y:(e.clientY - r.top) / r.height * this.cv.height }; },
   handles(){ const s = this.src(), c = s?.cal; if (!c) return []; const out = [];
     for (const line of ['top', 'bottom']) c[line].forEach((p, i) => out.push({ kind:line, i, p }));
-    if (c.mode !== 'vista') out.push({ kind:'center', p:c.center });
+    if (c.mode !== 'vista' && !s._calCauto) out.push({ kind:'center', p:c.center });   // automático: no se arrastra (se apaga en Sincronizar)
     (c.ignore || []).forEach((r, i) => { out.push({ kind:'ign0', i, p:{ x:r.x0, y:r.y0 } }); out.push({ kind:'ign1', i, p:{ x:r.x1, y:r.y1 } }); });
     return out; },
   pick(m){ let best = null, bd = 22 * (this.cv.width / innerWidth); for (const h of this.handles()) { const q = this.toScreen(h.p); const d = Math.hypot(q.x - m.x, q.y - m.y); if (d < bd) { bd = d; best = h; } } return best; },
   down(e){ if (!this.on) return; const m = this.pos(e); this.drag = this.pick(m); if (this.drag) this.cv.setPointerCapture(e.pointerId); },
   move(e){ if (!this.on) return; const m = this.pos(e); if (!this.drag) { this.hover = this.pick(m); return; }
     const s = this.src(), c = s.cal, p = this.fromScreen(m.x, m.y), d = this.drag;
-    if (d.kind === 'top' || d.kind === 'bottom') c[d.kind][d.i] = p; else if (d.kind === 'center') c.center = p;
+    if (d.kind === 'top' || d.kind === 'bottom') c[d.kind][d.i] = p; else if (d.kind === 'center') { c.center = p; c.centerAuto = false; }
     else if (d.kind === 'ign0') { c.ignore[d.i].x0 = p.x; c.ignore[d.i].y0 = p.y; } else if (d.kind === 'ign1') { c.ignore[d.i].x1 = p.x; c.ignore[d.i].y1 = p.y; }
     calPrepare(s); },
   setTramos(n){ const s = this.src(); if (!s) return; n = clamp(n | 0, 1, 12); const c = normCal(s.cal || defaultCal(n)); const old = c.top.length - 1;
@@ -182,11 +232,11 @@ const Calib = {
       c.fillStyle = '#ff6b6b'; c.font = `${11 * k}px ui-monospace,monospace`; c.textAlign = 'left'; c.textBaseline = 'top'; c.fillText('ignorar', a.x + 5 * k, a.y + 4 * k); });
     // modo piso: punto de la cámara en el piso y rectas a cada bailarín
     const vw = s.video.videoWidth || 1280, vh = s.video.videoHeight || 720, now = performance.now();
-    if (cal.mode !== 'vista') { const C = this.toScreen(cal.center);
+    if (cal.mode !== 'vista') { const Cf = s._calC && s._calCauto ? { x:s._calC.x / vw, y:s._calC.y / vh } : cal.center, far = !s._calCauto ? false : Cf.y > 1.45, Cv = far ? { x:clamp(Cf.x, 0, 1), y:1.45 } : Cf, C = this.toScreen(Cv);
       for (const [, d] of s._calDbg || []) { if (now - d.t > 500) continue; const F = this.toScreen({ x:d.F.x / vw, y:d.F.y / vh }), Hh = this.toScreen({ x:d.hit.x / vw, y:d.hit.y / vh });
-        c.strokeStyle = 'rgba(105,240,176,.7)'; c.lineWidth = 1.5 * k; c.setLineDash([4 * k, 4 * k]); c.beginPath(); c.moveTo(C.x, C.y); c.lineTo(Hh.x, Hh.y); c.stroke(); c.setLineDash([]);
+        c.strokeStyle = 'rgba(105,240,176,.7)'; c.lineWidth = 1.5 * k; c.setLineDash([4 * k, 4 * k]); c.beginPath(); const R0 = far ? F : C; c.moveTo(R0.x, R0.y); c.lineTo(Hh.x, Hh.y); c.stroke(); c.setLineDash([]);
         c.fillStyle = '#69f0b0'; c.beginPath(); c.arc(F.x, F.y, 5 * k, 0, 6.2832); c.fill(); c.strokeStyle = '#fff'; c.beginPath(); c.arc(Hh.x, Hh.y, 7 * k, 0, 6.2832); c.stroke(); }
-      c.fillStyle = '#ffd166'; c.beginPath(); c.arc(C.x, C.y, 9 * k, 0, 6.2832); c.fill(); c.fillStyle = '#ffd166'; c.font = `${12 * k}px ui-monospace,monospace`; c.textAlign = 'center'; c.textBaseline = 'top'; c.fillText('cámara en el piso', C.x, C.y + 12 * k); }
+      c.fillStyle = '#ffd166'; c.beginPath(); c.arc(C.x, C.y, 9 * k, 0, 6.2832); c.fill(); c.fillStyle = '#ffd166'; c.font = `${12 * k}px ui-monospace,monospace`; c.textAlign = 'center'; c.textBaseline = 'top'; c.fillText(s._calCauto ? (far ? `↓ cámara en el piso (automático, ${Cf.y.toFixed(1)} alturas abajo)` : 'cámara en el piso (automático)') : 'cámara en el piso (a mano)', C.x, C.y + 12 * k); }
     // esqueletos detectados (amarillo; los ignorados en rojo)
     for (const pose of (s.poses || [])) { const ign = calIgnored(s, pose); c.strokeStyle = ign ? 'rgba(255,107,107,.8)' : 'rgba(255,220,80,.95)'; c.lineWidth = 2 * k; c.beginPath();
       for (const [a, b] of SKEL) { const ka = pose.keypoints[a], kb = pose.keypoints[b]; if (!ka || !kb || (ka.score ?? 0) < P.track.minScore || (kb.score ?? 0) < P.track.minScore) continue;

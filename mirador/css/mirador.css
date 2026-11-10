@@ -32,7 +32,7 @@ body.panel-hidden #panel{transform:translateX(-100%)}
 button.icon{background:none;border:1px solid var(--line);border-radius:4px;width:28px;height:28px;cursor:pointer;color:var(--dim);font-size:18px;line-height:1}
 button.icon:hover{color:var(--ink);border-color:var(--dim)}
 #tabs{display:flex;flex-wrap:wrap;border-bottom:1px solid var(--line);background:var(--panel)}
-#tabs button{flex:1 1 auto;background:none;border:0;border-bottom:2px solid transparent;padding:8px 3px;cursor:pointer;color:var(--dim);font-size:11.5px;letter-spacing:.01em}
+#tabs button{flex:1 1 auto;background:none;border:0;border-bottom:2px solid transparent;padding:8px 2px;cursor:pointer;color:var(--dim);font-size:10.5px;letter-spacing:0}
 #tabs button:hover{color:var(--ink)} #tabs button.on{color:var(--live);border-bottom-color:var(--live)}
 #tabBody{flex:1;overflow-y:auto;overflow-x:hidden;padding:10px 12px 20px;scrollbar-width:thin;scrollbar-color:#333 transparent}
 #panelFoot{display:flex;align-items:center;gap:12px;padding:8px 12px;border-top:1px solid var(--line);font-family:var(--mono);font-size:11.5px;color:var(--dim)}
@@ -127,3 +127,22 @@ body.show-hint #hint{opacity:1}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 @media (max-width:700px){:root{--panelW:100vw}}
+
+/* ---------- sincronizar con los cuerpos (naranja) ---------- */
+:root{ --sync:#ff9a3c; --sync2:rgba(255,154,60,.12); }
+#tabs button[data-tab="sync"]{color:var(--sync);font-weight:600}
+#tabs button[data-tab="sync"].on{color:var(--sync);border-bottom-color:var(--sync)}
+.group.sync{border-color:var(--sync);background:linear-gradient(180deg,var(--sync2),transparent 60%),var(--panel2)}
+.group.sync>h3{color:var(--sync)}
+.group.sync input[type=range]{accent-color:var(--sync)}
+.group.sync .sw.on{background:var(--sync);border-color:var(--sync)}
+.btn.sync{background:var(--sync);color:#1a1006;border-color:var(--sync);font-weight:700}
+.btn.sync:hover{filter:brightness(1.08)}
+.syncbox{border:1px solid var(--sync);border-radius:6px;padding:8px 10px;margin:8px 0;font-size:12px;line-height:1.5;color:var(--ink);background:rgba(255,154,60,.07)}
+.syncbox b{color:var(--sync)}
+.syncbox .bad{color:var(--bad)} .syncbox .ok{color:var(--live)}
+/* mientras se sincroniza, todo lo de la ventana se proyecta: se oculta */
+body.syncing #panel,body.syncing #ui,body.syncing #calib,body.syncing #hint,body.syncing #cue,body.syncing #toast{display:none!important}
+body.syncing{cursor:none}
+/* el aviso de canción y la ayuda de teclas no se proyectan con el panel cerrado */
+body.panel-hidden #cue{opacity:0}
