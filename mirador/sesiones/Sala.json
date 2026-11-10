@@ -2,7 +2,7 @@
  "version": 3,
  "app": "mirador",
  "name": "Sala",
- "updated": "2026-11-10T21:05:00.238Z",
+ "updated": "2026-11-10T21:43:37.704Z",
  "plantilla": "enjambre",
  "P": {
   "cam": {
@@ -22,7 +22,7 @@
    "jointSize": 5,
    "showId": false,
    "glow": 0.85,
-   "maxPoses": 1
+   "maxPoses": 10
   },
   "det": {
    "preset": "sala",
@@ -210,7 +210,7 @@
   },
   "color": {
    "mode": "libre",
-   "c1": "#ffffff",
+   "c1": "#0030ff",
    "c0": "#000000",
    "mix": 1,
    "exposure": 1,

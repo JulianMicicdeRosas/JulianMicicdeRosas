@@ -196,6 +196,11 @@ escala: k = 0,96 · horizonte y = 46 px · cámara en el piso (0,54 ; 4,1), auto
 - Con poses de prueba, cada lugar del piso cae en su pared y la figura mide ~65 % del alto de la pared. **Falta verificar con una persona real** (tecla E) y tocar *separación*, *altura* y *tamaño* si hace falta.
 - Con la sala vacía la detección engancha sillas y objetos. Zonas ignoradas: sillas de abajo a la izquierda y franja sobre las paredes. Las sillas de la derecha no se ignoran (ahí puede haber gente).
 
+- **Placa de video:** Chrome arrancaba con la Intel UHD 630 (la pantalla principal cuelga de la integrada). Los lanzadores ahora llevan `--force_high_performance_gpu`: con la RTX 3070 Ti pasa de perfil Ligero a 36 fps a perfil Completo, render 8400×690, ~55 fps. Se comprueba en la consola con `gl.getParameter(gl.getExtension('WEBGL_debug_renderer_info').UNMASKED_RENDERER_WEBGL)`.
+- **Hasta 10 cuerpos:** MoveNet MultiPose da como mucho 6 por pasada. Con *cuerpos máx.* mayor que 6 la imagen se corta sola en 3 partes (`detTileN`): ~48 ms por detección. La sesión Sala quedó en 10. Sin probar con 10 personas reales.
+- **Color sólido:** *Proyección → Colorimetría → absoluto: un solo color* (`P.color.mode='absoluto'`, `P.color.c1`). Probado con azul.
+- El servidor local se cerró una vez solo; si Chrome muestra un error de conexión, volver a abrir `start_sala.bat`.
+
 Cosas a saber para operar:
 
 - Mirador en kiosk tapa a Resolume y OBS (hay un solo monitor de operación). Para verlos, minimizar Chrome; **mientras está minimizado OBS no captura**.

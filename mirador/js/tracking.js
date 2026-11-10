@@ -124,11 +124,14 @@ async function meterExposure(src, frame, vw, vh){
   lv.black += (black - lv.black) * k; lv.white += (white - lv.white) * k; lv.gamma += (gamma - lv.gamma) * k;
   src._meter = { mode, n, lo, hi, med };
 }
+/* partes en que se corta la imagen. El modelo (MoveNet MultiPose) da como mucho 6 cuerpos por pasada: para seguir más de 6
+   hacen falta al menos 3 partes (hasta 18 antes de unir los duplicados del solapamiento). */
+function detTileN(){ return (P.track.maxPoses | 0) > 6 ? Math.max(3, P.det.tiles | 0) : P.det.tiles; }
 const DETPREV = { src:null };   // cámara que muestra la vista previa del panel (pide la imagen procesada)
 /* detecta en una cámara: corta en partes, une los duplicados del solapamiento y pone ids estables */
 async function detectSource(src){
   const det = DET.detector, v = src.video, vw = v.videoWidth, vh = v.videoHeight; if (!det || !vw || !vh) return src.poses || [];
-  const tiles = DET.single ? [{ x0:0, x1:1 }] : detTiles(P.det.tiles), raw = [];
+  const tiles = DET.single ? [{ x0:0, x1:1 }] : detTiles(detTileN()), raw = [];
   const t0 = performance.now(), frame = tf.browser.fromPixels(v);
   try {
     if (P.det.expo === 'auto') await meterExposure(src, frame, vw, vh);

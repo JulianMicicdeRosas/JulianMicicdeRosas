@@ -155,7 +155,7 @@ const UI = {
       DETPREV.src = s;
       if (s._prevImg) { const o = this._prevCv ||= document.createElement('canvas'); if (o.width !== s._prevImg.width || o.height !== s._prevImg.height) { o.width = s._prevImg.width; o.height = s._prevImg.height; } o.getContext('2d').putImageData(s._prevImg, 0, 0); c.drawImage(o, ox, oy, vw * sc, vh * sc); }
       else if (s.video.readyState >= 2) c.drawImage(s.video, ox, oy, vw * sc, vh * sc);
-      const tiles = DET.single ? [{ x0:0, x1:1 }] : detTiles(P.det.tiles); c.strokeStyle = 'rgba(120,180,255,.55)'; c.setLineDash([4, 4]); c.lineWidth = 1;
+      const tiles = DET.single ? [{ x0:0, x1:1 }] : detTiles(detTileN()); c.strokeStyle = 'rgba(120,180,255,.55)'; c.setLineDash([4, 4]); c.lineWidth = 1;
       tiles.forEach(t => c.strokeRect(ox + t.x0 * vw * sc + .5, oy + .5, (t.x1 - t.x0) * vw * sc - 1, vh * sc - 1)); c.setLineDash([]);
       (s.cal?.ignore || []).forEach(r => { c.fillStyle = 'rgba(255,80,80,.15)'; c.fillRect(ox + Math.min(r.x0, r.x1) * vw * sc, oy + Math.min(r.y0, r.y1) * vh * sc, Math.abs(r.x1 - r.x0) * vw * sc, Math.abs(r.y1 - r.y0) * vh * sc); });
       const kept = new Set(s.poses || []); let nOk = 0, nIgn = 0, nExtra = 0;
