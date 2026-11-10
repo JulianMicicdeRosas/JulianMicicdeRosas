@@ -31,7 +31,7 @@ const Noise = (() => { const grad = [[1,1],[-1,1],[1,-1],[-1,-1],[1,0],[-1,0],[0
    ===================================================================== */
 const P_DEFAULT = {
   cam:   { mirror:true, showVideo:false, videoOpacity:.5, contrast:1.15, brightness:1, saturate:.7 },
-  track: { minScore:.22, smoothing:.55, showSkeleton:true, boneWidth:3, showJoints:false, jointSize:5, showId:false, glow:.85, maxPoses:5 },
+  track: { minScore:.22, smoothing:.55, showSkeleton:true, boneWidth:3, showJoints:false, jointSize:5, showId:false, glow:.85, maxPoses:1 },
   det:   { preset:'sala', res:384, tiles:2, minPose:.12, expo:'auto', light:1, black:0, white:1, gamma:1, gray:false, target:.45, speed:.8, meter:'auto' },
   link:  { enabled:true, range:.4, width:2.2, energy:1 },
   mask:  { source:'esqueleto', threshold:.34, softness:.12, learnBg:false, bodyWidth:1 },
@@ -54,6 +54,11 @@ const P_DEFAULT = {
           mosaic:false, mosW:7680, mosH:4320, tileW:1920, tileH:1080, mosCols:4, mosOrder:'filas', mosMap:'', mosPreview:false,
           // paredes de la sala (lienzo). Oeste = izquierda, Este = derecha. Ancho en px de cada pared; alto común.
           useWalls:true, wallH:690, walls:[{ nombre:'Oeste', w:3175 }, { nombre:'Norte', w:1775 }, { nombre:'Este', w:3450 }], mosMode:'paredes' },
+  // zoom de la imagen proyectada (se aplica a todo, antes del keystone y del mosaico)
+  view: { zoom:1, x:0, y:0 },
+  // colorimetría de TODO lo proyectado (etapa final, después de módulos, ecos y bloom)
+  color: { mode:'libre', c1:'#ffffff', c0:'#000000', mix:1, exposure:1, contrast:1, sat:1, gamma:1, black:0, white:1, r:1, g:1, b:1,
+           oneHue:false, bodyHue:200, lockAudioHue:false, test:false, segs:[] },
   perf: { targetFps:30, autoScale:true, scene2d:1 },
   // audio
   audio:{ source:'off', gain:1, smooth:.6, react:{ size:.8, glow:.6, bloom:.8, scatter:.5, hue:.3, echo:.4, flash:.3, speed:.5 } },
@@ -200,15 +205,33 @@ void main(){vec3 s=texture2D(uTex,v_uv).rgb*.227027;
   s+=(texture2D(uTex,v_uv+uDir*3.2307).rgb+texture2D(uTex,v_uv-uDir*3.2307).rgb)*.070270;gl_FragColor=vec4(s,1.);}`;
 const FS_COMP = `precision mediump float;varying vec2 v_uv;uniform sampler2D uBase,uBloom;
 uniform float uBloomAmt,uChroma,uGlitch,uBlocks,uTime,uVig,uGamma,uFlash,uSlices,uBlend;
+uniform vec3 uZoom;                                   /* zoom, desplazamiento x, y */
+uniform int uCMode,uTest,uNSeg;uniform vec3 uC0,uC1,uBal;uniform float uMix,uExpo,uCon,uSat,uCGam,uBlk,uWht;
+uniform vec4 uSeg[8];uniform vec3 uSegRGB[8];          /* tramos (paredes/proyectores): u0,u1,ganancia,negro · RGB */
 float hash(vec2 v){return fract(sin(dot(v,vec2(12.9898,78.233)))*43758.5453);}
-void main(){vec2 uv=v_uv;
+vec3 pattern(vec2 p,float u0,float u1){float x=clamp((p.x-u0)/max(u1-u0,1e-4),0.,1.),y=1.-p.y;
+  if(y<.45)return vec3(floor(x*11.)/10.);
+  if(y<.85){float i=floor(x*7.);return i<1.?vec3(1,0,0):i<2.?vec3(0,1,0):i<3.?vec3(0,0,1):i<4.?vec3(0,1,1):i<5.?vec3(1,0,1):i<6.?vec3(1,1,0):vec3(1);}
+  float k=floor(x*5.);return vec3(k<1.?0.:k<2.?.02:k<3.?.05:k<4.?.1:.2);}
+void main(){vec2 uv=(v_uv-.5-uZoom.yz)/uZoom.x+.5;
+  float ins=(uv.x<0.||uv.x>1.||uv.y<0.||uv.y>1.)?0.:1.;uv=clamp(uv,0.,1.);
   if(uGlitch>.001){float row=floor(uv.y*uBlocks),seed=floor(uTime*14.),r=hash(vec2(row,seed));
     if(r>1.-uGlitch*.55){uv.x+=(hash(vec2(row,seed+7.))-.5)*uGlitch*.22;uv.y+=(hash(vec2(row,seed+3.))-.5)*uGlitch*.012;}}
   vec2 d=uv-.5;float ca=uChroma*.012*(.35+length(d));
   vec3 b;b.r=texture2D(uBase,uv+d*ca).r;b.g=texture2D(uBase,uv).g;b.b=texture2D(uBase,uv-d*ca).b;
   vec3 c=b+texture2D(uBloom,uv).rgb*uBloomAmt;c*=1.-uVig*dot(d,d)*2.1;c+=uFlash;
   if(uSlices>1.5&&uBlend>0.){float fx=fract(uv.x*uSlices);float e=min(fx,1.-fx)/uBlend;c*=clamp(e,0.,1.)*.5+.5;}
-  c=pow(max(c,0.),vec3(1./uGamma));gl_FragColor=vec4(c,1.);}`;
+  c=pow(max(c,0.),vec3(1./uGamma))*ins;
+  /* tramo físico (pared o proyector) según la posición en la salida, no en la imagen con zoom */
+  float sg=1.,sb=0.;vec3 srgb=vec3(1.);float su0=0.,su1=1.;
+  for(int i=0;i<8;i++){if(i>=uNSeg)break;vec4 s=uSeg[i];if(v_uv.x>=s.x&&v_uv.x<=s.y){sg=s.z;sb=s.w;srgb=uSegRGB[i];su0=s.x;su1=s.y;}}
+  if(uTest==1)c=pattern(v_uv,su0,su1);   /* el patrón salta la parte creativa pero pasa por la calibración de salida */
+  else{
+    c*=uExpo;c=(c-.5)*uCon+.5;float l=dot(max(c,0.),vec3(.2126,.7152,.0722));c=mix(vec3(l),c,uSat);
+    if(uCMode==1)c=mix(c,uC1*l,uMix);else if(uCMode==2)c=mix(c,mix(uC0,uC1,clamp(l,0.,1.)),uMix);}
+  c=clamp(c*uBal,0.,1.)*srgb*sg;
+  c=uBlk+sb+c*(uWht-uBlk-sb);c=pow(clamp(c,0.,1.),vec3(1./uCGam));
+  gl_FragColor=vec4(clamp(c,0.,1.),1.);}`;
 const FS_FINAL = `precision mediump float;varying vec2 v_uv;uniform sampler2D uTex;
 void main(){vec2 uv=v_uv;if(uv.x<0.||uv.x>1.||uv.y<0.||uv.y>1.){gl_FragColor=vec4(0.,0.,0.,1.);return;}gl_FragColor=vec4(texture2D(uTex,uv).rgb,1.);}`;
 /* silueta sólida a partir de la máscara (dibuja en el pase GL aditivo) */
@@ -310,6 +333,16 @@ function homography(){
     a = p1.x - p0.x + g * p1.x; b = p3.x - p0.x + h * p3.x; c = p0.x; d = p1.y - p0.y + g * p1.y; e = p3.y - p0.y + h * p3.y; f = p0.y; }
   return new Float32Array([a, d, g, b, e, h, c, f, 1]);
 }
+
+/* tramos para la colorimetría por pared / proyector: paredes si las hay, si no las franjas de proyectores */
+function colorSegments(){
+  const ws = wallRanges(), n = ws.length ? ws.length : Math.max(1, Math.round(P.map.slices || 1));
+  const list = ws.length ? ws.map(w => ({ nombre:w.nombre, u0:w.u0, u1:w.u1 })) : Array.from({ length:n }, (_, i) => ({ nombre:'proyector ' + (i + 1), u0:i / n, u1:(i + 1) / n }));
+  const segs = P.color.segs || (P.color.segs = []);
+  while (segs.length < list.length) segs.push({ gain:1, black:0, r:1, g:1, b:1 });
+  return list.slice(0, 8).map((l, i) => Object.assign(l, { c:segs[i] }));
+}
+function hexRGB(h){ const m = /^#?([0-9a-f]{6})$/i.exec(h || ''); if (!m) return [1, 1, 1]; const v = parseInt(m[1], 16); return [(v >> 16 & 255) / 255, (v >> 8 & 255) / 255, (v & 255) / 255]; }
 
 /* =====================================================================
    AVISOS

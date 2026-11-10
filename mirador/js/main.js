@@ -99,6 +99,9 @@ addEventListener('keydown', e => {
   else if (k === 'h') UI.togglePanel();
   else if (k === 'c') { P.map.calibrate = !P.map.calibrate; uiCanvas.classList.toggle('calibrating', P.map.calibrate); UI.refresh('proyeccion'); }
   else if (k === 'k') Calib.toggle();
+  else if (k === '+' || k === '=') { P.view.zoom = clamp(+(P.view.zoom * 1.05).toFixed(3), .25, 4); toast('zoom ' + P.view.zoom.toFixed(2) + '×'); Sessions.touch(); }
+  else if (k === '-' || k === '_') { P.view.zoom = clamp(+(P.view.zoom / 1.05).toFixed(3), .25, 4); toast('zoom ' + P.view.zoom.toFixed(2) + '×'); Sessions.touch(); }
+  else if (k === 'z') { Object.assign(P.view, { zoom:1, x:0, y:0 }); toast('zoom 1×'); Sessions.touch(); UI.refresh('proyeccion'); }
   else if (k === 'e') { verEsqueletos = !verEsqueletos; toast(verEsqueletos ? 'esqueletos visibles encima de todo (E)' : 'esqueletos según la plantilla'); UI.refresh('camaras'); }
   else if (k === 'f') { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); }
   else if (k === 'b' && e.shiftKey) learnBackground();

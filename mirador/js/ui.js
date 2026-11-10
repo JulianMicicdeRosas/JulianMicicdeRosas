@@ -144,7 +144,7 @@ const UI = {
     this.range(gt, P.det, 'res', 192, 512, 32, 'resolución del modelo', manual);
     this.range(gt, P.det, 'minPose', .03, .5, .01, 'confianza del cuerpo', manual);
     this.range(gt, P.track, 'minScore', .05, .6, .01, 'confianza de los puntos', manual);
-    this.range(gt, P.track, 'smoothing', 0, .95, .01, 'suavizado'); this.range(gt, P.track, 'maxPoses', 1, 6, 1, 'cuerpos máx. por cámara');
+    this.range(gt, P.track, 'smoothing', 0, .95, .01, 'suavizado'); this.range(gt, P.track, 'maxPoses', 1, 10, 1, 'cuerpos máx. por cámara');
     this.buttons(gt, [[verEsqueletos ? 'Ocultar esqueletos (E)' : 'Ver esqueletos en la imagen (E)', () => { verEsqueletos = !verEsqueletos; this.refresh('camaras'); }, verEsqueletos ? 'on' : 'primary']]);
     const cv = document.createElement('canvas'); cv.className = 'detprev'; cv.width = 480; cv.height = 270; cv.style.cssText = 'width:100%;aspect-ratio:16/9;background:#0b0d12;border-radius:6px;margin:6px 0;display:block;cursor:pointer'; cv.title = 'La imagen tal como la recibe el detector (con exposición, negros y blancos). Clic: vista grande (K)'; cv.onclick = () => Calib.toggle(true); gt.appendChild(cv);
     const st = document.createElement('div'); st.className = 'note'; gt.appendChild(st);
@@ -158,21 +158,21 @@ const UI = {
       const tiles = DET.single ? [{ x0:0, x1:1 }] : detTiles(P.det.tiles); c.strokeStyle = 'rgba(120,180,255,.55)'; c.setLineDash([4, 4]); c.lineWidth = 1;
       tiles.forEach(t => c.strokeRect(ox + t.x0 * vw * sc + .5, oy + .5, (t.x1 - t.x0) * vw * sc - 1, vh * sc - 1)); c.setLineDash([]);
       (s.cal?.ignore || []).forEach(r => { c.fillStyle = 'rgba(255,80,80,.15)'; c.fillRect(ox + Math.min(r.x0, r.x1) * vw * sc, oy + Math.min(r.y0, r.y1) * vh * sc, Math.abs(r.x1 - r.x0) * vw * sc, Math.abs(r.y1 - r.y0) * vh * sc); });
-      const kept = new Set(s.poses || []); let nOk = 0, nIgn = 0;
-      for (const p of (s._raw || [])) { const low = (p.score ?? 1) < P.det.minPose, used = kept.has(p); if (!low && !used) continue;
-        const ign = used && s._calH && calIgnored(s, p); if (used && !ign) nOk++; if (ign) nIgn++;
-        c.strokeStyle = low ? 'rgba(160,160,160,.6)' : ign ? 'rgba(255,107,107,.9)' : 'rgba(105,240,176,.95)'; c.lineWidth = 2; c.setLineDash(low ? [3, 3] : []); c.beginPath();
+      const kept = new Set(s.poses || []); let nOk = 0, nIgn = 0, nExtra = 0;
+      for (const p of (s._raw || [])) { if (p._dup) continue; const low = (p.score ?? 1) < P.det.minPose, used = kept.has(p), ign = !low && !used && s._calH && calIgnored(s, p), extra = !low && !used && !ign;
+        if (used) nOk++; if (ign) nIgn++; if (extra) nExtra++;
+        c.strokeStyle = low ? 'rgba(160,160,160,.6)' : ign ? 'rgba(255,107,107,.9)' : extra ? 'rgba(255,209,102,.85)' : 'rgba(105,240,176,.95)'; c.lineWidth = 2; c.setLineDash(low || extra ? [3, 3] : []); c.beginPath();
         for (const [a, b] of SKEL) { const ka = p.keypoints[a], kb = p.keypoints[b]; if ((ka.score ?? 0) < P.track.minScore * (low ? .7 : 1) || (kb.score ?? 0) < P.track.minScore * (low ? .7 : 1)) continue; c.moveTo(ox + ka.x * sc, oy + ka.y * sc); c.lineTo(ox + kb.x * sc, oy + kb.y * sc); }
         c.stroke(); c.setLineDash([]);
         const b = p._box; if (b) { c.fillStyle = c.strokeStyle; c.font = '10px ui-monospace,monospace'; c.fillText((p.score ?? 0).toFixed(2), ox + b.x0 * sc, oy + b.y0 * sc - 3); } }
       const d = s._diag || {}, low = d.low || 0;
       st.innerHTML = s.video.readyState < 2 ? 'la cámara todavía no da imagen…' : !DET.detector ? (DET.error ? 'modelo con error: ' + esc(DET.error) : 'cargando el modelo…')
-        : `<b style="color:#69f0b0">${nOk}</b> cuerpo${nOk === 1 ? '' : 's'} en uso` + (nIgn ? ` · <b style="color:#ff6b6b">${nIgn}</b> en zona ignorada` : '') + (low ? ` · <span style="color:#aaa">${low} con poca confianza (gris)</span>` : '')
+        : `<b style="color:#69f0b0">${nOk}</b> cuerpo${nOk === 1 ? '' : 's'} en uso` + (nIgn ? ` · <b style="color:#ff6b6b">${nIgn}</b> en zona ignorada` : '') + (nExtra ? ` · <b style="color:#ffd166">${nExtra}</b> fuera del máximo (${P.track.maxPoses})` : '') + (low ? ` · <span style="color:#aaa">${low} con poca confianza (gris)</span>` : '')
           + ` · ${d.tiles || 1} parte${(d.tiles || 1) > 1 ? 's' : ''} · ${Math.round(d.ms || 0)} ms` + (nOk === 0 && low ? '<br>Hay cuerpos en gris: bajá la "confianza del cuerpo" o subí la sensibilidad.' : nOk === 0 && !low ? '<br>El modelo no encuentra a nadie: probá sensibilidad "máxima", más luz sobre los bailarines o la exposición dinámica (abajo).' : '');
     };
     this.liveFns.push(draw); draw();
     this.kv(gt, [['modelo', (modelBase ? 'local (vendor/movenet)' : 'descargado') + (DET.single ? ' · SinglePose (1 cuerpo)' : ' · MultiPose')]]);
-    this.note(gt, 'Verde: cuerpo en uso. Rojo: zona ignorada. Gris: el modelo lo vio con poca confianza y se descarta. La imagen es la que recibe el modelo, ya con la exposición y los niveles de abajo. Las líneas punteadas azules son las partes en que se corta la imagen. Lo más fiable en sala oscura: luz sobre los bailarines que no pegue en las paredes, o cámara con infrarrojo.');
+    this.note(gt, 'Verde: cuerpo en uso. Amarillo punteado: detectado pero fuera del máximo de cuerpos (con 1, el programa se queda con el bailarín que viene siguiendo). Rojo: zona ignorada. Gris: el modelo lo vio con poca confianza y se descarta. La imagen es la que recibe el modelo, ya con la exposición y los niveles de abajo. Las líneas punteadas azules son las partes en que se corta la imagen. Lo más fiable en sala oscura: luz sobre los bailarines que no pegue en las paredes, o cámara con infrarrojo.');
   },
   /* imagen que recibe el detector: exposición dinámica, negros, blancos, medios tonos */
   imgGroup(body){
@@ -264,6 +264,34 @@ const UI = {
   },
 
   /* =================== Proyección =================== */
+  color(parent, obj, key, label){ const r = this.row(parent, label); r.classList.add('wide'); const i = document.createElement('input'); i.type = 'color'; i.value = obj[key]; i.style.cssText = 'width:64px;height:28px;padding:0;border:0;background:none';
+    const t = document.createElement('input'); t.type = 'text'; t.value = obj[key]; t.style.width = '84px'; t.className = 'num';
+    const set = v => { if (!/^#[0-9a-f]{6}$/i.test(v)) return; obj[key] = v.toLowerCase(); i.value = obj[key]; t.value = obj[key]; Sessions.touch(); };
+    i.oninput = () => set(i.value); t.onchange = () => set(t.value.trim()); r.appendChild(i); r.appendChild(t); return r; },
+  /* zoom de la imagen proyectada */
+  viewGroup(body){
+    const V = P.view, g = this.group(body, 'Zoom de la imagen proyectada', { closed:V.zoom === 1 && !V.x && !V.y, desc:'Agranda o achica todo lo que se proyecta (módulos, figuras, ecos) alrededor del centro, y lo corre. Se aplica antes de las esquinas (keystone) y del mosaico, y se guarda en la sesión. Teclas: + / − zoom, Z vuelve a 1.' });
+    this.range(g, V, 'zoom', .25, 4, .01, 'zoom'); this.range(g, V, 'x', -1, 1, .001, 'correr ← →'); this.range(g, V, 'y', -1, 1, .001, 'correr ↓ ↑');
+    this.buttons(g, [['1×', () => { Object.assign(V, { zoom:1, x:0, y:0 }); Sessions.touch(); this.refresh('proyeccion'); }], ['1,25×', () => { V.zoom = 1.25; Sessions.touch(); }], ['1,5×', () => { V.zoom = 1.5; Sessions.touch(); }], ['2×', () => { V.zoom = 2; Sessions.touch(); }]]);
+  },
+  /* colorimetría de todo lo proyectado */
+  colorGroup(body){
+    const C = P.color, g = this.group(body, 'Colorimetría de todo lo proyectado', { closed:C.mode === 'libre' && !C.test, desc:'Etapa final, después de todos los módulos: lo que se fije acá vale para todas las plantillas y sesiones de la misma manera. "Absoluto" pasa toda la imagen a un solo color (solo cambia el brillo); "gradiente" va de un color de sombra a uno de luz.' });
+    this.select(g, C, 'mode', [['libre', 'libre (los colores de cada plantilla)'], ['absoluto', 'absoluto: un solo color'], ['gradiente', 'gradiente: sombra → luz']], 'modo', () => this.refresh('proyeccion'));
+    if (C.mode !== 'libre') { this.color(g, C, 'c1', C.mode === 'absoluto' ? 'color' : 'color de luz'); if (C.mode === 'gradiente') this.color(g, C, 'c0', 'color de sombra'); this.range(g, C, 'mix', 0, 1, .01, 'cuánto se aplica'); }
+    this.range(g, C, 'exposure', 0, 3, .01, 'exposición'); this.range(g, C, 'contrast', 0, 3, .01, 'contraste'); this.range(g, C, 'sat', 0, 2, .01, 'saturación');
+    this.range(g, C, 'gamma', .3, 3, .01, 'gamma de salida'); this.range(g, C, 'black', 0, .3, .001, 'nivel de negro'); this.range(g, C, 'white', .2, 1, .001, 'blanco máximo');
+    this.range(g, C, 'r', 0, 1.5, .005, 'balance: rojo'); this.range(g, C, 'g', 0, 1.5, .005, 'balance: verde'); this.range(g, C, 'b', 0, 1.5, .005, 'balance: azul');
+    this.toggle(g, C, 'oneHue', 'mismo color para todos los cuerpos', () => this.refresh('proyeccion')); if (C.oneHue) this.hue(g, C, 'bodyHue', 'tono de los cuerpos');
+    this.toggle(g, C, 'lockAudioHue', 'el audio no cambia el color');
+    this.toggle(g, C, 'test', 'patrón de color (grises, primarios, negros)');
+    this.buttons(g, [['Neutro', () => { Object.assign(C, deepClone(P_DEFAULT.color), { segs:C.segs }); Sessions.touch(); this.refresh('proyeccion'); }], ['Igualar tramos', () => { C.segs = []; colorSegments(); Sessions.touch(); this.refresh('proyeccion'); }]]);
+    const segs = colorSegments(), gs = this.group(body, 'Colorimetría por pared / proyector', { closed:!C.test, desc:'Para que las paredes (o los proyectores) den el mismo color: con el patrón de color encendido, mirá las paredes y bajá brillo o canales en la que se vea más fuerte. Nivel de negro sube el negro de un proyector para igualarlo con otro más lavado.' });
+    segs.forEach(sg => { const h = document.createElement('div'); h.className = 'note'; h.innerHTML = `<b>${esc(sg.nombre)}</b>`; gs.appendChild(h);
+      this.range(gs, sg.c, 'gain', 0, 1.5, .005, 'brillo'); this.range(gs, sg.c, 'black', 0, .2, .001, 'nivel de negro');
+      this.range(gs, sg.c, 'r', 0, 1.5, .005, 'rojo'); this.range(gs, sg.c, 'g', 0, 1.5, .005, 'verde'); this.range(gs, sg.c, 'b', 0, 1.5, .005, 'azul'); });
+    this.note(gs, 'Para colorimetría estable de verdad, además: los 7 proyectores en el mismo modo de imagen (sRGB/Rec.709, 6500 K), sin contraste dinámico ni iris automático, y Windows sin "color automático"/HDR en esa salida. Ver README.');
+  },
   tab_proyeccion(body){
     const g = this.group(body, 'Formato de salida', { desc:'Tamaño de la imagen que se proyecta. Con formato fijo, en esta ventana se ve a escala (previsualización); a tamaño real cuando la ventana mide eso (lanzadores).' });
     const fmt_ = { mode:OUT.mode === 'ventana' ? 'ventana' : (/^\d+x\d+$/.test(OUT.mode) ? OUT.mode : 'custom') };
@@ -272,6 +300,7 @@ const UI = {
     const r = this.row(g, 'medidas'); const cw = document.createElement('input'); cw.type = 'number'; cw.value = OUT.w; const ch = document.createElement('input'); ch.type = 'number'; ch.value = OUT.h; cw.disabled = ch.disabled = fmt_.mode !== 'custom'; cw.onchange = ch.onchange = applyFmt; r.appendChild(cw); r.appendChild(ch);
     this.kv(g, [['salida', `${outputSize().w} × ${outputSize().h}`], ['render interno', `${W} × ${H} (×${DPR.toFixed(2)})`], ['tope GPU', `${MAX_TEX} px`]]);
     if (outputSize().w * 1 > MAX_TEX) { const w = document.createElement('div'); w.className = 'warnbox'; w.textContent = `La GPU no puede renderizar más de ${MAX_TEX} px de ancho: la imagen se escala internamente.`; g.appendChild(w); }
+    this.viewGroup(body); this.colorGroup(body);
     const gp = this.group(body, 'Proyectores', { desc:'Franjas numeradas en el patrón de ajuste para alinear cada proyector. El fundido suaviza los bordes entre franjas si hay solape.' });
     this.range(gp, P.map, 'slices', 1, 12, 1, 'cantidad'); this.range(gp, P.map, 'blend', 0, .5, .005, 'fundido de bordes'); this.toggle(gp, P.map, 'testGrid', 'patrón de ajuste'); this.toggle(gp, P.map, 'blackout', 'negro (B)');
     const gw_ = this.group(body, 'Paredes de la sala (lienzo)', { desc:'El lienzo es la suma de las paredes, de izquierda a derecha (Oeste = izquierda, Este = derecha). El patrón de ajuste muestra cada pared con su nombre.' });

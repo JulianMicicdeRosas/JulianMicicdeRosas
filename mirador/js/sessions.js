@@ -12,7 +12,7 @@ const Sessions = {
   names(){ return Object.keys(this.all()).sort((a, b) => a.localeCompare(b)); },
   get(name){ return this.all()[name] || null; },
   snapshot(name){
-    return { version:2, app:'mirador', name:name || this.current || 'sin nombre', updated:new Date().toISOString(),
+    return { version:3, app:'mirador', name:name || this.current || 'sin nombre', updated:new Date().toISOString(),
       plantilla:plantillaActual, P:deepClone(P), corners:deepClone(corners),
       out:{ mode:OUT.mode, w:OUT.w, h:OUT.h },
       layout:{ orient:LAYOUT.orient },
@@ -30,6 +30,8 @@ const Sessions = {
     if (!s || !s.P) return false;
     for (const k in s.P) if (P[k] && typeof s.P[k] === 'object') { Object.assign(P[k], s.P[k]); if (k === 'audio' && s.P.audio.react) Object.assign(P.audio.react, s.P.audio.react); }
     if (!s.P.det && P.track.minScore >= .3) P.track.minScore = .22;   // sesiones de antes de la detección por partes: umbral más permisivo
+    if ((s.version || 2) < 3) P.track.maxPoses = 1;
+    for (const k of ['view', 'color']) if (!s.P[k]) Object.assign(P[k], deepClone(P_DEFAULT[k]));   // sin zoom ni colorimetría guardados: neutros                   // sesiones anteriores al tope de 1 cuerpo
     if (Array.isArray(s.corners) && s.corners.length === 4) corners = deepClone(s.corners);
     if (s.layout?.orient) LAYOUT.orient = s.layout.orient;
     plantillaActual = s.plantilla || '';

@@ -65,16 +65,16 @@ Sin internet en la sala el programa arranca igual: las librerías **y el modelo 
 | **Sesión** | Nombre, guardar/duplicar/exportar/importar, notas; lista de sesiones; **canciones de la sesión** (agregar archivos, carpeta `canciones/`, orden, reproducir). |
 | **Plantillas** | 12 estéticas con tecla rápida (1‑9, 0). Se aplican encima y después se ajustan. |
 | **Módulos** | Cada módulo con su interruptor, descripción y controles; esqueleto y enlaces; **fuente de la silueta** (esqueleto / brillo / fondo); ecos; posproceso. |
-| **Cámaras** | Zonas (hasta 4 cámaras), disposición (columnas / filas / a mano), espejo por zona, video en la imagen, **detección** (sensibilidad, partes de la imagen, resolución, confianza, vista previa con lo que ve el modelo), **exposición dinámica / blancos / negros** de la imagen que analiza el modelo, **ajustes de la cámara física**. |
+| **Cámaras** | Zonas (hasta 4 cámaras), disposición (columnas / filas / a mano), espejo por zona, video en la imagen, **detección** (cuerpos máximos —1 de fábrica—, sensibilidad, partes de la imagen, resolución, confianza, vista previa con lo que ve el modelo), **exposición dinámica / blancos / negros** de la imagen que analiza el modelo, **ajustes de la cámara física**. |
 | **Audio** | Fuente (apagado / micrófono / canción), micrófono, ganancia, suavizado, medidores en vivo, tempo estimado, y **qué mueve la música** (tamaño ← graves, bloom y destello ← golpe, color ← agudos, ecos ← nivel…). |
-| **Proyección** | Formato de salida, cantidad de proyectores y fundido de bordes, patrón de ajuste con franjas numeradas, negro, esquinas (keystone), pantalla completa, opción B por ventanas, **grabación**. |
+| **Proyección** | Formato de salida, **zoom de la imagen proyectada**, **colorimetría de todo lo proyectado** (y por pared/proyector, con patrón de color), cantidad de proyectores y fundido de bordes, patrón de ajuste con franjas numeradas, negro, esquinas (keystone), pantalla completa, opción B por ventanas, **grabación**. |
 | **Sistema** | Perfil de rendimiento, fps mínimo, adaptación automática, resolución interna y de la capa 2D, densidad de puntos, inferencia, diagnóstico y teclas. |
 
 Todo lo que tocás se autoguarda en la sesión actual. **Exportá la sesión** (.json) para llevarla de la Mac a la PC; las canciones no viajan dentro del .json: copiá los archivos a `canciones/` en la otra máquina y se vuelven a enlazar por nombre.
 
 ### Teclas
 
-`H` panel · `F` pantalla completa · `C` mover esquinas · `K` calibrar cámara · `E` ver esqueletos encima de todo · `B` negro · `Shift+B` aprender fondo · `X` limpiar ecos · `V` rotar cámaras · `R` grabar/parar · `M` micrófono sí/no · `Espacio` canción play/pausa · `↑/↓` canción anterior/siguiente · `1‑9, 0` plantillas · `G/L` exportar/importar sesión · `Esc`/`⌫` diapositivas.
+`H` panel · `F` pantalla completa · `C` mover esquinas · `K` calibrar cámara · `E` ver esqueletos encima de todo · `+`/`−` zoom de salida · `Z` zoom 1× · `B` negro · `Shift+B` aprender fondo · `X` limpiar ecos · `V` rotar cámaras · `R` grabar/parar · `M` micrófono sí/no · `Espacio` canción play/pausa · `↑/↓` canción anterior/siguiente · `1‑9, 0` plantillas · `G/L` exportar/importar sesión · `Esc`/`⌫` diapositivas.
 
 ## Las dos versiones de audio
 
@@ -141,6 +141,23 @@ Con calibración, el video de la cámara no se dibuja sobre las paredes y la sil
 - En una prueba con la foto de la sala oscurecida y cuatro personas a distintas distancias: imagen entera → 1 bailarín; 2 mitades → 3; 3 partes → 4 (y el operador en la zona ignorada).
 
 **Luz.** La cámara tiene que ver a los bailarines, no a la proyección. En sala oscura la solución estándar es **luz infrarroja**: focos IR (850 nm) y una cámara sin filtro IR (o una cámara de seguridad USB "IR"); el público no la ve y el proyector no la contamina. La silueta por defecto se arma desde el esqueleto justamente para no depender del brillo de la imagen.
+
+## Un cuerpo, zoom y colorimetría
+
+**Cuerpos máximos.** De fábrica Mirador sigue **un cuerpo** por cámara (Cámaras → Detección → *cuerpos máx. por cámara*, de 1 a 10). Con 1, se queda con el bailarín que viene siguiendo y no salta a otro aunque otro tenga más puntaje en un cuadro; si lo pierde casi un segundo, toma al más claro. Las zonas ignoradas (el operador) nunca ocupan el lugar. En la vista previa, los detectados que quedan afuera se ven en amarillo punteado. Las sesiones guardadas antes de este cambio se abren con 1.
+
+**Zoom de la imagen proyectada.** Proyección → *Zoom*: agranda o achica todo lo que se proyecta alrededor del centro, y lo corre en horizontal y vertical. Va antes de las esquinas (keystone) y del mosaico 8K, así que el reparto a los proyectores no cambia. Teclas `+` / `−` y `Z` (vuelve a 1×). Se guarda en la sesión.
+
+**Colorimetría de todo lo proyectado.** Proyección → *Colorimetría*: es la última etapa, después de módulos, ecos y bloom, y **no la tocan las plantillas**: lo que se fija ahí vale igual para todas.
+- *Modo*: **libre** (los colores de cada plantilla), **absoluto** (toda la imagen en un solo color; solo cambia el brillo) o **gradiente** (de un color de sombra a uno de luz).
+- Exposición, contraste, saturación, gamma de salida, nivel de negro, blanco máximo y balance rojo/verde/azul.
+- *Mismo color para todos los cuerpos* (en vez de un color por bailarín) y *el audio no cambia el color*.
+- **Por pared / proyector**: brillo, nivel de negro y rojo/verde/azul de cada pared (o de cada franja si no se usan paredes), para igualar proyectores. Con el **patrón de color** encendido se ven en cada pared grises en 11 pasos, primarios y secundarios, y negros al 0, 2, 5, 10 y 20 %: subí o bajá hasta que las paredes se vean iguales. El patrón pasa por la calibración de salida (balance, negro, blanco, gamma, ajustes por pared) pero no por la parte creativa.
+
+Para que el color sea de verdad el mismo de una función a otra, además de Mirador:
+- Los proyectores, todos en el mismo modo de imagen (sRGB / Rec.709, 6500 K, gamma 2.2), sin contraste dinámico, iris automático ni "modo eco" variable; misma lámpara/láser en uso parecido. Conviene igualarlos primero desde su propio menú y dejar Mirador para el ajuste fino.
+- Windows: en esa salida, HDR apagado, "Color automático" apagado, sin perfil ICC raro (sRGB), y en el panel de NVIDIA *Rango dinámico de salida: completo* y *profundidad de color* 8 bpc. El splitter, sin escalado ni procesamiento de color.
+- Chrome dibuja en sRGB. OBS: *Formato de color NV12, espacio 709, rango Parcial* para video común (o Completo si el destino lo espera); lo importante es que el reproductor use el mismo.
 
 ## OBS
 

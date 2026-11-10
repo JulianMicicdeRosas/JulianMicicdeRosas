@@ -1,4 +1,19 @@
 "use strict";
+/* zoom de salida y colorimetría general (FS_COMP) */
+const CMODES = { libre:0, absoluto:1, gradiente:2 };
+function setColorUniforms(){
+  const V = P.view, C = P.color, z = clamp(+V.zoom || 1, .1, 10);
+  gl.uniform3f(U(pComp, 'uZoom'), z, +V.x || 0, -(+V.y || 0));
+  gl.uniform1i(U(pComp, 'uCMode'), CMODES[C.mode] ?? 0); gl.uniform1i(U(pComp, 'uTest'), C.test ? 1 : 0);
+  const c0 = hexRGB(C.c0), c1 = hexRGB(C.c1); gl.uniform3f(U(pComp, 'uC0'), c0[0], c0[1], c0[2]); gl.uniform3f(U(pComp, 'uC1'), c1[0], c1[1], c1[2]);
+  gl.uniform3f(U(pComp, 'uBal'), C.r, C.g, C.b); gl.uniform1f(U(pComp, 'uMix'), C.mix); gl.uniform1f(U(pComp, 'uExpo'), C.exposure);
+  gl.uniform1f(U(pComp, 'uCon'), C.contrast); gl.uniform1f(U(pComp, 'uSat'), C.sat); gl.uniform1f(U(pComp, 'uCGam'), Math.max(.1, C.gamma));
+  gl.uniform1f(U(pComp, 'uBlk'), C.black); gl.uniform1f(U(pComp, 'uWht'), C.white);
+  const segs = colorSegments(), a = new Float32Array(32), b = new Float32Array(24);
+  segs.forEach((s, i) => { a.set([s.u0, s.u1, s.c.gain, s.c.black], i * 4); b.set([s.c.r, s.c.g, s.c.b], i * 3); });
+  gl.uniform1i(U(pComp, 'uNSeg'), segs.length); gl.uniform4fv(U(pComp, 'uSeg[0]'), a); gl.uniform3fv(U(pComp, 'uSegRGB[0]'), b);
+}
+
 /* =====================================================================
    MIRADOR — render
    Capa 2D (scene) → GL: escena + módulos GL aditivos → eco (feedback)
@@ -49,7 +64,8 @@ function render(t){
   gl.uniform1f(U(pComp, 'uBloomAmt'), P.fx.bloom + AM.bloom); gl.uniform1f(U(pComp, 'uChroma'), prof.allowChroma ? P.fx.chroma : 0);
   gl.uniform1f(U(pComp, 'uGlitch'), prof.allowGlitch ? P.fx.glitch : 0); gl.uniform1f(U(pComp, 'uBlocks'), P.fx.glitchBlocks);
   gl.uniform1f(U(pComp, 'uTime'), t); gl.uniform1f(U(pComp, 'uVig'), P.fx.vignette); gl.uniform1f(U(pComp, 'uGamma'), P.fx.gamma);
-  gl.uniform1f(U(pComp, 'uFlash'), P.map.blackout ? 0 : AM.flash); gl.uniform1f(U(pComp, 'uSlices'), P.map.slices); gl.uniform1f(U(pComp, 'uBlend'), P.map.blend); drawQuad(pComp);
+  gl.uniform1f(U(pComp, 'uFlash'), P.map.blackout ? 0 : AM.flash); gl.uniform1f(U(pComp, 'uSlices'), P.map.slices); gl.uniform1f(U(pComp, 'uBlend'), P.map.blend);
+  setColorUniforms(); drawQuad(pComp);
   if (mosaicActive() && fbKey) {
     // 1) panorama con keystone a un FBO; 2) cada franja a su baldosa del cuadro 8K
     gl.useProgram(pFinal); bindFBO(fbKey); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);

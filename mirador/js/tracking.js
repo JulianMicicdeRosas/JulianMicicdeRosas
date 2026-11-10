@@ -136,7 +136,7 @@ async function detectSource(src){
     for (let i = 0; i < tiles.length; i++) {
       const t = tiles[i], sx = Math.round(t.x0 * vw), sw = Math.round((t.x1 - t.x0) * vw);
       const input = tf.tidy(() => { const c = tiles.length > 1 ? tf.slice(frame, [0, sx, 0], [vh, sw, 3]) : tf.clone(frame); return same ? c : detProcess(c, L); });
-      let ps = []; try { ps = await det.estimatePoses(input, { maxPoses:Math.min(6, P.track.maxPoses + 1), flipHorizontal:false }); } catch (e) { DET.error = e.message; } finally { input.dispose(); }
+      let ps = []; try { ps = await det.estimatePoses(input, { maxPoses:Math.min(6, P.track.maxPoses + 2), flipHorizontal:false }); } catch (e) { DET.error = e.message; } finally { input.dispose(); }
       for (const p of ps) { if (sx) for (const k of p.keypoints) k.x += sx;
         const b = kpBox(p), edge = (i > 0 && b.x0 < sx + sw * .03) || (i < tiles.length - 1 && b.x1 > sx + sw * .97);
         p._tile = i; p._box = b; p._q = (p.score ?? .5) * (edge ? .6 : 1); raw.push(p); }
@@ -155,11 +155,19 @@ async function detectSource(src){
     for (const p of poses) { const a = p._box, aA = Math.max(1, (a.x1 - a.x0) * (a.y1 - a.y0));
       const dup = kept.some(q => { if (q._tile === p._tile) return false; const b = q._box, ix = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0), iy = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
         if (ix <= 0 || iy <= 0) return false; const bA = Math.max(1, (b.x1 - b.x0) * (b.y1 - b.y0)); return ix * iy / Math.min(aA, bA) > .45; });
-      if (!dup) kept.push(p); }
+      if (!dup) kept.push(p); else p._dup = true; }
     poses = kept; }
-  poses = poses.slice(0, P.track.maxPoses);
+  // fuera de las zonas ignoradas (el operador no ocupa un lugar), ids estables, y el tope de cuerpos:
+  // se quedan primero los que ya se venían siguiendo (con 1 cuerpo no salta de bailarín en bailarín)
+  if (src._calH) poses = poses.filter(p => !calIgnored(src, p));
+  poses = selectBodies(src, trackPoses(src, poses));
   diag.kept = poses.length;
-  return trackPoses(src, poses);
+  return poses;
+}
+function selectBodies(src, poses){
+  const max = Math.max(1, P.track.maxPoses | 0), prev = src._sel || new Set();
+  if (poses.length > max) poses = poses.map((p, i) => ({ p, k:(prev.has(p.id) ? 1 : 0) * 10 + (p._q ?? p.score ?? 0) })).sort((a, b) => b.k - a.k).slice(0, max).map(o => o.p);
+  src._sel = new Set(poses.map(p => p.id)); return poses;
 }
 /* ids estables por cercanía al cuadro anterior (el color de cada bailarín no salta) */
 function trackPoses(src, poses){
@@ -230,7 +238,7 @@ function syncBodies(){
       const fig = piso ? calMapPose(src, pose, id) : null; if (piso && !fig) return;
       if (!colorSlot.has(id)) colorSlot.set(id, (nextSlot++) % PALETTES.length);
       let b = bodies.get(id); if (!b) { b = { kp:[], hue:PALETTES[colorSlot.get(id)], seen:now, id, src:src.id }; bodies.set(id, b); }
-      b.seen = now;
+      b.seen = now; b.hue = P.color.oneHue ? P.color.bodyHue : PALETTES[colorSlot.get(id)];
       for (let i = 0; i < pose.keypoints.length; i++) {
         const k = pose.keypoints[i], S = k.score ?? 0, old = b.kp[i]; let X, Y;
         if (fig) { X = fig[i].x; Y = fig[i].y; } else if (useCal) { const m = calMap(src, k.x, k.y); X = m.x; Y = m.y; } else { X = mapX(k.x); Y = mapY(k.y); }
@@ -362,5 +370,5 @@ function simPoses(time, n, vw, vh){
 }
 function simTick(dt){
   if (!simMode) return; SIM.t += dt;
-  for (const src of sources) src.poses = simPoses(SIM.t, SIM.n, src.video.videoWidth, src.video.videoHeight);
+  for (const src of sources) { let ps = simPoses(SIM.t, SIM.n, src.video.videoWidth, src.video.videoHeight); ps.forEach(p => { p._q = .9; }); if (src._calH) ps = ps.filter(p => !calIgnored(src, p)); src._simAll = ps.length; src.poses = selectBodies(src, ps); }
 }
