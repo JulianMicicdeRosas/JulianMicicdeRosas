@@ -84,7 +84,10 @@ function calPrepare(src){
    altura y (px), mide en la imagen k·(y − yh). Se ajusta con los vértices de las líneas (alto de la pared vs. su base).
    Necesita paredes a distintas profundidades (bases a distinta altura en la imagen); si no, ok=false. */
 function horizonFit(cal, vh){
-  const pts = cal.top.map((t, i) => ({ y:cal.bottom[i].y * vh, h:(cal.bottom[i].y - t.y) * vh })).filter(p => p.h > 4);
+  /* después de sincronizar se usan muestras tomadas donde la cámara vio puntos (cal.hz): los vértices de las puntas
+     pueden ser una extrapolación lejana (pared que sigue fuera de cuadro) y arruinan el ajuste */
+  const smp = cal.synced && Array.isArray(cal.hz) && cal.hz.length >= 2;
+  const pts = (smp ? cal.hz.map(p => ({ y:p.y * vh, h:p.h * vh })) : cal.top.map((t, i) => ({ y:cal.bottom[i].y * vh, h:(cal.bottom[i].y - t.y) * vh }))).filter(p => p.h > 4);
   if (pts.length < 2) return { ok:false };
   const my = pts.reduce((a, p) => a + p.y, 0) / pts.length, mh = pts.reduce((a, p) => a + p.h, 0) / pts.length;
   let sxy = 0, sxx = 0; for (const p of pts) { sxy += (p.y - my) * (p.h - mh); sxx += (p.y - my) ** 2; }
@@ -95,8 +98,11 @@ function horizonFit(cal, vh){
    (esquinas) y los extremos que no tocan el borde de la imagen. Si las verticales son casi paralelas, queda muy lejos. */
 function verticalVP(cal, vw, vh){
   const n = cal.top.length - 1, L = [];
-  for (let i = 0; i <= n; i++) { const a = cal.top[i], b = cal.bottom[i]; const inner = i > 0 && i < n, edge = a.x > .02 && a.x < .98 && b.x > .02 && b.x < .98;
-    if (!(inner || edge)) continue; const ax = a.x * vw, ay = a.y * vh, bx = b.x * vw, by = b.y * vh, dx = bx - ax, dy = by - ay, l = Math.hypot(dx, dy); if (l < 10 || dy <= 0) continue;
+  /* verticales: las medidas al sincronizar (cal.verts, dentro de lo que la cámara vio) o, si no hay, los vértices de las líneas */
+  const smp = cal.synced && Array.isArray(cal.verts) && cal.verts.length >= 2;
+  const V = smp ? cal.verts.map(v => ({ a:v.a, b:v.b, use:true })) : cal.top.map((a, i) => { const b = cal.bottom[i]; return { a, b, use:(i > 0 && i < n) || (a.x > .02 && a.x < .98 && b.x > .02 && b.x < .98) }; });
+  for (const v of V) { const a = v.a, b = v.b;
+    if (!v.use) continue; const ax = a.x * vw, ay = a.y * vh, bx = b.x * vw, by = b.y * vh, dx = bx - ax, dy = by - ay, l = Math.hypot(dx, dy); if (l < 10 || dy <= 0) continue;
     L.push({ ax, ay, nx:-dy / l, ny:dx / l, dx:dx / l, dy:dy / l }); }
   if (L.length < 2) return null;
   let a11 = 0, a12 = 0, a22 = 0, b1 = 0, b2 = 0;
@@ -159,6 +165,9 @@ function calMapPose(src, pose, id){
   else { const hImg = Math.max(24, torso ? torso * 3.4 : (F.y - Math.min(...kp.filter((k, i) => ok(i)).map(k => k.y))) * 1.05);
     const near = clamp(Math.hypot(F.x - src._calC.x, F.y - src._calC.y) / Math.max(1, Math.hypot(hit.x - src._calC.x, hit.y - src._calC.y)), 0, 1);
     s = cal.figH * c.h / hImg * (1 - cal.depth * (1 - near) * .6); }       // fija: todas las figuras del mismo alto
+  /* tope: la figura mide entre 0,12 y 1,1 del alto de la pared (antes del multiplicador "tamaño"), para que una mala
+     medición no la haga gigante ni invisible */
+  { const hImg = Math.max(24, torso ? torso * 3.4 : (F.y - Math.min(...kp.filter((k, i) => ok(i)).map(k => k.y))) * 1.05); s = clamp(s, .12 * c.h / hImg, 1.1 * c.h / hImg); }
   s *= cal.scale ?? 1;
   const prev = src._calS.get(id); if (prev) s = prev + (s - prev) * .12; src._calS.set(id, s);
   src._calDbg.set(id, { F, hit, t:performance.now(), u, wall:t.nombre, h:s * Math.max(1, F.y - Math.min(...kp.filter((k, i) => ok(i)).map(k => k.y))) / c.h, mode });

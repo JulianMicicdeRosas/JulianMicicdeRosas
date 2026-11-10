@@ -11,6 +11,7 @@ const deepClone = o => JSON.parse(JSON.stringify(o));
 function fail(m){ const e = $('err'); if (e) e.textContent = m; console.error(m); }
 
 const urlParams = new URLSearchParams(location.search);
+const STRETCH = urlParams.get('ajuste') === 'estirar';
 
 /* ---------- ruido simplex 2D (dominio público) ---------- */
 const Noise = (() => { const grad = [[1,1],[-1,1],[1,-1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]];
@@ -130,8 +131,11 @@ function layoutStage(){
   const o = canvasSize(), stage = $('stage'), vw = innerWidth, vh = innerHeight;
   let cw = vw, ch = vh, left = 0, top = 0;
   if (OUT.mode !== 'ventana' || mosaicActive() || (typeof multiMode !== 'undefined' && multiMode)) {
-    const s = Math.min(vw / o.w, vh / o.h); cw = Math.round(o.w * s); ch = Math.round(o.h * s);
-    left = Math.round((vw - cw) / 2); top = Math.round((vh - ch) / 2);
+    /* ?ajuste=estirar: el lienzo llena toda la ventana sin respetar la proporción. Es para cuando otro programa
+       (OBS + Resolume, etc.) captura la ventana y la vuelve a estirar al tamaño del lienzo: así no se pierde alto. */
+    if (STRETCH && !mosaicActive()) { cw = vw; ch = vh; }
+    else { const s = Math.min(vw / o.w, vh / o.h); cw = Math.round(o.w * s); ch = Math.round(o.h * s);
+      left = Math.round((vw - cw) / 2); top = Math.round((vh - ch) / 2); }
   }
   stage.style.left = left + 'px'; stage.style.top = top + 'px'; stage.style.width = cw + 'px'; stage.style.height = ch + 'px';
   OUT.cssW = cw; OUT.cssH = ch;

@@ -1,0 +1,2 @@
+# los .bat van tal cual (ASCII + CRLF): cmd.exe no los lee con LF
+*.bat -text

@@ -18,7 +18,9 @@
    ===================================================================== */
 const Sync = {
   running:false, cancel:false, mark:null, overlay:false, overlayAlpha:.55, last:null,
-  opts:{ cols:3, rows:2, radius:.045, wait:450 },
+  /* 5 × 3 puntos por pared: con una pared que se ve solo en parte (sigue fuera de cuadro o un proyector apagado) igual quedan
+     puntos de sobra. wait: la sala pasa por OBS → NDI → Resolume, que demora la imagen; con 450 ms se perdían puntos. */
+  opts:{ cols:5, rows:3, radius:.045, wait:900 },
   cv:null, ctx:null,
 
   /* captura la cámara en pequeño y devuelve la luminancia */
@@ -134,6 +136,11 @@ const Sync = {
         if (c.length) cal[line][i] = { x:c.reduce((a, p) => a + p.x, 0) / c.length, y:c.reduce((a, p) => a + p.y, 0) / c.length };
       }
     }
+    /* muestras dentro de lo que la cámara vio de cada pared: base y alto de la pared (para la escala según la profundidad)
+       y verticales (para el punto de la cámara en el piso). Los vértices de las puntas pueden ser extrapolaciones lejanas. */
+    cal.hz = []; cal.verts = [];
+    fits.forEach((f, wi) => { if (!f) return; const xs = found.filter(q => q.wi === wi).map(q => q.loc.x), a = Math.min(...xs), b = Math.max(...xs);
+      for (let j = 0; j < 4; j++) { const lx = a + (b - a) * j / 3, t = applyH(f.H, lx, 0), bt = applyH(f.H, lx, 1); cal.hz.push({ y:bt.y, h:bt.y - t.y }); cal.verts.push({ a:t, b:bt }); } });
     cal.enabled = true; cal.useWalls = !!wallRanges().length;
     cal.synced = { t:this.last.t, okN, n, err:report.filter(r => r.err != null).map(r => r.err), view:{ zoom:P.view.zoom, x:P.view.x, y:P.view.y }, corners:deepClone(corners) };
     this.last.mismatch = mismatch.length ? Math.max(...mismatch) : 0;

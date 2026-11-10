@@ -10,6 +10,8 @@ REM    MIRADOR_VENTANA  = x,y,ancho,alto   (posicion y tamano de la ventana de C
 REM    MIRADOR_KIOSK    = 1  (pantalla completa kiosk en la pantalla principal)
 REM    MIRADOR_AUDIO    = mic | cancion | off
 REM    MIRADOR_MOSAICO  = 7680x4320  (salida 8K a splitter)
+REM    MIRADOR_AJUSTE   = estirar  (el lienzo llena la ventana; para capturarla con OBS y estirarla en Resolume)
+REM    MIRADOR_CDP      = 9222  (puerto local de depuracion, para manejar Mirador desde afuera; acepta la camara sin preguntar)
 REM -------------------------------------------------------------
 setlocal EnableExtensions
 cd /d "%~dp0"
@@ -37,6 +39,7 @@ timeout /t 2 /nobreak >nul
 REM -- Direccion ------------------------------------------------
 set "URL=http://127.0.0.1:%PORT%/index.html?salida=%MIRADOR_SALIDA%&audio=%MIRADOR_AUDIO%"
 if defined MIRADOR_MOSAICO set "URL=%URL%&mosaico=%MIRADOR_MOSAICO%"
+if defined MIRADOR_AJUSTE set "URL=%URL%&ajuste=%MIRADOR_AJUSTE%"
 
 REM -- Buscar Chrome o Edge -------------------------------------
 set "NAV="
@@ -51,6 +54,7 @@ if not defined NAV for %%c in ("%ProgramFiles(x86)%\Microsoft\Edge\Application\m
 
 set "PERFIL=%CD%\.chrome-mirador"
 set "FLAGS=--new-window --no-first-run --disable-infobars --disable-session-crashed-bubble --overscroll-history-navigation=0 --disable-pinch --autoplay-policy=no-user-gesture-required --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling --disable-features=Translate,CalculateNativeWinOcclusion,IntensiveWakeUpThrottling --ignore-gpu-blocklist"
+if defined MIRADOR_CDP set "FLAGS=%FLAGS% --remote-debugging-port=%MIRADOR_CDP% --remote-debugging-address=127.0.0.1 --use-fake-ui-for-media-stream"
 
 echo.
 echo  Mirador

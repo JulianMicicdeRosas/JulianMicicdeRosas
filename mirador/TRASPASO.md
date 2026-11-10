@@ -85,7 +85,7 @@ cámara ─► MoveNet MultiPose (TF.js 4.22, WebGL) ─► cuerpos (esqueleto 2
 - **7 proyectores Full HD**, alimentados por **una salida 8K (7680 × 4320) que reparte un splitter**. Una RTX 3070 Ti maneja solo 4 pantallas, por eso el splitter.
 - **OBS** para grabar.
 
-### Supuesto sin confirmar (probable causa del problema actual)
+### Supuesto que resultó falso (ver la sección 5 bis: la sala usa OBS + Resolume, no mosaico 8K)
 
 En modo mosaico (`P.map.mosMode='paredes'`), las paredes van como baldosas dentro del cuadro 8K:
 
@@ -161,6 +161,50 @@ Lectura:
 
 ---
 
+## 5 bis. Resuelto en la PC de la sala (10/11/2026): cómo está armada de verdad
+
+**El supuesto del mosaico 8K era falso.** No hay salida 8K ni hace falta mosaico. La cadena real es:
+
+```
+Mirador (Chrome kiosk, pantalla principal 1920×1080)
+  → OBS (captura de ventana, NDI "OBS PGM" / "OBS Preview" con DistroAV)
+  → Resolume Arena 6 (clip NDI en una composición de 8400 × 690)
+  → Advanced Output "Screen 9": 9 slices con warp → salida 4096 × 2160 (DISPLAY4)
+  → splitter en grilla 3 × 3 (celdas de ~1365 × 720) → 7 proyectores
+```
+
+- El mapeo de la sala **ya está hecho en Resolume** (`Documents\Resolume Arena 6\Preferences\AdvancedOutput.xml`). Las esquinas caen en x≈3172 y x≈4945 del lienzo, igual que en Mirador (3175 y 4950). **No tocar ese Advanced Output:** lo usan otras obras.
+- **Causa del amontonamiento en Norte:** OBS mandaba 1280×720 y el clip NDI entraba a Resolume **sin estirar**, centrado en la composición: ocupaba solo x≈3560–4840, o sea la pared Norte. Además Mirador dibujaba un mosaico 8K dentro de esa ventana.
+
+Lo que quedó configurado:
+
+| Dónde | Qué |
+|---|---|
+| Mirador | `start_sala.bat`: `salida=8400x690`, **sin mosaico**, `ajuste=estirar` (el lienzo llena toda la ventana 1920×1080). |
+| OBS | Perfil **Mirador** (1920×1080, 30 fps) y colección de escenas **Mirador** (una captura de la ventana de Chrome, a pantalla completa). El perfil y la colección anteriores ("Sin Título") quedaron intactos; respaldo en `%APPDATA%\obs-studio\respaldo-antes-de-mirador`. |
+| Resolume | Composición **Mirador sala** (copia de "sala nueva 2 dia de bolivia"). El clip NDI de OBS tiene **Scale W 437,5 % y Scale H 63,89 %** (1920×1080 → 8400×690). |
+| Sesión | **Sala** (en el perfil de Chrome de `C:\Mirador` y exportada en `sesiones/Sala.json`). Trae la sincronización y las zonas ignoradas. |
+
+Resultado de la sincronización por toda la cadena (grilla 5 × 3 por pared, espera 900 ms por la demora de OBS → NDI → Resolume):
+
+```
+Oeste: 9/15 ✓   Norte: 15/15 ✓   Este: 9/15 ✓   error ~2 px de cámara
+escala: k = 0,96 · horizonte y = 46 px · cámara en el piso (0,54 ; 4,1), automática
+```
+
+- Los puntos que faltan son los del **primer 40 % de Oeste** (lienzo 0–1270, slice 1 de Resolume: en la cámara esa parte de la pared se ve sin luz; revisar ese proyector) y el **último 40 % de Este** (queda fuera del cuadro de la cámara).
+- Con poses de prueba, cada lugar del piso cae en su pared y la figura mide ~65 % del alto de la pared. **Falta verificar con una persona real** (tecla E) y tocar *separación*, *altura* y *tamaño* si hace falta.
+- Con la sala vacía la detección engancha sillas y objetos. Zonas ignoradas: sillas de abajo a la izquierda y franja sobre las paredes. Las sillas de la derecha no se ignoran (ahí puede haber gente).
+
+Cosas a saber para operar:
+
+- Mirador en kiosk tapa a Resolume y OBS (hay un solo monitor de operación). Para verlos, minimizar Chrome; **mientras está minimizado OBS no captura**.
+- El clip de Resolume usa la fuente NDI **OBS Preview**; OBS está en Modo Estudio con una sola escena, así que vista previa y programa son lo mismo.
+- Manejo desde afuera: lanzar con `MIRADOR_CDP=9222` y hablarle a Chrome por el puerto de depuración local (`http://127.0.0.1:9222/json`, `Runtime.evaluate`). Así se corrió `Sync.run(sources[0])` sin tocar la ventana.
+- Resolución: el lienzo viaja a 1920 px de ancho para 8400 (4,4×). Alcanza para esqueletos; para más detalle habría que pasar a una fuente de 8400×690 real (fuente de navegador de OBS con cámara, o Spout).
+- El servidor de la copia vieja (`Downloads\Mirador-PC`, puerto 8765, consola de administrador) no se pudo cerrar sin permisos; el nuevo corre en 8766. Cerrando esas dos consolas, `start_sala.bat` vuelve a usar 8765.
+
+---
 ## 6. Qué falta (próximo paso, en este orden)
 
 ### 6.1 En la sala, con la PC
