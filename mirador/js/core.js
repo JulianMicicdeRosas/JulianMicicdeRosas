@@ -48,11 +48,17 @@ const P_DEFAULT = {
   grilla:   { enabled:false, cell:26, gap:.2, inertia:.86, hue:190, white:.3, useBodyHue:false, square:true },
   cortinas: { enabled:false, spacing:22, force:1, radius:.22, segments:18, width:1.2, hue:200, white:.6, glow:.7 },
   aves:     { enabled:false, rate:1, lift:1, size:3, hue:30, white:.6, life:1 },
+  // efectos GPU (efectos.js)
+  fluido:     { enabled:false, paleta:'aurora', hue:200, emision:1, soloBorde:true, todoElCuerpo:false, empuje:.6, ascenso:.5, corriente:.3, agitar:1, remolino:.5, memoria:.4, duracion:3, brillo:1, saturacion:1.1, detalle:2 },
+  particulas: { enabled:false, modo:'flujo', paleta:'hielo', hue:200, cantidad:1, tamano:1.2, brillo:1, corriente:1, escala:1, apartar:1, atraer:.6, friccion:.3, caida:.6, agitar:1, cuerpoBrilla:.6 },
+  membrana:   { enabled:false, trama:'vertical', separacion:18, grosor:1, empuje:1, estela:1, ondular:.5, brillo:1, paleta:'oro', hue:40 },
+  ondas:      { enabled:false, cantidad:14, velocidad:.25, grosor:1, relleno:.15, brillo:1, temblor:.5, paleta:'neon', hue:300 },
+  liquida:    { enabled:false, deformar:1, escala:1, separarColor:1, estirar:1, borde:1, relleno:.8, brillo:1, paleta:'coral', hue:10 },
   // mezcla y posproceso
   echo: { mode:'screen', decay:.9, zoom:1.004, rotate:0, drift:0 },
   fx:   { bloom:1, threshold:.42, radius:1.6, chroma:.9, glitch:0, glitchBlocks:38, vignette:.35, gamma:1 },
   map:  { blackout:false, testGrid:false, calibrate:false, scale:1, slices:1, blend:0,
-          mosaic:false, mosW:7680, mosH:4320, tileW:1920, tileH:1080, mosCols:4, mosOrder:'filas', mosMap:'', mosPreview:false,
+          mosaic:false, mosW:7680, mosH:4320, tileW:1920, tileH:1080, mosCols:4, mosOrder:'filas', mosMap:'', mosPreview:false, pins:{},
           // paredes de la sala (lienzo). Oeste = izquierda, Este = derecha. Ancho en px de cada pared; alto común.
           useWalls:true, wallH:690, walls:[{ nombre:'Oeste', w:3175 }, { nombre:'Norte', w:1775 }, { nombre:'Este', w:3450 }], mosMode:'paredes' },
   // zoom de la imagen proyectada (se aplica a todo, antes del keystone y del mosaico)
@@ -66,12 +72,12 @@ const P_DEFAULT = {
 };
 const P = deepClone(P_DEFAULT);
 const PALETTES = [200, 330, 48, 130, 275];
-const MODULE_IDS = ['silueta','swarm','scribble','lluvia','pintura','grilla','cortinas','aves','fog','vivas','push'];
+const MODULE_IDS = ['fluido','particulas','membrana','ondas','liquida','silueta','swarm','scribble','lluvia','pintura','grilla','cortinas','aves','fog','vivas','push'];
 
 /* =====================================================================
    PERFIL DE HARDWARE (topes). eff(obj,key,cap)=min(preset,tope)
    ===================================================================== */
-const prof = { name:'—', renderScale:1, gridN:200, bloomIter:2, allowChroma:true, allowGlitch:true, inferHz:30,
+const prof = { name:'—', tier:'equilibrado', renderScale:1, gridN:200, bloomIter:2, allowChroma:true, allowGlitch:true, inferHz:30,
   caps:{ 'fx.radius':6, 'fog.size':14, 'vivas.size':14, 'push.size':14 } };
 const eff = (obj, key, cap) => cap !== undefined ? Math.min(obj[key], cap) : obj[key];
 
@@ -197,7 +203,7 @@ void main(){vec2 q=(v_uv-.5)*uScale+.5;float inside=step(0.,q.x)*step(q.x,1.)*st
   gl_FragColor=vec4(sil,l,sk,1.);}`;
 const FS_FEED = `precision highp float;varying vec2 v_uv;uniform sampler2D uScene,uPrev;uniform float uDecay,uZoom,uRot,uDrift;uniform int uMode;
 void main(){vec2 c=v_uv-.5;float s=sin(uRot),co=cos(uRot);c=mat2(co,-s,s,co)*c/uZoom;vec2 puv=c+.5+vec2(uDrift,0.);
-  vec3 sc=texture2D(uScene,v_uv).rgb;vec3 pv=texture2D(uPrev,puv).rgb*uDecay;
+  vec3 sc=texture2D(uScene,v_uv).rgb;vec3 pv=max(texture2D(uPrev,puv).rgb*uDecay-vec3(1.6/255.),0.);
   if(puv.x<0.||puv.x>1.||puv.y<0.||puv.y>1.)pv=vec3(0.);
   vec3 o;if(uMode==0)o=sc;else if(uMode==1)o=sc+pv;else if(uMode==2)o=1.-(1.-sc)*(1.-pv);else o=max(sc,sc*(.35+pv*1.9)+pv*.25);
   gl_FragColor=vec4(o,1.);}`;
@@ -274,12 +280,14 @@ vec3 hsv(float h,float s,float v){vec3 k=vec3(1.,2./3.,1./3.);vec3 p=abs(fract(v
 void main(){vec2 d=gl_PointCoord-.5;float r=dot(d,d);if(r>.25)discard;float a=(1.-r*4.)*v_b;
   float h=fract((uHue+v_z*180.+v_b*uSpread)/360.);gl_FragColor=vec4(hsv(h,.85,1.)*a,a);}`;
 
+/* corner pin por baldosa (proyector): la baldosa se dibuja deformada a 4 esquinas propias dentro de su rectángulo */
+const VS_PIN = `attribute vec2 a_pos;uniform vec2 uOff,uScale;uniform mat3 uH;varying vec2 v_uv;void main(){vec2 uv=a_pos*.5+.5;v_uv=uv*uScale+uOff;vec3 p=uH*vec3(uv,1.);gl_Position=vec4(p.xy,0.,p.z);}`;
 const VS_TILE = `attribute vec2 a_pos;uniform vec2 uOff,uScale;varying vec2 v_uv;void main(){v_uv=(a_pos*.5+.5)*uScale+uOff;gl_Position=vec4(a_pos,0.,1.);}`;
-let pBlit, pMask, pFeed, pBright, pBlur, pComp, pFinal, pPoints, pSil, pTile, pCamWarp;
+let pBlit, pMask, pFeed, pBright, pBlur, pComp, pFinal, pPoints, pSil, pTile, pCamWarp, pPin;
 try {
   pBlit = prog(FS_BLIT, VS_QUAD); pMask = prog(FS_MASK, VS_QUAD); pFeed = prog(FS_FEED, VS_QUAD);
   pBright = prog(FS_BRIGHT, VS_QUAD); pBlur = prog(FS_BLUR, VS_QUAD); pComp = prog(FS_COMP, VS_QUAD); pFinal = prog(FS_FINAL, VS_KEY);
-  pSil = prog(FS_SIL, VS_QUAD); pTile = prog(FS_BLIT, VS_TILE); pCamWarp = prog(FS_CAMWARP, VS_QUAD);
+  pSil = prog(FS_SIL, VS_QUAD); pTile = prog(FS_BLIT, VS_TILE); pCamWarp = prog(FS_CAMWARP, VS_QUAD); pPin = prog(FS_BLIT, VS_PIN);
   if (EXT_VTF) pPoints = prog(FS_POINTS, VS_POINTS);
 } catch (e) { fail('Fallo al compilar shaders: ' + e.message); }
 
@@ -327,7 +335,7 @@ function resize(){
   if (typeof onResizeModules === 'function') onResizeModules();
   clearFeedback();
 }
-function clearFeedback(){ [fbFeed[0], fbFeed[1], fbComp].forEach(o => { if (!o) return; bindFBO(o); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); }); bindFBO(null); }
+function clearFeedback(){ [fbFeed[0], fbFeed[1], fbComp].forEach(o => { if (!o) return; bindFBO(o); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); }); bindFBO(null); if (typeof clearFX === 'function') clearFX(); bindFBO(null); }
 addEventListener('resize', () => { if (typeof running !== 'undefined' && running) { resize(); if (typeof updateMainOut === 'function') updateMainOut(); } else layoutStage(); });
 
 /* =====================================================================
@@ -335,8 +343,8 @@ addEventListener('resize', () => { if (typeof running !== 'undefined' && running
    ===================================================================== */
 let corners = [{ x:0, y:0 }, { x:1, y:0 }, { x:1, y:1 }, { x:0, y:1 }];
 const resetCorners = () => { corners = [{ x:0, y:0 }, { x:1, y:0 }, { x:1, y:1 }, { x:0, y:1 }]; };
-function homography(){
-  const s = P.map.scale, q = corners.map(c => ({ x:(c.x - .5) * 2 * s, y:(c.y - .5) * 2 * s })); const [p0, p1, p2, p3] = q;
+function homography(cs = corners, s = P.map.scale){
+  const q = cs.map(c => ({ x:(c.x - .5) * 2 * s, y:(c.y - .5) * 2 * s })); const [p0, p1, p2, p3] = q;
   const dx1 = p1.x - p2.x, dx2 = p3.x - p2.x, dx3 = p0.x - p1.x + p2.x - p3.x, dy1 = p1.y - p2.y, dy2 = p3.y - p2.y, dy3 = p0.y - p1.y + p2.y - p3.y;
   let a, b, c, d, e, f, g, h;
   if (Math.abs(dx3) < 1e-9 && Math.abs(dy3) < 1e-9) { a = p1.x - p0.x; b = p2.x - p1.x; c = p0.x; d = p1.y - p0.y; e = p2.y - p1.y; f = p0.y; g = 0; h = 0; }

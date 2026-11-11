@@ -96,7 +96,7 @@ const UI = {
     this.note(body, 'Una plantilla fija los módulos, los ecos y el posproceso. Después ajustás todo en <b>Módulos</b>. Teclas 1‑9 y 0 cambian rápido. Referencias y enlaces en <code>PLANTILLAS.md</code>.');
     const cards = document.createElement('div'); cards.className = 'cards';
     for (const t of PLANTILLAS) { const c = document.createElement('div'); c.className = 'card-t' + (t.id === plantillaActual ? ' pick' : '');
-      c.innerHTML = `<b>${esc(t.nombre)}</b><small>${esc(t.desc)}</small><small style="margin-top:4px;color:#6f7482">${esc(t.origen)}</small>${t.key ? `<span class="k">${t.key}</span>` : ''}`;
+      c.innerHTML = `<div class="thumb" style="background-image:url('referencia/plantillas/${esc(t.id)}.jpg')"></div><b>${esc(t.nombre)}</b><small>${esc(t.desc)}</small><small style="margin-top:4px;color:#6f7482">${esc(t.origen)}</small>${t.key ? `<span class="k">${t.key}</span>` : ''}${t.nueva ? '<span class="nueva">nueva</span>' : ''}`;
       c.onclick = () => applyPlantilla(t.id); cards.appendChild(c); }
     body.appendChild(cards);
     const g = this.group(body, 'Combinar', { closed:true });
@@ -106,6 +106,27 @@ const UI = {
   /* =================== Módulos =================== */
   tab_modulos(body){
     const modGroup = (id, build) => { const m = Modules.get(id); const g = this.group(body, m.label, { closed:!m.active, desc:m.desc, toggle:{ get:() => m.active, set:v => { setModule(id, v); rebuildPlan(); Sessions.touch(); } } }); build(g, P[id]); };
+    const fxGroup = (id, build) => { if (typeof fxAvailable === 'function' && !fxAvailable(id)) { const w = document.createElement('div'); w.className = 'warnbox'; w.textContent = Modules.get(id).label + ': esta placa de video no tiene texturas de punto flotante o lectura en el vertex shader.'; body.appendChild(w); return; } modGroup(id, build); };
+    const hd = document.createElement('div'); hd.className = 'sechead'; hd.textContent = 'Efectos de GPU (los más vistosos)'; body.appendChild(hd);
+    fxGroup('particulas', (g, p) => { this.select(g, p, 'modo', [['flujo', 'corrientes (el cuerpo aparta y agita)'], ['lluvia', 'cascada vertical (se abre al pasar)'], ['atraer', 'polvo que se junta en el cuerpo'], ['orbita', 'órbitas alrededor del cuerpo']], 'modo');
+      this.select(g, p, 'paleta', PALETA_OPTS, 'paleta'); if (p.paleta === 'cuerpo') this.hue(g, p, 'hue', 'tono');
+      this.range(g, p, 'cantidad', .25, 2, .05, 'cantidad'); this.range(g, p, 'tamano', .3, 4, .05, 'tamaño'); this.range(g, p, 'brillo', .1, 3, .01, 'brillo');
+      this.range(g, p, 'corriente', 0, 3, .01, 'corriente'); this.range(g, p, 'escala', .2, 4, .01, 'escala de la corriente'); this.range(g, p, 'apartar', 0, 3, .01, 'el cuerpo aparta'); this.range(g, p, 'atraer', 0, 3, .01, 'el cuerpo atrae');
+      this.range(g, p, 'agitar', 0, 3, .01, 'el movimiento agita'); this.range(g, p, 'caida', 0, 3, .01, 'caída (cascada)'); this.range(g, p, 'friccion', 0, 1, .01, 'fricción'); this.range(g, p, 'cuerpoBrilla', 0, 2, .01, 'brillan sobre el cuerpo'); });
+    fxGroup('fluido', (g, p) => { this.select(g, p, 'paleta', PALETA_OPTS, 'paleta'); if (p.paleta === 'cuerpo') this.hue(g, p, 'hue', 'tono');
+      this.range(g, p, 'emision', 0, 3, .01, 'cuánto color emite'); this.toggle(g, p, 'soloBorde', 'emite solo desde el borde'); this.range(g, p, 'agitar', 0, 3, .01, 'manos y pies agitan'); this.toggle(g, p, 'todoElCuerpo', 'agita todo el cuerpo');
+      this.range(g, p, 'empuje', 0, 3, .01, 'el cuerpo empuja'); this.range(g, p, 'ascenso', -1, 2, .01, 'el humo sube'); this.range(g, p, 'remolino', 0, 2, .01, 'remolinos'); this.range(g, p, 'corriente', 0, 2, .01, 'corriente de fondo');
+      this.range(g, p, 'duracion', .3, 12, .1, 'duración del humo (s)'); this.range(g, p, 'memoria', 0, .99, .01, 'inercia del agua'); this.range(g, p, 'brillo', .1, 3, .01, 'brillo'); this.range(g, p, 'saturacion', 0, 2, .01, 'saturación');
+      this.select(g, p, 'detalle', [[1, 'normal'], [2, 'fino (más pesado)']], 'detalle del humo', () => { const m = Modules.get('fluido'); if (m._alloc) m.resize(); }); });
+    fxGroup('membrana', (g, p) => { this.select(g, p, 'trama', [['vertical', 'hilos verticales'], ['horizontal', 'hilos horizontales'], ['grilla', 'grilla']], 'trama');
+      this.select(g, p, 'paleta', PALETA_OPTS, 'paleta'); if (p.paleta === 'cuerpo') this.hue(g, p, 'hue', 'tono');
+      this.range(g, p, 'separacion', 6, 80, 1, 'separación (px)'); this.range(g, p, 'grosor', .3, 4, .05, 'grosor'); this.range(g, p, 'empuje', 0, 3, .01, 'el cuerpo empuja'); this.range(g, p, 'estela', 0, 4, .01, 'estela del movimiento'); this.range(g, p, 'ondular', 0, 3, .01, 'ondulación'); this.range(g, p, 'brillo', .1, 3, .01, 'brillo'); });
+    fxGroup('ondas', (g, p) => { this.select(g, p, 'paleta', PALETA_OPTS, 'paleta'); if (p.paleta === 'cuerpo') this.hue(g, p, 'hue', 'tono');
+      this.range(g, p, 'cantidad', 3, 40, 1, 'cantidad de ondas'); this.range(g, p, 'velocidad', -1, 1, .01, 'velocidad (− hacia adentro)'); this.range(g, p, 'grosor', .3, 4, .05, 'grosor'); this.range(g, p, 'temblor', 0, 3, .01, 'temblor'); this.range(g, p, 'relleno', 0, 1, .01, 'relleno del cuerpo'); this.range(g, p, 'brillo', .1, 3, .01, 'brillo'); });
+    fxGroup('liquida', (g, p) => { this.select(g, p, 'paleta', PALETA_OPTS, 'paleta'); if (p.paleta === 'cuerpo') this.hue(g, p, 'hue', 'tono');
+      this.range(g, p, 'deformar', 0, 4, .01, 'deformación'); this.range(g, p, 'escala', .2, 4, .01, 'escala de la onda'); this.range(g, p, 'estirar', 0, 4, .01, 'se estira con el movimiento'); this.range(g, p, 'separarColor', 0, 4, .01, 'separación de color');
+      this.range(g, p, 'borde', 0, 3, .01, 'borde luminoso'); this.range(g, p, 'relleno', 0, 1.5, .01, 'relleno'); this.range(g, p, 'brillo', .1, 3, .01, 'brillo'); });
+    const hd2 = document.createElement('div'); hd2.className = 'sechead'; hd2.textContent = 'Efectos clásicos'; body.appendChild(hd2);
     modGroup('silueta', (g, p) => { this.hue(g, p, 'hue', 'color'); this.range(g, p, 'white', 0, 1, .01, 'blanco'); this.range(g, p, 'opacity', 0, 1, .01, 'opacidad'); this.range(g, p, 'soft', .005, .3, .005, 'borde suave'); this.toggle(g, p, 'fill', 'relleno'); this.range(g, p, 'edge', 0, 2, .01, 'borde luminoso'); this.hue(g, p, 'edgeHue', 'color del borde'); });
     modGroup('swarm', (g, p) => { this.range(g, p, 'density', 60, 800, 10, 'partículas por cuerpo'); this.range(g, p, 'sensitivity', 1, 10, .5, 'dispersión'); this.range(g, p, 'keepForm', 0, 1, .01, 'conservar forma'); this.range(g, p, 'size', .5, 8, .1, 'tamaño'); this.toggle(g, p, 'useBodyHue', 'color por cuerpo'); this.hue(g, p, 'hue', 'color fijo'); this.range(g, p, 'glow', 0, 1, .01, 'resplandor'); });
     modGroup('scribble', (g, p) => { this.range(g, p, 'iso', .1, .9, .01, 'nivel de trazo'); this.range(g, p, 'jitter', 0, .05, .001, 'temblor'); this.range(g, p, 'width', .5, 8, .1, 'grosor'); this.hue(g, p, 'hue', 'color'); this.range(g, p, 'glow', 0, 1, .01, 'resplandor'); });
@@ -324,6 +345,11 @@ const UI = {
     this.select(gm, P.map, 'mosOrder', [['filas', 'de izquierda a derecha, fila por fila'], ['columnas', 'de arriba a abajo, columna por columna']], 'orden', reM);
     const mp = this.text(gm, P.map, 'mosMap', 'mapa a mano', true); mp.placeholder = 'una baldosa por línea (vacío = automático):\nx,y   ó   sx,sy,sw,sh > x,y[,w,h]\n(sx,sy,sw,sh en px del lienzo; x,y,w,h en px del cuadro)'; mp.onchange = () => { P.map.mosMap = mp.value; reM(); };
     this.toggle(gm, P.map, 'mosPreview', 'ver panorama (no el mosaico)', reM);
+    { const tl0 = mosaicTiles(); if (tl0.length) { const gp2 = this.group(body, 'Esquinas por proyector (corner pin)', { closed:true, desc:'Para tiro oblicuo o en esquina: cada baldosa del mosaico (lo que recibe un proyector) se deforma a sus propias 4 esquinas, como el Corner Pin de TouchDesigner. Con el patrón de ajuste prendido, mové cada esquina hasta que caiga en el borde de la pared.' });
+      const sel = { i:clamp(this._pinTile | 0, 0, tl0.length - 1) }; this.select(gp2, sel, 'i', tl0.map((t, k) => [k, `${t.nombre || 'baldosa ' + (k + 1)} · ${t.w}×${t.h}`]), 'baldosa', v => { this._pinTile = v; this.refresh('proyeccion'); });
+      const t = tl0[sel.i], pins = P.map.pins || (P.map.pins = {}); if (!pins[t.i]) pins[t.i] = [0, 1, 2, 3].map(() => ({ dx:0, dy:0 }));
+      ['sup. izq.', 'sup. der.', 'inf. der.', 'inf. izq.'].forEach((nm, k) => { const c = pins[t.i][k]; this.range(gp2, c, 'dx', -t.w / 2, t.w / 2, 1, nm + ' ←→'); this.range(gp2, c, 'dy', -t.h / 2, t.h / 2, 1, nm + ' ↑↓'); });
+      this.buttons(gp2, [['Esta baldosa sin deformar', () => { delete pins[t.i]; Sessions.touch(); this.refresh('proyeccion'); }]]); } }
     const tl = mosaicTiles(); this.kv(gm, [['baldosas', tl.map(t => `${t.nombre || t.i + 1} ${t.w}×${t.h} en (${t.x},${t.y})`).join(' · ')], ['cuadro', `${P.map.mosW} × ${P.map.mosH}` + (P.map.mosW > MAX_TEX || P.map.mosH > MAX_TEX ? ' · supera el tope de la GPU' : '')]]);
     this.note(gm, 'El splitter tiene que recortar cada ventana Full HD exactamente en esas coordenadas. En Windows: pantalla a 7680 × 4320 (60 Hz con DSC o 30 Hz), escala 100 %, y <code>start_8k.bat</code>. Con <b>patrón de ajuste</b> cada baldosa muestra su número.');
     const gk = this.group(body, 'Esquinas (keystone global)', { closed:true });
@@ -403,6 +429,9 @@ const UI = {
     this.range(g, prof, 'renderScale', .3, 1.5, .05, 'resolución interna', resize); this.range(g, P.perf, 'scene2d', .3, 1, .05, 'resolución capa 2D', resize); this.range(g, prof, 'gridN', 64, 320, 4, 'densidad de puntos', buildRefBuffer); this.range(g, prof, 'inferHz', 15, 60, 1, 'inferencia (Hz)'); this.range(g, prof, 'bloomIter', 1, 3, 1, 'pasadas de bloom');
     this.buttons(g, [['Volver a medir', async () => { const r = await benchmark(); toast(`medido · p95 ${r.p95.toFixed(1)} ms (~${Math.round(1000 / r.p95)} fps a tope)`); }]]);
     const info = this.kv(g, []); this.liveFns.push(() => { info.innerHTML = `GPU: <b>${esc(gpuName())}</b><br>render: <b>${W}×${H}</b> · capa 2D <b>${scene.width}×${scene.height}</b> · máscara <b>${MASK_W}×${MASK_H}</b><br>inferencia: <b>${inferBudgetMs.toFixed(0)} ms</b> · cuerpos: <b>${bodies.size}</b> · modelo: <b>${simMode ? 'simulación' : (modelBase ? 'local' : 'tfhub')}</b>`; });
+    const gh = this.group(body, 'Salud (para funciones largas)', { desc:'Si la placa de video reinicia o el detector deja de responder, Mirador guarda la sesión y se recarga solo en el mismo estado.' });
+    const hl = this.kv(gh, []); this.liveFns.push(() => { const up = (performance.now() - Guardian.bootT) / 1000, mem = performance.memory ? (performance.memory.usedJSHeapSize / 1048576).toFixed(0) + ' MB' : '—';
+      hl.innerHTML = `encendido hace <b>${Math.floor(up / 3600)} h ${Math.floor(up / 60) % 60} min</b> · memoria JS <b>${mem}</b> · tensores <b>${typeof tf !== 'undefined' && tf.memory ? tf.memory().numTensors : '—'}</b><br>cuadro p95 <b>${[...scaler.hist].sort((a, b) => a - b)[56].toFixed(1)} ms</b> · capa 2D <b>${sceneDirty ? 'en uso' : 'apagada (ahorra)'}</b> · flotantes GPU <b>${FX.f32 ? '32' : FX.f16 ? '16' : 'no'}</b>`; });
     const gk = this.group(body, 'Teclas', { closed:true });
     this.kv(gk, [['H', 'panel'], ['F', 'pantalla completa'], ['C', 'mover esquinas'], ['K', 'calibrar cámara por tramos'], ['B', 'negro'], ['Shift+B', 'aprender fondo'], ['X', 'limpiar ecos'], ['V', 'rotar cámaras'], ['R', 'grabar / parar'], ['M', 'micrófono sí/no'], ['Espacio', 'canción play/pausa'], ['↑ / ↓', 'canción anterior / siguiente'], ['1‑9, 0', 'plantillas'], ['G / L', 'exportar / importar sesión'], ['Esc / ⌫', 'diapositivas']]);
     const gd = this.group(body, 'Diagnóstico', { closed:true });

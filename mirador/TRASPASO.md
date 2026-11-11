@@ -56,6 +56,7 @@ cámara ─► MoveNet MultiPose (TF.js 4.22, WebGL) ─► cuerpos (esqueleto 2
 | `js/calib.js` | Calibración por tramos: líneas `top`/`bottom` en fracción de la imagen de la cámara, una homografía por tramo. Modo **piso** (`calMapPose`: recta desde el punto de la cámara en el piso, pasando por los pies, hasta la base) y modo **vista** (`calMap`). Tamaño `real` / `camara` / `fija`, `horizonFit`, `verticalVP`, `calU` (correr y separación). Vista K (`Calib`). |
 | `js/sync.js` | Sincronización automática con la cámara: proyecta puntos, los busca por diferencia contra negro, ajusta la homografía por mínimos cuadrados por pared y rehace `cal.top`/`cal.bottom`. |
 | `js/render.js` | Tubería GL. `setColorUniforms` (zoom, colorimetría, sincronización), `drawCamOverlay` (cámara sobre la proyección, tecla S), mosaico, escalador, grabación. |
+| `js/efectos.js` | Efectos de GPU. Productores `motion` (velocidad del esqueleto en una textura) y `maskblur` (silueta difuminada en dos escalas). Módulos `particulas`, `fluido`, `membrana`, `ondas`, `liquida`. Paletas (`PALETAS`), `fxAvailable`, `clearFX`. Necesitan texturas float (y lectura en el vertex shader para partículas y membrana). |
 | `js/modules.js` | Módulos visuales y esqueletos (`drawSkeletons`; `verEsqueletos` con la tecla E). |
 | `js/ui.js` | Panel. Pestañas: Sesión, Plantillas, Módulos, **Sincronizar** (naranja), Cámaras, Audio, Proyección, Sistema. |
 | `js/sessions.js` | Sesiones en localStorage, versión 3. Guarda `P`, zonas con `cal` y `hw`, canciones. Exportan e importan en JSON. |
@@ -122,6 +123,7 @@ Con eso se arma el mapa a mano en *Proyección → Salida 8K a splitter → mapa
 | `81066bd` | Exposición dinámica, blancos y negros de la imagen que analiza el modelo (en GPU). Ajustes de la cámara física. |
 | `9a4f27c` | 1 cuerpo por cámara (de fábrica; se queda con el que viene siguiendo). Zoom de salida. Colorimetría de todo lo proyectado (libre / absoluto / gradiente) y por pared, con patrón de color. |
 | `49f7e3f` | **Pestaña naranja Sincronizar**: sincronización automática con puntos, verificación con S, tamaño "altura real", ajuste fino (tamaño, altura, correr, separación), punto de la cámara en el piso automático. El aviso de canción y la ayuda de teclas ya no se proyectan. |
+| (este) | **Efectos de GPU** (`js/efectos.js`): partículas, fluido Navier-Stokes, membrana, ondas, silueta líquida, con paletas y 12 plantillas nuevas con miniatura (`referencia/plantillas/`). **Estabilidad:** guardián que se recarga solo si se pierde el contexto WebGL o el detector, tiempo acotado en shaders, eco sin fantasmas, capa 2D solo si se usa, mapas por id podados, medición que espera a la GPU. **Corner pin** por baldosa del mosaico. |
 
 ---
 

@@ -59,7 +59,7 @@ async function start(sim){
     applyProfile(PROFILES[rec]); buildRefBuffer(); resize(); toast(`perfil ${PROFILES[rec].name} (~${Math.round(fps)} fps a tope en la prueba)`, 3500); }
   // estado visual inicial
   if (sess) { Sessions.current = sessName; localStorage.setItem(Sessions.CUR, sessName); await Sessions.apply(sess, { keepCams:true, keepOut:true }); }
-  else { applyPlantilla('enjambre', { silent:true }); if (newName) Sessions.create(newName); else Sessions.updateName(); }
+  else { applyPlantilla(typeof fxAvailable === 'function' && fxAvailable('particulas') ? 'corrientes' : 'enjambre', { silent:true }); if (newName) Sessions.create(newName); else Sessions.updateName(); }
   if (escenaParam) applyPlantilla(ESCENA_ALIAS[escenaParam] || escenaParam, { silent:true });
   if (mosaicoParam && mosaicoParam !== '0') { P.map.mosaic = true; P.map.mosPreview = false; const m = mosaicoParam.match(/^(\d+)x(\d+)$/); if (m) { P.map.mosW = +m[1]; P.map.mosH = +m[2]; }
     if (!P.map.useWalls && P.map.slices < 2 && /^\d+x\d+$/.test(OUT.mode)) P.map.slices = Math.max(1, Math.round(OUT.w / (P.map.tileW || 1920))); resize(); }
@@ -78,6 +78,11 @@ $('startSim').addEventListener('click', () => start(true));
 function loop(now){
   requestAnimationFrame(loop);
   const dt = Math.min((now - last) / 1000, .05); last = now; const t = (now - t0) / 1000;
+  try { frame(now, dt, t); Guardian.errs = 0; }
+  catch (e) { if (Guardian.errs++ === 0) console.error(e); if (Guardian.errs === 30) toast('error en el dibujo: ' + e.message, 6000); if (Guardian.errs > 240) Guardian.recover('error repetido en el dibujo: ' + e.message); }
+}
+function frame(now, dt, t){
+  _frameNo++; motion.dt = dt;
   simTick(dt); syncBodies(); Audio_.tick(dt);
   for (const m of plan) if (!m.producer && m.update) m.update(dt);
   drawScene(dt); render(t); drawCalib(); Calib.draw(); scalerTick(dt);
@@ -146,6 +151,35 @@ function aplicarSala(){
   resize(); buildRefBuffer(); sources.forEach(calPrepare); clearFeedback(); Sessions.touch(); toast('sala: Oeste 3175 · Norte 1775 · Este 3450 × 690, calibración de la foto');
 }
 
+/* ---------- guardián: si la GPU o el detector se caen (driver, horas de función), se recupera solo ---------- */
+const Guardian = { errs:0, KEY:'mirador.recuperar', bootT:performance.now(),
+  recover(reason){
+    if (this.going) return; this.going = true;
+    try {
+      const prev = JSON.parse(sessionStorage.getItem(this.KEY) || 'null');
+      if (prev && Date.now() - prev.t < 90000 && prev.n >= 2) { toast('Problema repetido (' + reason + '). No reinicio solo: recargá la página.', 0); this.going = false; return; }
+      if (Sessions.current) Sessions.save(Sessions.current);
+      sessionStorage.setItem(this.KEY, JSON.stringify({ t:Date.now(), n:(prev && Date.now() - prev.t < 90000 ? prev.n : 0) + 1, reason, sim:simMode,
+        sesion:Sessions.current || '', snap:Sessions.current ? null : Sessions.snapshot('recuperación'), out:{ mode:OUT.mode, w:OUT.w, h:OUT.h }, audio:P.audio.source,
+        mosaico:P.map.mosaic ? `${P.map.mosW}x${P.map.mosH}` : '', panel:!document.body.classList.contains('panel-hidden') }));
+    } catch (e) { console.error(e); }
+    toast('Recuperando: ' + reason + '…', 0); setTimeout(() => location.reload(), 400);
+  },
+  pending(){ try { const r = JSON.parse(sessionStorage.getItem(this.KEY) || 'null'); return r && Date.now() - r.t < 90000 ? r : null; } catch (e) { return null; } },
+  async resume(r){
+    $('gateSession').value = r.sesion && Sessions.get(r.sesion) ? r.sesion : '';
+    const go = $('gateOut'); if ([...go.options].some(o => o.value === r.out.mode)) go.value = r.out.mode; else { go.value = 'custom'; $('gateOutW').value = r.out.w; $('gateOutH').value = r.out.h; }
+    $('gateAudio').value = r.audio || 'off';
+    await start(!!r.sim);
+    if (r.snap) await Sessions.apply(r.snap, { keepCams:true, keepOut:true });
+    if (r.mosaico) { const m = r.mosaico.match(/^(\d+)x(\d+)$/); P.map.mosaic = true; if (m) { P.map.mosW = +m[1]; P.map.mosH = +m[2]; } resize(); }
+    if (r.panel) UI.togglePanel(true);
+    toast('Mirador se recuperó solo (' + r.reason + ').', 6000);
+    setTimeout(() => { try { const x = JSON.parse(sessionStorage.getItem(this.KEY) || 'null'); if (x && Date.now() - x.t > 80000) sessionStorage.removeItem(this.KEY); } catch (e) {} }, 95000);
+  } };
+glCanvas.addEventListener('webglcontextlost', e => { e.preventDefault(); Guardian.recover('la placa de video reinició el contexto WebGL'); });
+
 /* ---------- inicio ---------- */
 fillGate(); layoutStage();
+{ const r = Guardian.pending(); if (r) setTimeout(() => Guardian.resume(r), 60); }
 if (audioParam || presetParam || inIframe) { setTimeout(() => start(false), 50); }   // lanzado desde la presentación: arranca solo

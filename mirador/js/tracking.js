@@ -139,7 +139,7 @@ async function detectSource(src){
     for (let i = 0; i < tiles.length; i++) {
       const t = tiles[i], sx = Math.round(t.x0 * vw), sw = Math.round((t.x1 - t.x0) * vw);
       const input = tf.tidy(() => { const c = tiles.length > 1 ? tf.slice(frame, [0, sx, 0], [vh, sw, 3]) : tf.clone(frame); return same ? c : detProcess(c, L); });
-      let ps = []; try { ps = await det.estimatePoses(input, { maxPoses:Math.min(6, P.track.maxPoses + 2), flipHorizontal:false }); } catch (e) { DET.error = e.message; } finally { input.dispose(); }
+      let ps = []; try { ps = await det.estimatePoses(input, { maxPoses:Math.min(6, P.track.maxPoses + 2), flipHorizontal:false }); DET.fails = 0; } catch (e) { DET.error = e.message; DET.fails = (DET.fails || 0) + 1; } finally { input.dispose(); }
       for (const p of ps) { if (sx) for (const k of p.keypoints) k.x += sx;
         const b = kpBox(p), edge = (i > 0 && b.x0 < sx + sw * .03) || (i < tiles.length - 1 && b.x1 > sx + sw * .97);
         p._tile = i; p._box = b; p._q = (p.score ?? .5) * (edge ? .6 : 1); raw.push(p); }
@@ -204,7 +204,8 @@ async function detectLoop(){
     const t0 = performance.now();
     if (!simMode && !(typeof Sync !== 'undefined' && Sync.running)) { await ensureDetector();
       for (const src of sources) { if (!DET.detector || src.video.readyState < 2) continue;
-        try { src.poses = await detectSource(src); } catch (e) { DET.error = e.message; } } }
+        try { src.poses = await detectSource(src); } catch (e) { DET.error = e.message; DET.fails = (DET.fails || 0) + 1; }
+        if (DET.fails > 60 && typeof Guardian !== 'undefined') Guardian.recover('el detector dejó de responder'); } }
     inferBudgetMs = inferBudgetMs * .9 + (performance.now() - t0) * .1;
     const period = 1000 / Math.max(15, prof.inferHz), wait = Math.max(0, period - (performance.now() - t0));
     await new Promise(r => setTimeout(r, wait));
@@ -250,7 +251,8 @@ function syncBodies(){
       }
     });
   }
-  for (const [id, b] of bodies) if (now - b.seen > 900) { bodies.delete(id); colorSlot.delete(id); }
+  for (const [id, b] of bodies) if (now - b.seen > 900) { bodies.delete(id); colorSlot.delete(id); for (const s of sources) { s._calS?.delete(id); s._calDbg?.delete(id); } }
+  for (const s of sources) if (s._calDbg && s._calDbg.size > 64) { for (const [id, d] of s._calDbg) if (now - d.t > 2000) { s._calDbg.delete(id); s._calS?.delete(id); } }
 }
 function centerOfMass(b){ let sx = 0, sy = 0, n = 0; for (const i of [5, 6, 11, 12]) { const k = b.kp[i]; if (k && k.s > P.track.minScore) { sx += k.x; sy += k.y; n++; } } return n ? { x:sx / n, y:sy / n } : null; }
 function bodyScale(b){

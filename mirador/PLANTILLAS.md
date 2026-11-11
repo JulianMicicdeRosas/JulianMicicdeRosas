@@ -4,6 +4,49 @@ Cada plantilla de Mirador parte de una obra conocida de cuerpo en movimiento + p
 
 Se eligen en la pestaña **Plantillas** o con las teclas **1‑9 y 0**. Después se combinan y ajustan en **Módulos** y quedan guardadas en la sesión.
 
+## Plantillas nuevas (efectos de GPU)
+
+Hechas con cinco efectos que corren enteros en la placa de video (`js/efectos.js`). Tienen miniatura en la pestaña **Plantillas** y ocupan las teclas **1‑9 y 0**. Las clásicas siguen disponibles en la misma pestaña, sin tecla.
+
+| Tecla | Plantilla | Referencia | Qué hace |
+|---|---|---|---|
+| 1 | **Cascada de píxeles** | Adrien M & Claire B, *Pixel* (2014): cicloramas verticales y partículas proyectadas que reaccionan al cuerpo. <https://www.am-cb.net/projets/pixel> | *Partículas*, modo cascada: una cortina vertical que cae y se abre alrededor de cada cuerpo. |
+| 2 | **Corrientes de luz** | Adrien M & Claire B, *Pixel*; Optical Flow de TouchDesigner (velocidad del movimiento inyectada en partículas): <https://docs.derivative.ca/Palette:opticalFlow> | *Partículas*, modo corrientes: un río de luz que los cuerpos desvían; el movimiento deja remolinos. |
+| 3 | **Humo de luz** | Fluidos en GPU (Navier‑Stokes), Memo Akten, Universal Everything | *Fluido*: el borde del cuerpo arde y suelta humo que sube; manos y pies lo revuelven. |
+| 4 | **Tinta en el agua** | Fluidos en GPU, sumi‑e | *Fluido* lento: tinta azul que queda flotando y girando. |
+| 5 | **Membrana** | Klaus Obermaier, *Apparition* (2004): una trama que el cuerpo deforma. <https://www.exile.at/apparition/> | *Membrana*: hilos verticales como una tela tensa que el cuerpo empuja y deja vibrando. |
+| 6 | **Red elástica** | *Apparition*; Chunky Move, *Mortal Engine* | *Membrana* en grilla de neón que se curva como un trampolín. |
+| 7 | **Topografía** | Golan Levin, *Augmented Hand Series* (2014): deformación y seguimiento en tiempo real del contorno. <http://www.flong.com/archive/projects/augmented-hand-series/index.html> | *Ondas de contorno*: curvas de nivel alrededor de cada cuerpo que laten hacia afuera. |
+| 8 | **Cuerpo líquido** | Golan Levin, *Augmented Hand Series* | *Silueta líquida* + *Ondas*: el cuerpo como mercurio que tiembla, se estira y se abre en colores. |
+| 9 | **Polvo de estrellas** | Universal Everything, *Transfiguration* | *Partículas*, modo atraer: polvo dorado que se junta en el cuerpo quieto y estalla al moverse. |
+| 0 | **Aurora** | *Pixel* + fluidos | *Fluido* verde agua desde el borde + corriente de partículas finas. |
+| — | **Eclipse** | Blanco y negro | *Partículas* en órbita + *Ondas*, sobrio. |
+| — | **Lluvia dorada** | *Pixel*; Random International, *Rain Room* | Cascada de oro sobre hilos verticales: el cuerpo abre un hueco en la lluvia. |
+
+### Los cinco efectos
+
+- **Partículas de luz:** cientos de miles de partículas con posición y velocidad en texturas de GPU. Cuatro modos: corrientes (ruido *curl*), cascada vertical, atraer (se juntan en la silueta) y órbitas. El cuerpo las aparta o atrae por el gradiente de la silueta, y el movimiento las agita.
+- **Fluido de luz:** Navier‑Stokes incompresible, con advección, vorticidad y presión de Jacobi. El borde del cuerpo emite color, el cuerpo empuja, el humo sube y manos y pies agitan.
+- **Membrana:** hilos de luz como triángulos con grosor real. El cuerpo los empuja y el movimiento los deja vibrando.
+- **Ondas de contorno:** curvas de nivel de la silueta difuminada, animadas hacia afuera.
+- **Silueta líquida:** la silueta muestreada con el espacio deformado por ruido y movimiento, con separación de color en los bordes.
+
+### Paleta
+
+Cada efecto tiene paleta propia: aurora, fuego, hielo, oro, neón, tinta, coral, bosque, lavanda, sangre, blanco y negro, o el color de cada cuerpo.
+
+### El movimiento sale del esqueleto, no de la imagen
+
+En TouchDesigner, el *optical flow* se calcula sobre la imagen de la cámara. En una sala con proyección esa imagen está contaminada por la luz del proyector, así que Mirador arma el campo de movimiento con la velocidad de las articulaciones (productor `motion`). Por la misma razón, la silueta sale del esqueleto y no de un recorte por brillo.
+
+### Qué se tomó de las otras referencias
+
+- **MediaPipe para TouchDesigner** (<https://github.com/torinmb/mediapipe-touchdesigner>): Mirador ya hace lo mismo en el navegador, sin sensores, con MoveNet: esqueleto y silueta por esqueleto. La segmentación de MediaPipe recorta por la imagen, y con proyección encima se confunde.
+- **Kinect** (<https://docs.derivative.ca/Kinect_In_CHOP>): la profundidad evita que el proyector interfiera, pero el navegador no lee Kinect. La alternativa equivalente es una cámara con infrarrojo y focos IR (ver README).
+- **Corner Pin y KantanMapper** (<https://docs.derivative.ca/Corner_Pin_TOP> · <https://docs.derivative.ca/Palette:kantanMapper>): en *Proyección → Esquinas por proyector* cada baldosa del mosaico 8K (lo que recibe un proyector) tiene sus 4 esquinas, para tiro oblicuo o en esquina. Se suma al keystone general (tecla C). En la sala con Resolume, la deformación por proyector se hace en Resolume (*Advanced Output*) y esto queda para el mosaico directo al splitter.
+
+## Plantillas clásicas
+
 | Tecla | Plantilla | Obra de referencia | Qué hace en Mirador |
 |---|---|---|---|
 | 1 | **Videoplace** | Myron Krueger, *Videoplace* (1974–1990), el primer entorno interactivo con siluetas de video: <https://en.wikipedia.org/wiki/Videoplace> · video: <https://www.youtube.com/watch?v=d4DUIeXSEpk> | Silueta plana de color saturado sobre negro (módulo *Silueta*, sin ecos). |

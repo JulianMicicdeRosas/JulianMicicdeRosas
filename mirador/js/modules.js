@@ -28,8 +28,8 @@ function rebuildPlan(){
   }
   if (typeof UI !== 'undefined') UI.refresh('modulos');
 }
-function setModule(id, on){ const m = Modules.get(id); if (!m) return; m.active = !!on; if (m.param) m.param.enabled = !!on; }
-function syncModulesFromP(){ for (const id of MODULE_IDS) { const m = Modules.get(id); if (m && P[id]) m.active = !!P[id].enabled; } rebuildPlan(); }
+function setModule(id, on){ const m = Modules.get(id); if (!m) return; if (on && typeof fxAvailable === 'function' && !fxAvailable(id)) { toast('Este efecto no está disponible en esta placa de video'); on = false; } m.active = !!on; if (m.param) m.param.enabled = !!on; }
+function syncModulesFromP(){ for (const id of MODULE_IDS) { const m = Modules.get(id); if (m && P[id]) m.active = !!P[id].enabled && (typeof fxAvailable !== 'function' || fxAvailable(id)); } rebuildPlan(); }
 function onResizeModules(){ for (const m of Modules.values()) if (m._alloc && m.resize) m.resize(); }
 
 /* ===================== PRODUCTOR: mask (GPU) ===================== */

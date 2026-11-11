@@ -1,4 +1,8 @@
 "use strict";
+/* esquinas propias de una baldosa (en px de la baldosa, y hacia abajo): sup. izq., sup. der., inf. der., inf. izq. */
+function tilePin(t){ const p = P.map.pins?.[t.i]; if (!p || p.every(c => !c.dx && !c.dy)) return null;
+  const w = t.w || 1, h = t.h || 1, [tl, tr, br, bl] = p;
+  return homography([{ x:bl.dx / w, y:-bl.dy / h }, { x:1 + br.dx / w, y:-br.dy / h }, { x:1 + tr.dx / w, y:1 - tr.dy / h }, { x:tl.dx / w, y:1 - tl.dy / h }], 1); }
 /* zoom de salida y colorimetría general (FS_COMP) */
 const CMODES = { libre:0, absoluto:1, gradiente:2 };
 function setColorUniforms(){
@@ -40,7 +44,9 @@ function drawCamOverlay(){
    → bloom → composición (aberración, glitch, viñeta, flash, bordes de
    proyector) → homografía a pantalla. Escalador con histéresis.
    ===================================================================== */
+let sceneDirty = true;   // la capa 2D se sube a la GPU solo si se dibujó algo (8192 px de ancho cuestan)
 function drawScene(dt){
+  sceneDirty = false;
   sctx.setTransform(S2, 0, 0, S2, 0, 0); sctx.globalAlpha = 1; sctx.globalCompositeOperation = 'source-over'; sctx.clearRect(0, 0, W, H);
   if (P.cam.showVideo && !P.map.blackout) {
     for (const src of sources) { if (src.video.readyState < 2 || !src.cell || src._calH) continue;
@@ -48,16 +54,16 @@ function drawScene(dt){
       sctx.save(); sctx.beginPath(); sctx.rect(c.x, c.y, c.w, c.h); sctx.clip(); sctx.globalAlpha = P.cam.videoOpacity;
       sctx.filter = `contrast(${P.cam.contrast}) brightness(${P.cam.brightness}) saturate(${P.cam.saturate})`;
       if (zoneMirror(src)) { sctx.translate(2 * c.x + c.w, 0); sctx.scale(-1, 1); }
-      sctx.drawImage(src.video, vox, voy, src.video.videoWidth * vscale, src.video.videoHeight * vscale);
+      sctx.drawImage(src.video, vox, voy, src.video.videoWidth * vscale, src.video.videoHeight * vscale); sceneDirty = true;
       sctx.restore(); }
     sctx.filter = 'none';
   }
-  if (P.map.testGrid) drawGrid();
+  if (P.map.testGrid) { drawGrid(); sceneDirty = true; }
   if (P.map.blackout) return;
   const list = [...bodies.values()];
-  if (P.link.enabled && list.length > 1) drawLinks(list);
-  if (P.track.showSkeleton || verEsqueletos || P.track.showJoints || P.track.showId) drawSkeletons(list);
-  for (const m of plan) if (m.draw2d && m.active) m.draw2d();
+  if (P.link.enabled && list.length > 1) { drawLinks(list); sceneDirty = true; }
+  if ((P.track.showSkeleton || verEsqueletos || P.track.showJoints || P.track.showId) && list.length) { drawSkeletons(list); sceneDirty = true; }
+  for (const m of plan) if (m.draw2d && m.active) { m.draw2d(); sceneDirty = true; }
 }
 
 let feedIdx = 0;
@@ -68,8 +74,9 @@ function render(t){
     for (const src of sources) { if (src.video.readyState < 2) continue; gl.bindTexture(gl.TEXTURE_2D, src.videoTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src.video); }
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); }
   for (const m of plan) if (m.producer) m.produce();
-  uploadCanvas(sceneTex, scene);
-  bindFBO(fbScene); gl.disable(gl.BLEND); gl.useProgram(pBlit); useTex(0, sceneTex, pBlit, 'uTex'); drawQuad(pBlit);
+  gl.disable(gl.BLEND);
+  if (sceneDirty) { uploadCanvas(sceneTex, scene); bindFBO(fbScene); gl.useProgram(pBlit); useTex(0, sceneTex, pBlit, 'uTex'); drawQuad(pBlit); }
+  else { bindFBO(fbScene); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); }
   if (!P.map.blackout) { gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); for (const m of plan) if (!m.producer && m.draw) m.draw(); gl.disable(gl.BLEND); }
   const cur = feedIdx, prev = 1 - feedIdx;
   const decay = P.echo.mode === 'directo' ? 0 : clamp(P.echo.decay + AM.echo * (.995 - P.echo.decay), 0, .995);
@@ -83,7 +90,7 @@ function render(t){
   gl.useProgram(pComp); bindFBO(fbComp); useTex(0, fbFeed[cur].t, pComp, 'uBase'); useTex(1, src.t, pComp, 'uBloom');
   gl.uniform1f(U(pComp, 'uBloomAmt'), P.fx.bloom + AM.bloom); gl.uniform1f(U(pComp, 'uChroma'), prof.allowChroma ? P.fx.chroma : 0);
   gl.uniform1f(U(pComp, 'uGlitch'), prof.allowGlitch ? P.fx.glitch : 0); gl.uniform1f(U(pComp, 'uBlocks'), P.fx.glitchBlocks);
-  gl.uniform1f(U(pComp, 'uTime'), t); gl.uniform1f(U(pComp, 'uVig'), P.fx.vignette); gl.uniform1f(U(pComp, 'uGamma'), P.fx.gamma);
+  gl.uniform1f(U(pComp, 'uTime'), t % 1000); gl.uniform1f(U(pComp, 'uVig'), P.fx.vignette); gl.uniform1f(U(pComp, 'uGamma'), P.fx.gamma);
   gl.uniform1f(U(pComp, 'uFlash'), P.map.blackout ? 0 : AM.flash); gl.uniform1f(U(pComp, 'uSlices'), P.map.slices); gl.uniform1f(U(pComp, 'uBlend'), P.map.blend);
   setColorUniforms(); drawQuad(pComp); drawCamOverlay();
   if (mosaicActive() && fbKey) {
@@ -93,7 +100,9 @@ function render(t){
     gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, glCanvas.width, glCanvas.height); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
     gl.useProgram(pTile); useTex(0, fbKey.t, pTile, 'uTex');
     const tiles = mosaicTiles(), CH = glCanvas.height;
-    for (const t of tiles) { gl.viewport(t.x, CH - t.y - t.h, t.w, t.h); gl.uniform2f(U(pTile, 'uOff'), t.sx, 1 - t.sy - t.sh); gl.uniform2f(U(pTile, 'uScale'), t.sw, t.sh); drawQuad(pTile); }
+    for (const t of tiles) { gl.viewport(t.x, CH - t.y - t.h, t.w, t.h); const pin = tilePin(t);
+      const pr = pin ? pPin : pTile; gl.useProgram(pr); useTex(0, fbKey.t, pr, 'uTex');
+      gl.uniform2f(U(pr, 'uOff'), t.sx, 1 - t.sy - t.sh); gl.uniform2f(U(pr, 'uScale'), t.sw, t.sh); if (pin) gl.uniformMatrix3fv(U(pr, 'uH'), false, pin); drawQuad(pr); }
   } else {
     gl.useProgram(pFinal); bindFBO(null); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
     useTex(0, fbComp.t, pFinal, 'uTex'); gl.uniformMatrix3fv(U(pFinal, 'uH'), false, homography()); drawQuad(pFinal);
@@ -143,7 +152,7 @@ const PROFILES = {
   completo:    { name:'Completo', renderScale:1, gridN:220, bloomIter:2, allowChroma:true, allowGlitch:true, inferHz:30, scene2d:1, targetFps:60 },
 };
 function applyProfile(pr){
-  Object.assign(prof, { name:pr.name, renderScale:pr.renderScale, gridN:pr.gridN, bloomIter:pr.bloomIter, allowChroma:pr.allowChroma, allowGlitch:pr.allowGlitch, inferHz:pr.inferHz });
+  Object.assign(prof, { name:pr.name, tier:Object.keys(PROFILES).find(k => PROFILES[k] === pr) || prof.tier, renderScale:pr.renderScale, gridN:pr.gridN, bloomIter:pr.bloomIter, allowChroma:pr.allowChroma, allowGlitch:pr.allowGlitch, inferHz:pr.inferHz });
   P.perf.scene2d = pr.scene2d ?? 1; P.perf.targetFps = pr.targetFps || 30;
   chosenProfile = Object.assign({}, prof, { scene2d:P.perf.scene2d }); scaler.step = 0;
 }
@@ -156,15 +165,17 @@ function guessTier(){
   return 'equilibrado';
 }
 /* medición breve: 90 cuadros con cuerpos sintéticos y los módulos pesados prendidos */
+const _px1 = new Uint8Array(4);
 async function benchmark(){
   const savedActive = new Map([...Modules.values()].map(m => [m.id, m.active]));
   const savedP = deepClone(P), savedProf = Object.assign({}, prof), wasSim = simMode;
-  ['silueta', 'swarm', 'scribble'].forEach(id => setModule(id, true)); if (EXT_VTF) setModule('vivas', true);
+  ['silueta', 'swarm', 'scribble', 'particulas', 'fluido'].forEach(id => { if (typeof fxAvailable !== 'function' || fxAvailable(id)) setModule(id, true); }); if (EXT_VTF) setModule('vivas', true);
   Object.assign(prof, PROFILES.completo, { name:'test' }); buildRefBuffer(); resize(); rebuildPlan();
   const times = []; let f = 0; const t0 = SIM.t, tStart = performance.now();
   await new Promise(res => { function step(t){ const a = performance.now();
     SIM.t += .016; for (const src of sources) src.poses = simPoses(SIM.t, 4, src.video.videoWidth || 1280, src.video.videoHeight || 720);
     syncBodies(); for (const m of plan) if (!m.producer && m.update) m.update(.016); drawScene(.016); render(t / 1000);
+    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, _px1);   // espera a la GPU: sin esto mide solo JavaScript
     const dt = performance.now() - a; if (f++ >= 10) times.push(dt); toast(`midiendo la computadora · ${f}/90`, 0);
     if (f < 90 && performance.now() - tStart < 4000) requestAnimationFrame(step); else res(); } requestAnimationFrame(step); });
   SIM.t = t0; if (!wasSim) sources.forEach(x => x.poses = []); bodies.clear();

@@ -21,6 +21,7 @@ mirador/
 ├── js/
 │   ├── core.js                Parámetros (P), WebGL, shaders, formato de salida, resize
 │   ├── tracking.js            Zonas de cámara, detector MoveNet (imagen por partes, ids propias), cuerpos, simulador
+│   ├── efectos.js             Efectos de GPU: partículas, fluido, membrana, ondas, silueta líquida
 │   ├── modules.js             Módulos visuales y productores (máscara GPU / CPU)
 │   ├── render.js              Capa 2D → GL → ecos → bloom → salida · escalador · perfiles · grabación
 │   ├── audio.js               Micrófono / canción, bandas, golpe, multiplicadores AM · playlist
@@ -64,7 +65,7 @@ Sin internet en la sala el programa arranca igual: las librerías **y el modelo 
 |---|---|
 | **Sesión** | Nombre, guardar/duplicar/exportar/importar, notas; lista de sesiones; **canciones de la sesión** (agregar archivos, carpeta `canciones/`, orden, reproducir). |
 | **Plantillas** | 12 estéticas con tecla rápida (1‑9, 0). Se aplican encima y después se ajustan. |
-| **Módulos** | Cada módulo con su interruptor, descripción y controles; esqueleto y enlaces; **fuente de la silueta** (esqueleto / brillo / fondo); ecos; posproceso. |
+| **Módulos** | **Efectos de GPU** (partículas, fluido, membrana, ondas, silueta líquida) con paleta; cada módulo con su interruptor, descripción y controles; esqueleto y enlaces; **fuente de la silueta** (esqueleto / brillo / fondo); ecos; posproceso. |
 | **Sincronizar** (naranja) | Sincronización automática proyección ↔ cámara con puntos, verificación con la cámara superpuesta, ajuste fino de tamaño (altura real / cámara / fija), altura, posición y separación. |
 | **Cámaras** | Zonas (hasta 4 cámaras), disposición (columnas / filas / a mano), espejo por zona, video en la imagen, **detección** (cuerpos máximos —1 de fábrica—, sensibilidad, partes de la imagen, resolución, confianza, vista previa con lo que ve el modelo), **exposición dinámica / blancos / negros** de la imagen que analiza el modelo, **ajustes de la cámara física**. |
 | **Audio** | Fuente (apagado / micrófono / canción), micrófono, ganancia, suavizado, medidores en vivo, tempo estimado, y **qué mueve la música** (tamaño ← graves, bloom y destello ← golpe, color ← agudos, ecos ← nivel…). |
@@ -174,6 +175,21 @@ Para que el color sea de verdad el mismo de una función a otra, además de Mira
 - Los proyectores, todos en el mismo modo de imagen (sRGB / Rec.709, 6500 K, gamma 2.2), sin contraste dinámico, iris automático ni "modo eco" variable; misma lámpara/láser en uso parecido. Conviene igualarlos primero desde su propio menú y dejar Mirador para el ajuste fino.
 - Windows: en esa salida, HDR apagado, "Color automático" apagado, sin perfil ICC raro (sRGB), y en el panel de NVIDIA *Rango dinámico de salida: completo* y *profundidad de color* 8 bpc. El splitter, sin escalado ni procesamiento de color.
 - Chrome dibuja en sRGB. OBS: *Formato de color NV12, espacio 709, rango Parcial* para video común (o Completo si el destino lo espera); lo importante es que el reproductor use el mismo.
+
+## Efectos de GPU y estabilidad
+
+**Efectos nuevos:** Partículas de luz, Fluido de luz, Membrana, Ondas de contorno y Silueta líquida. Corren enteros en la placa de video y se eligen con las 12 plantillas nuevas, que tienen miniatura en la pestaña Plantillas. Referencias y detalle en `PLANTILLAS.md`. Se ajustan en *Módulos → Efectos de GPU*.
+
+**Pensado para funciones largas:**
+- **Memoria constante.** Nada crece con el tiempo: los efectos nuevos no guardan nada en la CPU, y los registros por cuerpo se podan. En la prueba de estrés, la memoria JS se quedó en ~8 MB después de 48 cambios de plantilla y minutos de efecto.
+- **Ecos sin fantasmas.** Con 8 bits, un eco con permanencia nunca llegaba a negro y dejaba un velo. Ahora se resta un piso en cada cuadro.
+- **Tiempo acotado en los shaders.** En las GPU que calculan a 16 bits (Mac), el tiempo deja de ser preciso después de ~35 min y las animaciones se traban. Ahora el tiempo da la vuelta cada 1000 s.
+- **Menos trabajo por cuadro.** La capa 2D (8192 px de ancho en la sala) solo se sube a la GPU si algo se dibujó en ella. Con las plantillas nuevas no se sube.
+- **Guardián.** Si la placa de video reinicia (cambio de driver, Windows recupera la GPU) o el detector deja de responder, Mirador guarda la sesión y se recarga solo en el mismo estado: formato, mosaico, plantilla, audio y panel. Si pasa dos veces seguidas en menos de 90 s, no insiste y avisa.
+- **Medición honesta.** La prueba de rendimiento del arranque espera a la GPU en cada cuadro. Antes medía solo JavaScript y podía elegir un perfil demasiado pesado.
+- **Panel de salud.** *Sistema → Salud* muestra tiempo encendido, memoria JS, tensores de TensorFlow, cuadro p95 y estado de la capa 2D.
+
+**Esquinas por proyector (corner pin):** *Proyección → Esquinas por proyector*. Cada baldosa del mosaico tiene 4 esquinas propias, para proyectores en ángulo. En la sala actual (OBS → NDI → Resolume) eso lo hace Resolume en *Advanced Output*. El corner pin de Mirador sirve cuando se usa el mosaico 8K directo al splitter, sin Resolume.
 
 ## OBS
 
