@@ -11,6 +11,8 @@ REM  Mirador NO hace mosaico: entrega el lienzo 8400x690 entero, estirado a toda
 REM  la ventana. Resolume lo vuelve a estirar a 8400x690 y lo reparte.
 REM  Lienzo: Oeste 3175 + Norte 1775 + Este 3450 = 8400 x 690.
 REM -------------------------------------------------------------
+REM  Puerto 8766: la sesion Sala esta guardada en ese origen, y asi no choca con otra copia en 8765.
+set MIRADOR_PORT=8766
 set MIRADOR_SALIDA=8400x690
 set MIRADOR_MOSAICO=
 set MIRADOR_AJUSTE=estirar

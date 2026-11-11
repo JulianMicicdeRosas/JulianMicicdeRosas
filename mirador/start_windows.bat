@@ -11,11 +11,13 @@ REM    MIRADOR_KIOSK    = 1  (pantalla completa kiosk en la pantalla principal)
 REM    MIRADOR_AUDIO    = mic | cancion | off
 REM    MIRADOR_MOSAICO  = 7680x4320  (salida 8K a splitter)
 REM    MIRADOR_AJUSTE   = estirar  (el lienzo llena la ventana; para capturarla con OBS y estirarla en Resolume)
+REM    MIRADOR_PORT     = 8766  (puerto del servidor local; por defecto 8765)
 REM    MIRADOR_CDP      = 9222  (puerto local de depuracion, para manejar Mirador desde afuera; acepta la camara sin preguntar)
 REM -------------------------------------------------------------
 setlocal EnableExtensions
 cd /d "%~dp0"
 set "PORT=8765"
+if defined MIRADOR_PORT set "PORT=%MIRADOR_PORT%"
 if not defined MIRADOR_SALIDA set "MIRADOR_SALIDA=ventana"
 if not defined MIRADOR_AUDIO set "MIRADOR_AUDIO=off"
 title Mirador
