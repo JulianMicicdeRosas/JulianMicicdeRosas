@@ -34,6 +34,8 @@ poesia-tipografica/
 ├── start_instalacion_13480.bat / reproyectar_13480.bat   Lo mismo en 13480 × 1080 sin los primeros 1920 px
 ├── start_instalacion_1920x690.bat / reproyectar_1920x690.bat   Una sola pantalla de 1920 × 690
 │                         (Mac: start_mac_1920x690.command / reproyectar_mac_1920x690.command)
+├── start_obs_charlas.bat / reproyectar_obs_charlas.bat   Charlas y Talleres para OBS + Resolume (8400 × 690, sin abrir Chrome)
+├── obs/                  Perfil y colección de escenas de OBS para importar (ver docs/OBS-RESOLUME-CHARLAS.md)
 ├── abrir_pantalla.bat   Abre Chrome / Edge (pregunta pantalla completa o ventana) con el formato del lanzador
 ├── public/loop/          Imágenes del loop (flat.png) y public/loop/sponsors/ (todos los logos)
 └── src/
@@ -183,6 +185,17 @@ queda negro. El muro de palabras, el título, los nombres y la transcripción qu
 Con **«@N»** los primeros N px del ancho no se usan: `13480x1080@1920` es una salida de 13480 × 1080 donde el
 primer proyector (a la izquierda) está apagado. Todo se compone y se centra en los 11560 × 1080 restantes; la franja de
 la izquierda queda negra. Los paneles C y D también se abren dentro de la parte visible.
+
+### Charlas y Talleres por OBS + Resolume (que no se pixele)
+
+Configuración guardada y paso a paso en **[`docs/OBS-RESOLUME-CHARLAS.md`](docs/OBS-RESOLUME-CHARLAS.md)**: lanzador
+`start_obs_charlas.bat` (no abre Chrome y copia la dirección para OBS), perfil y escena de OBS para importar (carpeta
+`obs/`: lienzo y salida 8400 × 690, 60 cuadros, RGBA, fuente de navegador 8400 × 690 a 60 cuadros) y los valores de
+Resolume (composición 8400 × 690, Spout, slices de las tres paredes). La regla: 8400 × 690 en todos los eslabones, sin
+escalar en el medio. Dentro de OBS el show se dibuja píxel a píxel y nunca baja su calidad (antes, con los 30 cuadros
+de la fuente de OBS, la calidad adaptativa bajaba la resolución interna hasta el 60 %). En la dirección:
+`presentacion=charlas|umbral` fija la presentación, `obs=1` el modo OBS y `atlas=2048` vuelve a las letras de antes
+si la placa tiene poca memoria.
 
 ### Versión 1920 × 690
 

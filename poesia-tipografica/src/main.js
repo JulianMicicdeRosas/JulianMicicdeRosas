@@ -45,6 +45,10 @@ function poolFor() {
   }
   return Math.round(18000 * Math.max(1, visibleAspect(fmt) / 2.47));
 }
+// Dentro de OBS (fuente de navegador) o con ?obs=1: píxel a píxel y sin calidad adaptativa. La fuente de OBS da cuadros
+// al ritmo que se le pide (30 por defecto): la calidad adaptativa lo tomaba por una placa lenta y bajaba la resolución
+// interna hasta el 60 % (se veía pixelado).
+const OBS = typeof window !== 'undefined' && (!!window.obsstudio || params.get('obs') === '1');
 const CONFIG = {
   pool: Math.round(Math.min(100000, Math.max(2000, num('pool', poolFor())))), // muro de 40 filas ≈ 11 000 letras (en 1822 × 737) + caída + títulos
   points: Math.round(Math.min(300000, Math.max(0, num('points', 80000)))),
@@ -54,7 +58,7 @@ const CONFIG = {
   grain: num('grain', 0.055),
   // En Mac (pantallas Retina, equipos sin ventilador) se limita la resolución interna: en el
   // proyector (1x) no cambia nada y en la pantalla del portátil ahorra mucho calor.
-  dpr: Math.min(window.devicePixelRatio || 1, num('dpr', /Macintosh|Mac OS X/.test(navigator.userAgent) ? 1.25 : 1.5)),
+  dpr: OBS ? Math.max(0.5, num('dpr', 1)) : Math.min(window.devicePixelRatio || 1, num('dpr', /Macintosh|Mac OS X/.test(navigator.userAgent) ? 1.25 : 1.5)),
   idleText: 'FLAT',
 };
 
@@ -82,7 +86,9 @@ async function boot() {
   const camDist = CONFIG.worldH / 2 / Math.tan(THREE.MathUtils.degToRad(fov / 2));
   camera.position.set(0, 0, camDist);
 
-  const atlas = new GlyphAtlas(renderer);
+  // glifos a 192 px (antes 96): las palabras grandes (5×, 12×, títulos) ya no se ven blandas ni pixeladas
+  const atlasHi = maxTex >= 8192 && num('atlas', 4096) >= 4096; // ?atlas=2048: el de antes (placas con poca memoria)
+  const atlas = new GlyphAtlas(renderer, atlasHi ? { size: 4096, cell: 192 } : {});
   const field = new TypeField({ atlas, count: CONFIG.pool, aspect: camera.aspect, worldH: CONFIG.worldH, idleText: CONFIG.idleText });
   scene.add(field.mesh);
   const lines = new Overlay(field); // líneas finas: fragmentos del muro y figura de la tecla 0
@@ -359,6 +365,7 @@ async function boot() {
   } catch {
     /* sin localStorage: se usan los valores por defecto */
   }
+  settings = urlPresentation(settings);
   let saveTimer = 0;
   let brandFontLoaded = '';
   function applyLiveSettings() {
@@ -391,6 +398,17 @@ async function boot() {
   }
 
   // loop de versiones anteriores (FLAT + sponsors + título) → nuevo loop de grupos de logos
+  // ?presentacion=charlas (o umbral) en la dirección, como en la fuente de OBS: fija la presentación y el título del
+  // loop, mande lo que mande el panel C
+  function urlPresentation(s) {
+    const p = params.get('presentacion');
+    if (!PRESENTACIONES[p]) return s;
+    const titulos = Object.values(PRESENTACIONES).map((x) => x.toLowerCase());
+    const nuevo = PRESENTACIONES[p];
+    const loop = (s.loop || []).map((st) => (st && st.tipo === 'texto' && titulos.includes(String(st.contenido || '').trim().toLowerCase()) ? { ...st, contenido: nuevo, letras: nuevo.toUpperCase() } : st));
+    return { ...s, presentacion: p, loop };
+  }
+
   function migrate(s) {
     const old = (s.loop || []).some((st) => st && (st.contenido === 'loop/flat.png' || st.carpeta === 'public/loop/sponsors'));
     if (old) s = { ...s, loop: structuredClone(DEFAULT_SETTINGS.loop) };
@@ -429,7 +447,7 @@ async function boot() {
   }
 
   function setSettings(next, { persist = true } = {}) {
-    settings = migrate({ ...structuredClone(DEFAULT_SETTINGS), ...next });
+    settings = urlPresentation(migrate({ ...structuredClone(DEFAULT_SETTINGS), ...next }));
     show.setSettings(settings);
     applyLiveSettings();
     if (!persist) return;
@@ -885,7 +903,7 @@ async function boot() {
     { name: 'mínima', dpr: 0.6, points: 0.3 },
   ];
   let quality = 0, slowFor = 0, fastFor = 0;
-  const adaptive = num('adaptativo', 1) !== 0;
+  const adaptive = num('adaptativo', OBS ? 0 : 1) !== 0;
   function applyQuality() {
     const q = QUALITY[quality];
     dprScale = q.dpr;

@@ -1,0 +1,116 @@
+{
+  "name": "Charlas y Talleres FLAT 8400x690",
+  "current_scene": "Charlas y Talleres 8400x690",
+  "current_program_scene": "Charlas y Talleres 8400x690",
+  "scene_order": [
+    {
+      "name": "Charlas y Talleres 8400x690"
+    }
+  ],
+  "sources": [
+    {
+      "id": "browser_source",
+      "versioned_id": "browser_source",
+      "name": "Show FLAT (navegador)",
+      "uuid": "b4755255-13bc-4944-a494-f27acae91b27",
+      "settings": {
+        "url": "http://127.0.0.1:5173/?formato=8400x690/3175,1775,3450&presentacion=charlas&obs=1",
+        "width": 8400,
+        "height": 690,
+        "fps_custom": true,
+        "fps": 60,
+        "css": "body { background-color: #000; margin: 0; overflow: hidden; }",
+        "shutdown": false,
+        "restart_when_active": false,
+        "reroute_audio": false,
+        "webpage_control_level": 1
+      },
+      "enabled": true,
+      "flags": 0,
+      "volume": 1.0,
+      "balance": 0.5,
+      "mixers": 0,
+      "muted": true,
+      "sync": 0,
+      "monitoring_type": 0,
+      "deinterlace_mode": 0,
+      "deinterlace_field_order": 0,
+      "push-to-mute": false,
+      "push-to-mute-delay": 0,
+      "push-to-talk": false,
+      "push-to-talk-delay": 0,
+      "hotkeys": {},
+      "private_settings": {},
+      "filters": []
+    },
+    {
+      "id": "scene",
+      "versioned_id": "scene",
+      "name": "Charlas y Talleres 8400x690",
+      "uuid": "e658a70e-dd0a-407b-9987-e32abd437dfe",
+      "settings": {
+        "id_counter": 1,
+        "custom_size": false,
+        "items": [
+          {
+            "name": "Show FLAT (navegador)",
+            "source_uuid": "b4755255-13bc-4944-a494-f27acae91b27",
+            "visible": true,
+            "locked": true,
+            "rot": 0.0,
+            "pos": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "align": 5,
+            "bounds_type": 0,
+            "bounds_align": 0,
+            "bounds_crop": false,
+            "bounds": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "crop_left": 0,
+            "crop_top": 0,
+            "crop_right": 0,
+            "crop_bottom": 0,
+            "id": 1,
+            "group_item_backup": false,
+            "scale_filter": "disable",
+            "blend_method": "default",
+            "blend_type": "normal",
+            "show_transition": {
+              "duration": 0
+            },
+            "hide_transition": {
+              "duration": 0
+            },
+            "private_settings": {}
+          }
+        ]
+      },
+      "enabled": true,
+      "flags": 0,
+      "mixers": 0,
+      "hotkeys": {},
+      "private_settings": {},
+      "filters": []
+    }
+  ],
+  "groups": [],
+  "quick_transitions": [],
+  "transitions": [],
+  "saved_projectors": [],
+  "current_transition": "Fade",
+  "transition_duration": 300,
+  "preview_locked": true,
+  "scaling_enabled": false,
+  "scaling_level": 0,
+  "scaling_off_x": 0.0,
+  "scaling_off_y": 0.0,
+  "modules": {}
+}

@@ -372,7 +372,7 @@ export function solidTitle(text, { aspect = 4, upper = true } = {}) {
   const t = String(text || '').trim().replace(/\s+/g, ' ');
   const str = upper ? t.toUpperCase() : t;
   const words = str.split(' ');
-  const PX = 260;
+  const PX = 480; // rasterizado grande: en 8400 × 690 el título ocupa ~1500 px y no se agranda (no se pixela)
   const font = `700 ${PX}px "Marca FLAT", "Geist Mono", "IBM Plex Mono", monospace`;
   const m = document.createElement('canvas').getContext('2d');
   m.font = font;

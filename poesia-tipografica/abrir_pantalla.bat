@@ -17,6 +17,8 @@ if not exist "%CHROME%" set CHROME=%ProgramFiles%\Microsoft\Edge\Application\mse
 
 set "FLAT_URL=http://127.0.0.1:5173/"
 if defined FLAT_FORMATO set "FLAT_URL=http://127.0.0.1:5173/?formato=%FLAT_FORMATO%"
+REM Para OBS (start_obs_charlas.bat): no se abre Chrome; OBS abre el show como fuente de navegador
+if defined FLAT_SIN_NAVEGADOR goto :obs
 
 REM GPU dedicada (p. ej. RTX 3070 Ti): forzar la placa de alto rendimiento y no caer en la integrada.
 REM Que siga animando y tomando aunque otra ventana quede encima (Alt+Tab): sin ahorro de energía para ventanas
@@ -52,4 +54,23 @@ for /f "tokens=1-4 delims=," %%a in ("%FLAT_VENTANA%") do (
   set VH=%%d
 )
 start "" "%CHROME%" --app="%FLAT_URL%" --window-position=%VX%,%VY% --window-size=%VW%,%VH% %FLAGS% --user-data-dir="%~dp0.chrome-ventana"
+exit /b 0
+
+:obs
+REM la direccion lleva & : se muestra y se copia con expansion retardada (sin que cmd la interprete)
+setlocal EnableDelayedExpansion
+if not defined FLAT_OBS_URL set "FLAT_OBS_URL=!FLAT_URL!"
+<nul set /p "=!FLAT_OBS_URL!" > "%TEMP%\flat_obs_url.txt"
+clip < "%TEMP%\flat_obs_url.txt" >nul 2>&1
+echo.
+echo   Show listo para OBS. No se abre Chrome: lo abre OBS.
+echo   En OBS, fuente de navegador, URL (ya quedo copiada, pegar con Ctrl+V):
+echo.
+echo     !FLAT_OBS_URL!
+echo.
+echo   Ancho 8400 - Alto 690 - FPS personalizados 60. Ver docs\OBS-RESOLUME-CHARLAS.md
+echo   Para operar el show: clic derecho en la fuente de OBS - Interactuar (teclas y panel C).
+echo.
+endlocal
+pause
 exit /b 0
