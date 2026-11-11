@@ -212,6 +212,13 @@ Cosas a saber para operar:
 - El servidor de la copia vieja (`Downloads\Mirador-PC`, puerto 8765, consola de administrador) no se pudo cerrar sin permisos; el nuevo corre en 8766. Cerrando esas dos consolas, `start_sala.bat` vuelve a usar 8765.
 
 ---
+### Prueba del 11/11/2026 (después de los efectos de GPU y las plantillas nuevas)
+
+- Las 24 plantillas corren sin errores (41–49 fps con la cámara detectando, 60 fps con 10 cuerpos simulados). El color sólido (*absoluto*) se aplica también a los efectos de GPU.
+- **Puerto:** `start_sala.bat` usa el **8766**. La sesión Sala vive en ese origen, y la copia vieja (`Downloads\Mirador-PC`) vuelve a arrancar como administrador en el 8765, con un Chrome en mosaico 8K. Si está abierta, cerrarla: tapa a Mirador y OBS puede capturar la ventana equivocada (las dos tienen el mismo título).
+- **OBS:** la captura de Mirador apareció corrida y al 72 %. Tiene que ocupar todo el lienzo: seleccionarla y apretar Ctrl+S (estirar a la pantalla). En Modo Estudio, después apretar *Transición*.
+- **CPU al límite:** con Resolume mostrando otra presentación por NDI (1,5 núcleos), la CPU (i5-8500, 6 núcleos) llegó al 97 % y cada detección tardó 1–2 s, cuando con la sala libre tardaba ~48 ms. El cuello es el proceso de GPU de Chrome, que queda atado a un núcleo. Volver a medir con la sala libre (`sources[0]._diag.ms`). Si sigue lento, bajar a 6 cuerpos (una sola parte) o sacar la fuente NDI que no se use en Resolume.
+
 ## 6. Qué falta (próximo paso, en este orden)
 
 ### 6.1 En la sala, con la PC
