@@ -271,7 +271,7 @@ La salida es un solo cuadro de 8400 × 690 que recorre tres paredes contiguas. M
 pared **oeste** (3175 px), al frente la **norte** (1775 px) y a la derecha la **este** (3450 px). En el panel C y en
 `FLAT_FORMATO` se escribe `8400x690/3175,1775,3450` (con `/A,B,C` = anchos de cada pared, de izquierda a derecha).
 
-- **Pared de frente (norte):** ahí van el título del loop, los logos de los sponsors, el logo de FLAT del cierre (5),
+- **Pared de frente (norte):** ahí van el título del loop, los logos de los sponsors, el logo de FLAT del cierre (Z),
   los nombres de los disertantes, el verso en vivo de la clásica (1), los dibujos por oración y el logo de FLAT fijo de
   la tecla 0. Es una pared de 1775 × 690 (casi la misma proporción que la pantalla del FLAT), así que todo eso se compone
   como antes, pero en el frente.
@@ -350,7 +350,7 @@ En panel C → **Cronograma del día** aparece la propuesta de placas:
 - **Ciclo Umbral**: una placa por lector, en el orden del cronograma, y una para quien hace el desmontaje.
 - **Charlas y talleres**: una placa por actividad, con sus disertantes («Gabriela Bazán y Iván Vidal»), en orden de
   horario. Lo que es en otra sala (Espacio de taller, teatros) viene sin tildar.
-- Al lado de cada nombre, la tecla que le tocaría (1 … 4, 6 … 9 y después letras); destildar uno corre las teclas.
+- Al lado de cada nombre, la tecla que le tocaría (1 … 9 y después letras); destildar uno corre las teclas.
 - **Usar estas placas** reemplaza la lista de Artistas, pone la presentación que corresponde (UMBRAL o Ciclo de charlas
   y talleres FLAT) y cambia el título del loop. Si había otros nombres cargados, pide un segundo clic. Después se puede
   corregir todo a mano en Artistas.
@@ -362,12 +362,12 @@ Erian»). Si el cronograma cambia de lugar: `CRONOGRAMA_URL=` en `.env` (un CSV 
 Tipo, Artistas / participantes, Sede / sala, Ciclo y Publicar en la web).
 
 **Disertantes y sus teclas**: en panel C → Artistas se escribe el nombre de cada disertante y **la tecla que muestra
-su placa** (una letra o un número). Vacía = su número de orden (1 … 4, 6 … 9). No se pueden usar C, D, F, S, P, T, L,
-0 ni 5 (son del show): el panel lo avisa; si dos comparten tecla, se marca en rojo y sólo funciona la primera.
+su placa** (una letra o un número). Vacía = su número de orden (1 … 9). No se pueden usar C, D, F, S, P, T, L,
+Z ni 0 (son del show): el panel lo avisa; si dos comparten tecla, se marca en rojo y sólo funciona la primera.
 
 **Placa del artista**: primero se ve el nombre sobre el muro. **Los primeros 3 s no se transcribe nada**
 (presentación, aplausos: ni la voz dispara ni ese audio llega a OpenAI). Después, cuando la persona **empieza a
-hablar** (o se aprieta S), arranca su animación. Cada tecla numérica tiene la suya (8 repite Muro y 9 Constelación);
+hablar** (o se aprieta S), arranca su animación. Cada tecla numérica tiene la suya (5 repite Clásica, 8 Muro y 9 Constelación);
 con una letra se reparten por orden. En el panel C cada artista puede fijar otra (el menú muestra cuál le toca en
 automático):
 
@@ -450,12 +450,32 @@ Lo que se repite es la secuencia completa (qué palabra, qué imagen, qué estad
 cada letra tiene azar propio en cada función, así que no es un video cuadro por cuadro sino la misma obra otra vez.
 Para un video fijo, grabar la pantalla durante la re-proyección (OBS).
 
+## Pruebas
+
+- **`npm test`** (o `python tests/test_server.py`): las partes puras del backend —imagen ASCII a tonos, origen del
+  WebSocket, cronograma, ajustes— en un segundo, sin micrófono ni red.
+- **`npm run e2e`**: la noche de punta a punta con un OpenAI simulado y un micrófono simulado, en un navegador sin
+  ventana: arranque, título sólido, avisos, edición del loop, placa y sus 3 s de gracia, imagen ASCII del modelo y los
+  cuatro modos de dibujo, tecla 0, tecla 5 como placa, cierre (Z), grabación de la sesión. Tarda unos 3 minutos y deja
+  capturas y registros en `tests/e2e/salida/`. Necesita Playwright con Chromium
+  (`npm i -g playwright && npx playwright install chromium`) y los puertos 5173, 8765, 9970 y 9971 libres (cerrar el
+  show antes). Trabaja en una carpeta temporal: no toca `Documentos/Ciclo FLAT`.
+
+Correr las dos antes de cada función y después de cualquier cambio.
+
+**Avisos al operador:** lo que el operador tiene que leer («Ningún artista tiene la tecla 6», «No hay artista 3», «Fin
+de la re-proyección») aparece 8 s en rojo arriba del panel C y en el título de la ventana. Nunca en la pared.
+
+**Sólo este equipo:** el programa acepta órdenes únicamente de páginas abiertas en esta misma computadora
+(`localhost` / `127.0.0.1`: el show, el panel, OBS). Para operar desde otra máquina de la red: `WS_ORIGINS=` en `.env`
+con la dirección de esa página.
+
 ## Operación de la noche
 
 **Título del loop en sólido:** «UMBRAL» o «Ciclo de charlas y talleres FLAT» se escribe en sólido con la tipografía
 de FLAT (la de marca cargada en el panel C o, si no hay, Geist Mono Bold, la de títulos del manual), en hueso como los
 logos, en la pared de frente. Entra con glitch y queda fijo. Al pasar a otra cosa (el paso siguiente del loop, T, la
-tecla de un artista, 0, 5, L) **se desarma en letras**: el sólido se borra de izquierda a derecha y en cada parte
+tecla de un artista, 0, Z, L) **se desarma en letras**: el sólido se borra de izquierda a derecha y en cada parte
 aparece, en su lugar, una letra del título (encimadas, así de lejos sigue pareciendo el sólido), que salta con glitch
 y cae. En el panel C, Loop, el paso de texto tiene la opción «sólido (tipografía FLAT)»; con «letras» vuelve a armarse
 con palabras. En el loop, el título y el cierre la cámara queda quieta, de frente (la pantalla no se inclina).
@@ -478,8 +498,8 @@ con palabras. En el loop, el título y el cierre la cámara queda quieta, de fre
 | --- | --- |
 | `→` / `←` | loop: alterna el logo de FLAT y el título «UMBRAL» (que queda fijo) |
 | `T` | empieza a grabar en modo palabras (desde el título o cuando sea), hasta que se elige un artista |
-| tecla del artista | su placa (la tecla elegida en panel C → Artistas; por defecto 1 … 4, 6 … 9): deja de grabar; arranca cuando habla o con `S` |
-| `0` / `5` | sólo transcripción (pocas palabras) / cierre con el logo de FLAT |
+| tecla del artista | su placa (la tecla elegida en panel C → Artistas; por defecto 1 … 9): deja de grabar; arranca cuando habla o con `S` |
+| `0` / `Z` | sólo transcripción (pocas palabras) / cierre con el logo de FLAT |
 | `S` | grabar / dejar de grabar (el poema dibuja; lo dibujado queda en pantalla) |
 | `P` | detener la grabación (igual que `S` cuando graba) |
 | `L` | volver al loop (deja de grabar) |
@@ -494,6 +514,27 @@ título, el nombre y las figuras lo calan (quedan como huecos negros).
 Sólo se envía audio a OpenAI mientras se graba (`S` o `T`): el loop y los nombres no consumen la API.
 
 ### Ilustraciones en grilla de texto
+
+**Imagen ASCII del modelo (de fábrica desde noviembre).** Por cada estrofa el director devuelve la imagen como arte
+ASCII de 48 × 26 con la escala de tonos `" .:-=+*#%@"`. El programa **conserva los tonos** (luz, sombra, volumen), los
+lleva a la resolución del telón y la dibuja con las palabras dichas. Si el modelo devuelve algo inservible, se le pide
+de nuevo una vez; si vuelve a fallar, se usa una figura de la biblioteca. Lo que el modelo ponga fuera de la rampa se
+lleva al tono más parecido; un fondo de puntos se toma como fondo.
+
+Cómo se dibuja en el telón: panel C → Grilla de texto → **Dibujo con letras**:
+
+| Modo | Qué hace |
+| --- | --- |
+| **Híbrido legible** (de fábrica) | el texto sigue en orden y se lee; el tono elige punto, minúscula, mayúscula o negrita |
+| **Rampa ASCII** | cada letra se elige por cuánta tinta tiene (letras de lo dicho + signos): más volumen, las palabras no se leen |
+| **Estructura** | los bordes con `/ \ | _` según su dirección (en el color de acento); adentro, rampa |
+| **Sólo brillo** | como antes: el texto corre y cada letra se enciende según el tono; es el único que usa los tratamientos (topografía, trama, erosión, eco, silueta) |
+
+Los tres primeros van siempre en positivo (la figura hecha de letras sobre negro). El formato que se le pide al modelo
+se elige en «Formato del dibujo» («Imagen ASCII con tonos» u otro de los anteriores); cualquier fuente (composición,
+grilla, emoji, biblioteca) se puede dibujar con cualquiera de los modos. El botón **Probar**, en la misma sección, pide
+una imagen al modelo y la muestra en el panel y en la pared: es la manera de ver qué devuelve el modelo real antes de
+una función. Para volver a lo anterior: Dibujo «Sólo brillo» y Formato «Composición abstracta en capas».
 
 La imagen está hecha de texto. Con cada estrofa el director (OpenAI, o Ollama sin internet) elige un concepto
 dibujable y devuelve, además de la física, una **grilla de 48 × 26** caracteres (`#` figura, `.` fondo). El

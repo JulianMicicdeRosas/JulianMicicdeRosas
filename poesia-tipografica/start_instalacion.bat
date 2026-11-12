@@ -50,7 +50,22 @@ taskkill /FI "WINDOWTITLE eq poesia-frontend*" /T /F >nul 2>&1
 taskkill /FI "WINDOWTITLE eq FLAT - re-proyeccion*" /T /F >nul 2>&1
 start "poesia-backend" /min cmd /k ".venv\Scripts\python server.py"
 start "poesia-frontend" /min cmd /k "npm run preview"
-timeout /t 4 /nobreak >nul
+REM (se busca el puerto a la escucha sin depender del idioma de Windows: direccion remota ":0")
+REM esperar a que respondan el frontend (5173) y el backend (8765) antes de abrir la pantalla (hasta 60 s)
+set /a FLAT_N=0
+:esperar
+netstat -an | findstr /c:":5173 " | findstr /c:":0 " >nul
+if not errorlevel 1 netstat -an | findstr /c:":8765 " | findstr /c:":0 " >nul
+if not errorlevel 1 goto :listo
+set /a FLAT_N+=1
+if %FLAT_N% GEQ 60 (
+  echo [!] El programa tarda en arrancar. Abro la pantalla igual: si queda negra o dice "backend desconectado",
+  echo     mirar los mensajes de las ventanas minimizadas "poesia-backend" y "poesia-frontend".
+  goto :listo
+)
+timeout /t 1 /nobreak >nul
+goto :esperar
+:listo
 
 call "%~dp0abrir_pantalla.bat"
 exit /b 0

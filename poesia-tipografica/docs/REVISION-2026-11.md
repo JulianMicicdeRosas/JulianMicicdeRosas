@@ -42,6 +42,13 @@ brillo; elegir además *qué letra* va en cada celda le daría volumen y contorn
 El error 3 explica varias consultas de estas semanas: «Ningún artista tiene la tecla 6», «No hay artista 3» y «Fin de
 la re-proyección» existen en el código pero no aparecen en ningún lado.
 
+**Actualización del 12/11** (después de esta revisión): quedaron arreglados y cubiertos por la prueba de punta a
+punta los errores 1, 2 y 3; el 6 se resolvió sin número de generación (el motor busca primero una letra libre en todo
+el pool y, si no hay, toma una del telón avisándole a su celda); se valida `Origin` en el WebSocket; los lanzadores
+esperan a que respondan los puertos; la recarga por pérdida de GPU tiene tope; una tarea que falla se reinicia sin
+tumbar el servidor; el arnés de pruebas está en `tests/`. Además, el modelo devuelve la imagen en ASCII con tonos y el
+telón la dibuja eligiendo la letra (§4), y el atlas pasó de 441 a 625 lugares.
+
 ## 3. Puntos débiles nuevos o agravados
 
 ### 3.1 No hay pruebas en el repositorio

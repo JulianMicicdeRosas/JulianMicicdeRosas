@@ -20,7 +20,21 @@ taskkill /FI "WINDOWTITLE eq FLAT - re-proyeccion*" /T /F >nul 2>&1
 start "poesia-frontend" /min cmd /k "npm run preview"
 start "FLAT - re-proyeccion" cmd /k ".venv\Scripts\python server.py --replay elegir"
 echo Elige la sesion en la ventana "FLAT - re-proyeccion". Chrome se abre en unos segundos.
-timeout /t 6 /nobreak >nul
+REM (se busca el puerto a la escucha sin depender del idioma de Windows: direccion remota ":0")
+REM esperar a que respondan el frontend (5173) antes de abrir la pantalla (hasta 40 s)
+set /a FLAT_N=0
+:esperar
+netstat -an | findstr /c:":5173 " | findstr /c:":0 " >nul
+if not errorlevel 1 goto :listo
+set /a FLAT_N+=1
+if %FLAT_N% GEQ 40 (
+  echo [!] El programa tarda en arrancar. Abro la pantalla igual: si queda negra o dice "backend desconectado",
+  echo     mirar los mensajes de las ventanas minimizadas "poesia-backend" y "poesia-frontend".
+  goto :listo
+)
+timeout /t 1 /nobreak >nul
+goto :esperar
+:listo
 
 call "%~dp0abrir_pantalla.bat"
 exit /b 0

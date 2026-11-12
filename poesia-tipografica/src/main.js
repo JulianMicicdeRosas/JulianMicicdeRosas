@@ -28,7 +28,7 @@ import { Show, DEFAULT_SETTINGS, TITULO, PRESENTACIONES, presentationTitle } fro
 import { ConfigPanel } from './configPanel.js';
 import { PointCloud } from './pointCloud.js';
 import { Overlay } from './overlay.js';
-import { TREATMENTS, treat, pickTreatment, seedOf, composeFigure, figureToTone, rowsToTone, toneToText } from './treatments.js';
+import { TREATMENTS, treat, pickTreatment, seedOf, composeFigure, figureToTone, rowsToTone, digitsToTone, toneToText } from './treatments.js';
 
 const params = new URLSearchParams(location.search);
 const num = (k, d) => (params.has(k) && Number.isFinite(+params.get(k)) ? +params.get(k) : d);
@@ -86,9 +86,10 @@ async function boot() {
   const camDist = CONFIG.worldH / 2 / Math.tan(THREE.MathUtils.degToRad(fov / 2));
   camera.position.set(0, 0, camDist);
 
-  // glifos a 192 px (antes 96): las palabras grandes (5×, 12×, títulos) ya no se ven blandas ni pixeladas
-  const atlasHi = maxTex >= 8192 && num('atlas', 4096) >= 4096; // ?atlas=2048: el de antes (placas con poca memoria)
-  const atlas = new GlyphAtlas(renderer, atlasHi ? { size: 4096, cell: 192 } : {});
+  // glifos a 160 px (al principio eran 96): las palabras grandes (5×, 12×, títulos) no se ven blandas ni pixeladas.
+  // 25 × 25 = 625 lugares: entran las cinco familias (105 caracteres cada una) y los signos; antes eran 441, justos.
+  const atlasHi = maxTex >= 8192 && num('atlas', 4096) >= 4096; // ?atlas=2048: la mitad (placas con poca memoria)
+  const atlas = new GlyphAtlas(renderer, atlasHi ? { size: 4096, cell: 160 } : { size: 2048, cell: 80 });
   const field = new TypeField({ atlas, count: CONFIG.pool, aspect: camera.aspect, worldH: CONFIG.worldH, idleText: CONFIG.idleText });
   scene.add(field.mesh);
   const lines = new Overlay(field); // líneas finas: fragmentos del muro y figura de la tecla 0
@@ -159,6 +160,8 @@ async function boot() {
       const src = (tone, origen) => (tone ? { tone, origen } : null);
       const comp = () => (Array.isArray(raw.formas) && raw.formas.length ? src(figureToTone(composeFigure(raw.formas), gw, gh), `composición del LLM (${raw.formas.length} formas)${re}`) : null);
       const llmGrid = () => (dir.grilla ? src(rowsToTone(dir.grilla, gw, gh), `grilla del LLM${re}`) : null);
+      // imagen ASCII del modelo con sus tonos (luz y sombra), no sólo la silueta
+      const ascii = () => (Array.isArray(raw.grilla_tonos) && raw.grilla_tonos.length ? src(digitsToTone(raw.grilla_tonos, gw, gh), `imagen ASCII del modelo${re}`) : null);
       const fromSvg = () => {
         const f = dir.svg_paths?.length && sampleFigure(dir.svg_paths.map((d) => ({ d, op: 'fill' })), {});
         return f ? src(figureToTone(f, gw, gh), 'silueta SVG del LLM') : null;
@@ -169,21 +172,26 @@ async function boot() {
       const fromLib = () => fromEmoji(LIB_EMOJI[lib], `biblioteca (${lib})`) || src(figureToTone(sampleFigure(SHAPES[lib], {}), gw, gh), `biblioteca (${lib})`);
       // «letras»: arte ASCII hecho con las letras transcriptas; se muestra tal cual (sólo positivo, sin tratamiento)
       const letras = Array.isArray(raw.grilla_letras) && raw.grilla_letras.length ? { grid: raw.grilla_letras, origen: `letras transcriptas (ASCII)${re}`, chars: true } : null;
-      const order = settings.forma_grilla === 'emoji' ? [emo, comp, llmGrid, fromSvg] : [comp, llmGrid, fromSvg, emo];
+      const order = settings.forma_grilla === 'emoji' ? [emo, comp, llmGrid, fromSvg] : [ascii, comp, llmGrid, fromSvg, emo];
       const pick = [() => letras, ...order].reduce((a, f) => a || f(), null) || fromLib();
       // semilla estable: la misma estrofa da la misma imagen (re-proyección idéntica)
       const seed = seedOf(JSON.stringify([dir.figura, raw.emoji, raw.formas, raw.grilla, raw.verso || dir.verso, dir.palabras_clave]));
       const pref = settings.tratamiento || 'azar';
-      const kind = pick.chars ? 'letras' : TREATMENTS.includes(pref) ? pref : pref === 'llm' && TREATMENTS.includes(raw.tratamiento) ? raw.tratamiento : pickTreatment(seed);
+      // dibujo con letras: el tono elige también la letra (rampa, híbrido, estructura); usa los tonos tal cual
+      const glifos = !pick.chars && ['rampa', 'hibrido', 'estructura'].includes(settings.dibujo_letras) ? settings.dibujo_letras : null;
+      const kind = pick.chars ? 'letras' : glifos ? glifos : TREATMENTS.includes(pref) ? pref : pref === 'llm' && TREATMENTS.includes(raw.tratamiento) ? raw.tratamiento : pickTreatment(seed);
       let shapeArg = pick.grid, preview = pick.grid;
-      if (!pick.chars) {
+      if (glifos) {
+        shapeArg = { tone: pick.tone, accent: null, gw, gh };
+        preview = toneToText(pick.tone, null, gw, gh);
+      } else if (!pick.chars) {
         const t = treat(pick.tone, gw, gh, kind, seed);
         shapeArg = { tone: t.tone, accent: t.accent, gw, gh };
         preview = toneToText(t.tone, t.accent, gw, gh);
       }
       const origen = `${pick.origen} · ${kind}`;
       const artistWall = show.mode === 'muro' && show.state === 'perform'; // muro, cruce o constelación
-      const pol = pick.chars || artistWall ? 'positivo' : choosePolarity(dir); // en las placas, el dibujo sobre negro
+      const pol = pick.chars || glifos || artistWall ? 'positivo' : choosePolarity(dir); // en las placas, el dibujo sobre negro
       lastGrid = { grid: preview, origen, pol };
       // el contorno de la forma va en el color de acento de la marca
       field.edgeAccent = settings.contorno_acento !== false;
@@ -191,7 +199,7 @@ async function boot() {
       field.releaseFigure(true);
       field.setBackdrop(true); // la ilustración se cala en el muro: tiene que estar visible
       field.refillSecs = (settings.cadencia && settings.cadencia.min_s) || 14;
-      field.setShape(shapeArg, { polaridad: pol, duracion: Math.max(8, +dir.duracion_s || 16), chars: !!pick.chars });
+      field.setShape(shapeArg, { polaridad: pol, duracion: Math.max(8, +dir.duracion_s || 16), chars: !!pick.chars, glifos: glifos || 'brillo' });
       if (artistWall) field.breakWordsOverShape(); // las palabras que tapan el dibujo se rompen
       config.setLastDirection({ ...dir, origen: `${origen} · ${pol}`, pidio: 'grilla', estiloVisto: 'grilla' });
       debug.setDirection(dir);
@@ -410,8 +418,12 @@ async function boot() {
   }
 
   function migrate(s) {
-    const old = (s.loop || []).some((st) => st && (st.contenido === 'loop/flat.png' || st.carpeta === 'public/loop/sponsors'));
-    if (old) s = { ...s, loop: structuredClone(DEFAULT_SETTINGS.loop) };
+    // loop de la primera versión → el de grupos de logos. UNA sola vez: antes corría siempre, y como el panel C ponía
+    // esa misma carpeta al cambiar un paso a «logos», se borraba el loop entero.
+    if (!s.loop_viejo_v13) {
+      const old = (s.loop || []).some((st) => st && (st.contenido === 'loop/flat.png' || st.carpeta === 'public/loop/sponsors'));
+      s = { ...s, loop: old ? structuredClone(DEFAULT_SETTINGS.loop) : s.loop, loop_viejo_v13: true };
+    }
     // v4: las ilustraciones pasan a ser grilla de texto (una sola vez; después se respeta lo elegido en el panel)
     if (!s.imagenes_v5) s = { ...s, imagenes: 'grilla', imagenes_v4: true, imagenes_v5: true }; // la ilustración es la grilla de texto
     // ilustraciones: composición abstracta del LLM (no emoji) con tratamiento gráfico
@@ -443,6 +455,9 @@ async function boot() {
     }
     // v10: tres paredes (oeste 3175 · norte 1775 · este 3450) en 8400 × 690, una sola vez si estaba un formato anterior
     if (!s.formato_v10) s = { ...s, formato: ['1024x768', '1822x737', '', undefined].includes(s.formato) ? '8400x690/3175,1775,3450' : s.formato, formato_v10: true };
+    // v13: el modelo devuelve la imagen como arte ASCII con tonos y el telón la dibuja eligiendo la letra (una vez;
+    // va al final para que ninguna migración anterior lo pise)
+    if (!s.ascii_v13) s = { ...s, imagenes: 'grilla', forma_grilla: 'llm', grilla_preset: 'densidad', dibujo_letras: 'hibrido', ascii_v13: true };
     return s;
   }
 
@@ -488,12 +503,26 @@ async function boot() {
     if (mic === 'error' || mic === 'unavailable') warn = 'micrófono sin señal';
     else if (oa && oa !== 'connected') warn = oa === 'reconnecting' || oa === 'connecting' ? 'transcripción reconectando' : 'sin transcripción';
     const base = presentationTitle(settings);
-    document.title = warn ? `⚠ ${warn} · ${base}` : base;
+    document.title = [warn && `⚠ ${warn}`, noticeText && `● ${noticeText}`, base].filter(Boolean).join(' · ');
   }
 
   // El estado del show nunca se escribe en la pared: sólo en el panel C.
-  function notify(text) {
+  let noticeText = '', noticeTimer = 0;
+  function notify(text, aviso = false) {
     config?.setState(show?.label?.() || text);
+    // aviso = algo que el operador tiene que leer (p. ej. «Ningún artista tiene la tecla 6»): 8 s en el panel C y en
+    // el título de la ventana. Lo demás es el estado, que ya se ve en el panel.
+    if (!aviso || !text) return;
+    noticeText = String(text);
+    config?.setNotice(noticeText);
+    console.info('[aviso]', noticeText);
+    warnOperator({});
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => {
+      noticeText = '';
+      config?.setNotice('');
+      warnOperator({});
+    }, 8000);
   }
 
   // pedir al backend los logos de una carpeta (responde con data URLs)
@@ -525,7 +554,7 @@ async function boot() {
   const show = new Show({
     field,
     fetchLogos,
-    notify: (t) => notify(t),
+    notify: (t, aviso) => notify(t, aviso),
     interiorTarget: Math.min(4200, CONFIG.pool * 0.32),
     onSession: (st) => socket?.send({ type: 'session', ...st }),
     onPrerollReset: () => socket?.send({ type: 'preroll_reset' }),
@@ -553,7 +582,7 @@ async function boot() {
     },
     hello: (m) => {
       replayMode = !!m.replay;
-      if (m.replay) notify(`RE-PROYECCIÓN · ${String(m.replay.carpeta || '').split(/[\\/]/).pop()}`);
+      if (m.replay) notify(`RE-PROYECCIÓN · ${String(m.replay.carpeta || '').split(/[\\/]/).pop()}`, true);
       else if (!bootLogged) {
         bootLogged = true;
         logUi({ action: 'arranque' }); // la escena empieza de cero (al re-proyectar se reinicia aquí)
@@ -612,7 +641,7 @@ async function boot() {
       config.setState(show.label());
     },
     replay_settings: (m) => setSettings({ ...settings, ...(m.settings || {}) }, { persist: false }),
-    replay_end: () => notify('Fin de la re-proyección'),
+    replay_end: () => notify('Fin de la re-proyección', true),
     prompt_preview: (m) => config.setPromptPreview(m),
     grid_test: (m) => {
       lastGrid = null;
@@ -768,7 +797,7 @@ async function boot() {
 
   // ── teclado del operador ─────────────────────────────────────────────────
   // teclas que cambian lo que se ve: se graban y, al re-proyectar, las repite el backend
-  const SHOW_KEY = /^(arrowright|arrowleft|[0-9]|s|p|t|l)$/;
+  const SHOW_KEY = /^(arrowright|arrowleft|[0-9]|s|p|t|l|z)$/;
   window.addEventListener('keydown', (e) => {
     const tag = document.activeElement?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
@@ -796,14 +825,16 @@ async function boot() {
     else if (k === 'f') {
       if (document.fullscreenElement) document.exitFullscreen();
       else document.documentElement.requestFullscreen?.().catch(() => {});
-    } else if (k === '5') show.goFlatFinal(); // cierre: todo se desarma y queda el logo de FLAT
+    } else if (k === 'z') show.goFlatFinal(); // cierre: todo se desarma y queda el logo de FLAT
+    // sesiones grabadas cuando el cierre era la tecla 5: al re-proyectarlas, el 5 sin artista sigue siendo el cierre
+    else if (k === '5' && replayMode && show.artistForKey('5') < 0) show.goFlatFinal();
     else if (k === '0') show.goSparse(); // sólo transcripción: pocas palabras que arman figuras y se rompen
     else if (k === 's') show.toggleRecord();
     else if (k === 'p') show.stop();
     else if (k === 't') show.startWords();
     else if (k === 'l') show.goLoop();
     else if (show.artistForKey(k) >= 0) show.goArtist(show.artistForKey(k) + 1); // la tecla elegida en el panel C
-    else if (/^[1-9]$/.test(k)) show.notify(`Ningún artista tiene la tecla ${k} (panel C → Artistas)`);
+    else if (/^[1-9]$/.test(k)) show.notify(`Ningún artista tiene la tecla ${k} (panel C → Artistas)`, true);
     else if (k === 'escape') {
       config.toggle(false);
       debug.toggle(false);
@@ -995,6 +1026,21 @@ async function boot() {
   // se vuelve a la misma escena (la transcripción y la grabación siguen en el backend, sin cortes).
   renderer.domElement.addEventListener('webglcontextlost', (e) => {
     e.preventDefault();
+    // tope: si la placa pierde el dibujo una y otra vez, no se entra en un bucle de recargas (3 en 2 minutos y se
+    // avisa en el título; F5 o reiniciar el navegador cuando la placa esté bien)
+    let hits = [];
+    try {
+      hits = JSON.parse(sessionStorage.getItem('poesia.gpu') || '[]').filter((x) => Date.now() - x < 120000);
+      hits.push(Date.now());
+      sessionStorage.setItem('poesia.gpu', JSON.stringify(hits));
+    } catch {
+      /* sin sessionStorage: se recarga igual */
+    }
+    if (hits.length > 3) {
+      console.error('[gpu] la placa perdió el dibujo 4 veces en 2 minutos: no recargo más');
+      document.title = '⚠ placa de video: recargar (F5) · ' + presentationTitle(settings);
+      return;
+    }
     console.warn('[gpu] se perdió el contexto WebGL: recargo y vuelvo a la escena');
     try {
       sessionStorage.setItem(RESUME_KEY, JSON.stringify({ at: Date.now(), state: show.state, mode: show.mode, variant: show.variant, artist: show.artistIdx, recording: show.recording }));

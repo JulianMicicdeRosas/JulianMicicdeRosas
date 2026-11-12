@@ -173,6 +173,7 @@ export class TypeField {
     this.ambientRain = true; // sin letras flotando: el ambiente es sólo lluvia que cae del telón
     this.gph = new Int32Array(N).fill(-1);
     this.keepFall = new Uint8Array(N);
+    this.cellOf = new Int32Array(N); // celda del telón (índice + 1) que usa esta letra; 0 = ninguna
     this.onTransition = null; // (intensidad) → ráfaga de glitch de pantalla
     this.idleText = (idleText || 'la voz escribe en la oscuridad').trim();
 
@@ -425,15 +426,35 @@ export class TypeField {
     }
     if (pick < 0) pick = fallback;
     if (pick < 0) {
+      // No hay libres cerca: se busca en todo el pool. Antes se tomaba la primera letra que apareciera, aunque fuera de
+      // una palabra viva (que después se rompía o cambiaba de letra). Ahora, en este orden: una libre; una del telón
+      // (y se le avisa a su celda, que se vuelve a escribir sola); una de un dibujo; recién al final, cualquier otra.
+      let bg = -1, fig = -1, any = -1;
       for (let k = 0; k < N - 1; k++) {
         const i = 1 + ((this.allocCursor + k) % (N - 1));
-        if (this.state[i] !== LINE && this.state[i] !== CURSOR && this.state[i] !== TITLE) {
+        const st = this.state[i];
+        if (st === FREE) {
           pick = i;
           break;
         }
+        if (st === BGW) {
+          if (bg < 0 && this.cellOf[i] > 0) bg = i;
+        } else if (st === FIGURE) {
+          if (fig < 0) fig = i;
+        } else if (any < 0 && st !== LINE && st !== CURSOR && st !== TITLE) any = i;
       }
+      if (pick < 0 && bg >= 0) {
+        const c = this.backdrop?.cells[this.cellOf[bg] - 1];
+        if (c && c.i === bg) {
+          c.i = -1;
+          c.at = this.time + 2;
+        }
+        pick = bg;
+      }
+      if (pick < 0) pick = fig >= 0 ? fig : any;
     }
     if (pick < 0) return -1;
+    this.cellOf[pick] = 0;
     this.allocCursor = pick + 1;
     this._unrest(pick);
     this.state[pick] = LINE;
@@ -1341,7 +1362,7 @@ export class TypeField {
    * positivo: sólo quedan las palabras dentro de la figura · negativo: la figura es un hueco en el muro.
    * Las letras que sobran caen con glitch; las que faltan aparecen con un salto.
    */
-  setShape(grid, { polaridad = 'negativo', duracion = 20, chars = false } = {}) {
+  setShape(grid, { polaridad = 'negativo', duracion = 20, chars = false, glifos = 'brillo' } = {}) {
     if (!grid || (!grid.tone && !grid.length)) {
       if (this.shape) this.onTransition?.(0.45);
       this.shape = null;
@@ -1349,12 +1370,17 @@ export class TypeField {
     }
     // chars: arte ASCII con letras propias (una letra de la grilla = una celda del muro, sólo positivo)
     // grid.tone: imagen en tonos (treatments.js) → cada letra se enciende según su tono; grid.accent: color de marca
-    const pol = chars || polaridad === 'positivo' ? 'positivo' : 'negativo';
+    // glifos: además de encenderse, cada celda elige su letra según el tono de la imagen (sólo en positivo)
+    //   'rampa'      la letra con la tinta que pide el tono (letras de lo dicho + signos): ASCII clásico
+    //   'hibrido'    el texto sigue en orden y se lee; el tono elige punto / minúscula / mayúscula / negrita
+    //   'estructura' los bordes con / \ | _ según su dirección; adentro, rampa
+    const gl = grid.tone && ['rampa', 'hibrido', 'estructura'].includes(glifos) ? glifos : null;
+    const pol = chars || gl || polaridad === 'positivo' ? 'positivo' : 'negativo';
     this.shapeId = (this.shapeId || 0) + 1;
-    if (grid.tone) this.shape = { tone: grid.tone, accent: grid.accent, gw: grid.gw, gh: grid.gh, pol, id: this.shapeId, until: this.time + duracion };
+    if (grid.tone) this.shape = { tone: grid.tone, accent: grid.accent, gw: grid.gw, gh: grid.gh, pol, id: this.shapeId, until: this.time + duracion, glifos: gl };
     else this.shape = { grid, gw: Math.max(...grid.map((r) => r.length)), gh: grid.length, pol, chars, id: this.shapeId, until: this.time + duracion };
     this.bdFill = null; // la imagen se muestra completa
-    this.onTransition?.(0.75);
+    this.onTransition?.(gl ? 0.3 : 0.75); // una imagen densa de letras entra con un glitch más corto (si no, encandila)
   }
 
   /** El muro se va escribiendo durante `segundos` (hasta la próxima imagen) en lugar de aparecer entero. */
@@ -1363,6 +1389,59 @@ export class TypeField {
   }
 
   /** ¿La celda visible (x, y) toca el borde de la ilustración? (alguna vecina queda vacía) */
+  /** Prepara lo que la imagen necesita para elegir letras: la rampa de tinta y, en «estructura», el gradiente. */
+  _shapeGlyphPrep(S) {
+    const B = this.backdrop, atlas = this.atlas;
+    const set = new Set(ASCII_SYMBOLS);
+    for (let j = 0; j < B.cells.length && set.size < 70; j += 3) if (B.cells[j].ch !== ' ') set.add(B.cells[j].ch);
+    S.ramp = [...set].sort((a, b) => atlas.ink[atlas.slot(a, B.kind)] - atlas.ink[atlas.slot(b, B.kind)]);
+    if (S.glifos === 'estructura') {
+      const { gw, gh, tone } = S;
+      S.gx = new Float32Array(gw * gh);
+      S.gy = new Float32Array(gw * gh);
+      const at = (x, y) => tone[clamp(y, 0, gh - 1) * gw + clamp(x, 0, gw - 1)];
+      for (let y = 0; y < gh; y++) {
+        for (let x = 0; x < gw; x++) {
+          S.gx[y * gw + x] = at(x + 1, y) - at(x - 1, y); // celdas 1 × 2: dos columnas = una fila
+          S.gy[y * gw + x] = (at(x, y + 1) - at(x, y - 1)) * 0.5;
+        }
+      }
+    }
+  }
+
+  /** Qué letra le pide la imagen a una celda del telón (tono v en la celda ti de la grilla de tonos). */
+  _shapeGlyph(S, c, ti, v) {
+    const B = this.backdrop;
+    if (!S.ramp) this._shapeGlyphPrep(S);
+    const rampAt = (u) => S.ramp[Math.min(S.ramp.length - 1, Math.floor(clamp((u - 0.1) / 0.9, 0, 0.999) * S.ramp.length))];
+    c.gch = null;
+    c.gcls = -1;
+    c.gk = B.kind;
+    c.acc = 0;
+    if (S.glifos === 'hibrido') {
+      c.gcls = v < 0.26 ? 0 : v < 0.46 ? 1 : v < 0.7 ? 2 : 3;
+      c.alpha = [0.42, 0.55, 0.76, 0.92][c.gcls];
+      if (c.gcls === 3) c.gk = 'bold';
+      return;
+    }
+    if (S.glifos === 'estructura' && ti >= 0) {
+      const gx = S.gx[ti], gy = S.gy[ti];
+      if (Math.hypot(gx, gy) > 0.2) {
+        const ang = ((Math.atan2(gy, gx) * 180) / Math.PI + 180) % 180; // dirección en que sube el tono; el borde la cruza
+        c.gch = ang < 22.5 || ang >= 157.5 ? '|' : ang < 67.5 ? '/' : ang < 112.5 ? '_' : '\\';
+        c.gk = 'bold';
+        c.alpha = 1;
+        c.acc = this.edgeAccent ? 1 : 0;
+        return;
+      }
+      c.gch = rampAt(v);
+      c.alpha = 0.4 + 0.45 * v;
+      return;
+    }
+    c.gch = rampAt(v);
+    c.alpha = 0.55 + 0.45 * v;
+  }
+
   _shapeEdge(x, y) {
     const B = this.backdrop;
     return this._shapeHides(x + B.cw, y) || this._shapeHides(x - B.cw, y) || this._shapeHides(x, y + B.rh) || this._shapeHides(x, y - B.rh);
@@ -1420,7 +1499,7 @@ export class TypeField {
     const { rowsN, top, bottom, rh, size, kind, cw, colsN, x0, x1 } = this._bdGeom();
     const cells = [];
     for (let r = 0; r < rowsN; r++) {
-      for (let c = 0; c < colsN; c++) cells.push({ x: x0 + (c + 0.5) * cw, y: top - (r + 0.5) * rh, ch: ' ', i: -1, at: 0 });
+      for (let c = 0; c < colsN; c++) cells.push({ x: x0 + (c + 0.5) * cw, y: top - (r + 0.5) * rh, ch: ' ', i: -1, at: 0, k: cells.length });
     }
     this.backdrop = { rowsN, colsN, rh, size, cw, kind, cells, top, bottom, x0, x1, tick: 0, ver: this.corpusChars, next: null, rw: 0, fx: new Uint8Array(cells.length), fxVer: -1 };
     const txt = this._bdText(cells.length);
@@ -1458,12 +1537,13 @@ export class TypeField {
       for (let q = 0, qn = Math.max(70, Math.round(Math.max(1000, B.cells.length / 6) * step)); q < qn && B.rw < B.cells.length; q++, B.rw++) {
         const c = B.cells[B.rw];
         c.ch = B.next[B.rw] || ' ';
-        if (c.i < 0 || this.shape?.chars) continue; // con arte de letras, la celda muestra la letra de la imagen
+        if (c.i < 0 || this.shape?.chars || (this.shape?.glifos && c.sid === this.shape.id && (c.gch || c.ch !== ' '))) continue; // la celda muestra la letra que pide la imagen (se actualiza más abajo, una sola vez)
         if (c.ch === ' ') this._bdDrop(c, t);
         else {
           this.slot[c.i] = this.atlas.slot(c.ch, B.kind);
           this.birth[c.i] = t;
           c.shown = c.ch;
+          c.sk = B.kind;
         }
       }
       if (B.rw >= B.cells.length) B.next = null;
@@ -1495,9 +1575,23 @@ export class TypeField {
         c.hide = this._shapeHides(c.x, c.y);
         if (S.tone) {
           const ti = this._toneIndex(c.x, c.y), v = ti < 0 ? 0 : S.tone[ti];
-          c.alpha = S.pol === 'positivo' ? 0.22 + 0.78 * v : 0.82 * (1 - 0.75 * Math.min(1, v / 0.5));
-          c.acc = this.edgeAccent && ti >= 0 && S.accent && S.accent[ti] ? 1 : 0;
+          if (S.glifos) {
+            this._shapeGlyph(S, c, ti, v);
+            // la letra que ya estaba en la celda también entra calma (pudo haberse escrito recién, al rellenarse el
+            // telón entre una imagen y la siguiente)
+            if (c.i >= 0 && this.birth[c.i] > t - 10) {
+              this.birth[c.i] = t - 10;
+              this.metaDirty = true;
+            }
+          } else {
+            c.gch = null;
+            c.gcls = -1;
+            c.alpha = S.pol === 'positivo' ? 0.22 + 0.78 * v : 0.82 * (1 - 0.75 * Math.min(1, v / 0.5));
+            c.acc = this.edgeAccent && ti >= 0 && S.accent && S.accent[ti] ? 1 : 0;
+          }
         } else {
+          c.gch = null;
+          c.gcls = -1;
           c.acc = this.edgeAccent && !c.hide && this._shapeEdge(c.x, c.y) ? 1 : 0;
           c.alpha = c.acc ? 1 : 0.82;
         }
@@ -1506,6 +1600,9 @@ export class TypeField {
         c.hide = false;
         c.acc = 0;
         c.alpha = 0.82;
+        if (c.gch && c.ch === ' ' && c.i >= 0) this._bdDrop(c, t, false); // un signo de la imagen en un espacio del texto
+        c.gch = null;
+        c.gcls = -1;
       }
       const fx = FX[j];
       if (fx === 2) {
@@ -1531,14 +1628,27 @@ export class TypeField {
         }
       }
       // arte de letras: la celda muestra la letra de la imagen (cambia con un salto)
-      const want = this.shape?.chars ? this._shapeChar(c.x, c.y) || ' ' : c.ch;
-      if (c.i >= 0 && c.shown !== want && want !== ' ') {
-        this.slot[c.i] = this.atlas.slot(want, B.kind);
-        this.birth[c.i] = t;
+      // imagen dibujada con letras: el tono elige el signo (rampa, estructura) o la caja y el peso de la letra (híbrido)
+      let want = this.shape?.chars ? this._shapeChar(c.x, c.y) || ' ' : c.ch, wk = B.kind;
+      if (S && S.glifos && c.sid === S.id) {
+        if (c.gch) {
+          want = c.gch;
+          wk = c.gk;
+        } else if (c.gcls >= 0 && want !== ' ') {
+          want = c.gcls === 0 ? '·' : c.gcls === 1 ? want.toLowerCase() : want.toUpperCase();
+          wk = c.gk;
+        }
+      }
+      if (c.i >= 0 && (c.shown !== want || (c.sk || B.kind) !== wk) && want !== ' ') {
+        this.slot[c.i] = this.atlas.slot(want, wk);
+        // (en una imagen dibujada con letras el cambio no cuenta como letra «recién dicha»: sin destello ni salto de
+        // tamaño con la voz, que con cientos de letras a la vez quemaba la imagen)
+        if (!(S && S.glifos)) this.birth[c.i] = t;
         c.shown = want;
+        c.sk = wk;
         this.metaDirty = true;
       }
-      if (c.i < 0 && want !== ' ' && (j < limit || this.shape?.chars) && t >= c.at && budget-- > 0) this._bdPlace(c, t, want);
+      if (c.i < 0 && want !== ' ' && (j < limit || this.shape?.chars || S?.glifos) && t >= c.at && budget-- > 0) this._bdPlace(c, t, want, wk);
     }
     // letras que se desprenden y caen (más con la voz fuerte)
     const rate = (0.8 + 5 * this.phys.intensidad + 14 * this.rms) * step;
@@ -1566,12 +1676,13 @@ export class TypeField {
       k %= B.cells.length;
       const c = B.cells[k++];
       c.ch = ch;
-      if (c.i < 0) continue;
+      if (c.i < 0 || (this.shape?.glifos && c.sid === this.shape.id && (c.gch || ch !== ' '))) continue; // (la letra la pone la imagen, en el paso del telón)
       if (ch === ' ') this._bdDrop(c, t, false);
       else {
         this.slot[c.i] = this.atlas.slot(ch, B.kind);
         this.birth[c.i] = t; // destello
         c.shown = ch;
+        c.sk = B.kind;
         this.talpha[c.i] = 1;
       }
     }
@@ -1580,7 +1691,7 @@ export class TypeField {
     this.metaDirty = true;
   }
 
-  _bdPlace(c, t, ch = c.ch) {
+  _bdPlace(c, t, ch = c.ch, kind = this.backdrop.kind) {
     const B = this.backdrop;
     const i = this._allocParticle(false);
     if (i < 0) return;
@@ -1598,14 +1709,19 @@ export class TypeField {
     this.tsize[i] = B.size;
     this.size[i] = B.size;
     this.talpha[i] = 0.82;
-    this.pslot[i] = this.atlas.slot(ch, B.kind);
+    this.pslot[i] = this.atlas.slot(ch, kind);
     c.shown = ch;
+    c.sk = kind;
     this.ptint[i] = 0;
     this.paccent[i] = 0;
     this.delay[i] = t + Math.random() * 0.4;
-    this.birth[i] = this.delay[i];
+    // las letras de una imagen dibujada con letras entran calmas: si contaran como «recién dichas», al llegar la
+    // imagen crecerían y arderían todas juntas con la voz (cientos a la vez: una mancha blanca durante 2–3 s)
+    const calm = !!(this.shape && this.shape.glifos && c.sid === this.shape.id);
+    this.birth[i] = calm ? this.delay[i] - 10 : this.delay[i];
     this.level[i] = 0.1;
     c.i = i;
+    this.cellOf[i] = c.k + 1;
     this.metaDirty = true;
   }
 
@@ -1615,6 +1731,7 @@ export class TypeField {
     c.i = -1;
     c.at = t + 1.5 + Math.random() * 5;
     if (i < 0 || this.state[i] !== BGW) return;
+    this.cellOf[i] = 0;
     this.state[i] = FREE;
     this.pslot[i] = -1;
     this.keepFall[i] = fall ? 1 : 0;

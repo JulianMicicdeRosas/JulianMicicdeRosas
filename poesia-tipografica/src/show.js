@@ -12,16 +12,16 @@ import { processLogo, paginate, composeLogos, LogoStage, solidTitle } from './lo
 import { later, every, cancel } from './ticker.js'; // no se frenan con la ventana oculta (Alt+Tab)
 
 export const ANIMS = ['clasica', 'muro', 'cruce', 'constelacion', 'sedimento', 'partitura'];
-// animación por número de tecla (5 es el cierre, 0 «pocas palabras»)
-const ANIM_BY_KEY = { 1: 'clasica', 2: 'muro', 3: 'cruce', 4: 'constelacion', 6: 'sedimento', 7: 'partitura', 8: 'muro', 9: 'constelacion' };
+// animación por número de tecla (0 es «pocas palabras»; el cierre es Z). 5, 8 y 9 repiten clásica, muro y constelación
+const ANIM_BY_KEY = { 1: 'clasica', 2: 'muro', 3: 'cruce', 4: 'constelacion', 5: 'clasica', 6: 'sedimento', 7: 'partitura', 8: 'muro', 9: 'constelacion' };
 // teclas del operador que no se pueden dar a un artista
-export const RESERVED_KEYS = new Set(['c', 'd', 'f', 's', 'p', 't', 'l', '0', '5', ' ']);
+export const RESERVED_KEYS = new Set(['c', 'd', 'f', 's', 'p', 't', 'l', 'z', '0', ' ']);
 
-/** Tecla de un artista: la elegida en el panel C o, si no tiene, su número de orden (1–4, 6–9). */
+/** Tecla de un artista: la elegida en el panel C o, si no tiene, su número de orden (1–9). */
 export function artistKey(a, i) {
   const k = String(a?.tecla || '').trim().toLowerCase().slice(0, 1);
   if (k) return k;
-  return i < 9 && i !== 4 ? String(i + 1) : '';
+  return i < 9 ? String(i + 1) : '';
 }
 
 /** Animación de un artista: la elegida en el panel C; si no, la de su tecla (1–9) o, con letra, por orden. */
@@ -64,8 +64,9 @@ export const DEFAULT_SETTINGS = {
   formato: '8400x690/3175,1775,3450', // salida: 'ANCHOxALTO' (cuadro centrado), con '/A,B,C' paredes; o 'pantalla'
   inicio_por_voz: true, // placa del artista: arranca sola cuando la persona habla
   umbral_voz: 0.35,
-  forma_grilla: 'llm', // ilustración: 'llm' (composición) · 'emoji' · 'letras'
-  grilla_preset: 'composicion',
+  forma_grilla: 'llm', // ilustración: 'llm' (la dibuja el modelo) · 'emoji' · 'letras'
+  grilla_preset: 'densidad', // el modelo devuelve la imagen como arte ASCII con tonos
+  dibujo_letras: 'hibrido', // cómo se dibuja en el telón: 'brillo' · 'rampa' · 'hibrido' · 'estructura'
   tratamiento: 'azar', // topografia | trama | erosion | eco | silueta | azar | llm
   prompt_grilla: '', // parte estética del pedido de la grilla ('' = la de fábrica)
   director: 'openai', // openai | ollama | deepseek
@@ -110,8 +111,10 @@ function loadImage(src) {
 }
 
 export class Show {
-  constructor({ field, onSession, notify, fetchLogos, interiorTarget = 4000 }) {
+  constructor({ field, onSession, notify, fetchLogos, onPrerollReset, interiorTarget = 4000 }) {
     this.field = field;
+    this.onPrerollReset = onPrerollReset; // 3 s de gracia de la placa: el backend descarta el audio previo
+    this.recToken = 0;
     this.fetchLogos = fetchLogos; // carpeta → Promise<string[]> (el backend lee la carpeta)
     this.pageTimers = [];
     this.logoCache = new Map();
@@ -266,7 +269,7 @@ export class Show {
   /**
    * Animación de cada artista (se alternan): 1 clásica (muro de texto + transcripción + dibujos calados) ·
    * 2 muro (palabras de muchos tamaños + un dibujo por oración) · 3 cruce (palabras horizontales y verticales,
-   * como un crucigrama) · 4 constelación (palabras unidas por líneas + un dibujo por oración). 6–9 repiten el ciclo.
+   * como un crucigrama) · 4 constelación (palabras unidas por líneas + un dibujo por oración). 5, 8 y 9 repiten.
    * Cada artista puede fijar la suya en el panel C.
    */
   artistAnim(n) {
@@ -542,7 +545,7 @@ export class Show {
     this.pageTimers = [];
   }
 
-  // ── cierre: tecla 5 ──────────────────────────────────────────────────────
+  // ── cierre: tecla Z ──────────────────────────────────────────────────────
   /** Todo se desarma (las letras caen) y queda el logo de FLAT; cada 4 s se rompe con glitch y se vuelve a armar. */
   async goFlatFinal() {
     this._setRecording(false);
@@ -633,7 +636,7 @@ export class Show {
   goArtist(n) {
     const a = this.artists[n - 1];
     if (!a?.name?.trim()) {
-      this.notify(`No hay artista ${n} (configúralo con C)`);
+      this.notify(`No hay artista ${n} (configúralo con C)`, true);
       return false;
     }
     this._setRecording(false);

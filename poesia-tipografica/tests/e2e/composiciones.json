@@ -1,0 +1,63 @@
+{
+ "vuelo": [
+  {"tipo":"elipse","cx":48,"cy":52,"rx":14,"ry":5,"giro":-18,"tono":1},
+  {"tipo":"poligono","puntos":[[40,50],[12,22],[22,20],[52,46]],"tono":0.9},
+  {"tipo":"poligono","puntos":[[50,50],[30,16],[38,14],[58,46]],"tono":0.55},
+  {"tipo":"poligono","puntos":[[54,55],[86,70],[80,74],[50,58]],"tono":0.8},
+  {"tipo":"elipse","cx":62,"cy":46,"rx":5,"ry":4,"tono":1},
+  {"tipo":"trazo","puntos":[[66,45],[74,43],[78,45]],"grosor":2,"tono":0.9},
+  {"tipo":"arco","cx":50,"cy":60,"r":30,"desde":200,"hasta":330,"grosor":1.5,"tono":0.4},
+  {"tipo":"arco","cx":50,"cy":60,"r":38,"desde":205,"hasta":320,"grosor":1,"tono":0.25},
+  {"tipo":"trazo","puntos":[[34,56],[22,62],[10,64]],"grosor":3,"tono":0.6},
+  {"tipo":"trazo","puntos":[[36,58],[26,68],[14,74]],"grosor":2,"tono":0.35},
+  {"tipo":"elipse","cx":20,"cy":80,"rx":1.5,"ry":1.5,"tono":0.7},
+  {"tipo":"elipse","cx":28,"cy":84,"rx":1,"ry":1,"tono":0.5},
+  {"tipo":"elipse","cx":14,"cy":86,"rx":1,"ry":1,"tono":0.4},
+  {"tipo":"elipse","cx":62,"cy":46,"rx":1.2,"ry":1.2,"restar":true}
+ ],
+ "arbol": [
+  {"tipo":"trazo","puntos":[[50,92],[50,70],[48,55],[50,40]],"grosor":7,"tono":1},
+  {"tipo":"trazo","puntos":[[49,62],[38,50],[28,44]],"grosor":3,"tono":0.85},
+  {"tipo":"trazo","puntos":[[50,55],[62,44],[74,40]],"grosor":3,"tono":0.85},
+  {"tipo":"trazo","puntos":[[50,45],[44,32],[40,22]],"grosor":2,"tono":0.8},
+  {"tipo":"trazo","puntos":[[50,45],[58,30],[60,18]],"grosor":2,"tono":0.8},
+  {"tipo":"elipse","cx":32,"cy":40,"rx":12,"ry":9,"tono":0.45},
+  {"tipo":"elipse","cx":66,"cy":34,"rx":14,"ry":10,"tono":0.5},
+  {"tipo":"elipse","cx":50,"cy":20,"rx":13,"ry":10,"tono":0.6},
+  {"tipo":"elipse","cx":42,"cy":28,"rx":7,"ry":6,"tono":0.8},
+  {"tipo":"anillo","cx":50,"cy":30,"r":28,"grosor":1.2,"tono":0.3},
+  {"tipo":"trazo","puntos":[[50,90],[38,96],[24,98]],"grosor":2,"tono":0.6},
+  {"tipo":"trazo","puntos":[[50,90],[64,95],[80,97]],"grosor":2,"tono":0.6},
+  {"tipo":"elipse","cx":60,"cy":24,"rx":4,"ry":3,"restar":true},
+  {"tipo":"elipse","cx":30,"cy":36,"rx":3,"ry":2.5,"restar":true}
+ ],
+ "mano": [
+  {"tipo":"elipse","cx":50,"cy":62,"rx":15,"ry":17,"tono":1},
+  {"tipo":"trazo","puntos":[[40,52],[34,34],[32,20]],"grosor":5,"tono":0.95},
+  {"tipo":"trazo","puntos":[[47,48],[46,28],[46,12]],"grosor":5,"tono":1},
+  {"tipo":"trazo","puntos":[[54,48],[58,28],[60,14]],"grosor":5,"tono":0.95},
+  {"tipo":"trazo","puntos":[[60,54],[68,38],[72,26]],"grosor":4.5,"tono":0.9},
+  {"tipo":"trazo","puntos":[[38,66],[26,58],[18,50]],"grosor":5,"tono":0.9},
+  {"tipo":"anillo","cx":50,"cy":40,"r":34,"grosor":1,"tono":0.35},
+  {"tipo":"anillo","cx":50,"cy":40,"r":42,"grosor":0.8,"tono":0.2},
+  {"tipo":"elipse","cx":50,"cy":64,"rx":5,"ry":5,"restar":true},
+  {"tipo":"trazo","puntos":[[50,80],[50,96]],"grosor":10,"tono":0.7},
+  {"tipo":"elipse","cx":80,"cy":20,"rx":1.5,"ry":1.5,"tono":0.6},
+  {"tipo":"elipse","cx":86,"cy":30,"rx":1,"ry":1,"tono":0.4},
+  {"tipo":"elipse","cx":14,"cy":24,"rx":1.2,"ry":1.2,"tono":0.5}
+ ],
+ "luna_agua": [
+  {"tipo":"elipse","cx":56,"cy":30,"rx":16,"ry":16,"tono":1},
+  {"tipo":"elipse","cx":63,"cy":26,"rx":14,"ry":14,"restar":true},
+  {"tipo":"anillo","cx":56,"cy":30,"r":22,"grosor":1,"tono":0.3},
+  {"tipo":"rect","x":8,"y":58,"w":84,"h":1.6,"tono":0.7},
+  {"tipo":"trazo","puntos":[[44,66],[56,65],[66,66]],"grosor":3,"tono":0.85},
+  {"tipo":"trazo","puntos":[[40,72],[54,71],[70,72]],"grosor":2.5,"tono":0.6},
+  {"tipo":"trazo","puntos":[[36,78],[52,77],[72,78]],"grosor":2,"tono":0.45},
+  {"tipo":"trazo","puntos":[[30,84],[50,83],[76,84]],"grosor":1.6,"tono":0.3},
+  {"tipo":"trazo","puntos":[[24,90],[48,89],[82,90]],"grosor":1.2,"tono":0.2},
+  {"tipo":"elipse","cx":20,"cy":20,"rx":1,"ry":1,"tono":0.5},
+  {"tipo":"elipse","cx":30,"cy":12,"rx":0.8,"ry":0.8,"tono":0.4},
+  {"tipo":"elipse","cx":84,"cy":14,"rx":1,"ry":1,"tono":0.5}
+ ]
+}

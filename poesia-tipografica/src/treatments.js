@@ -184,6 +184,36 @@ export function rowsToTone(rows, gw, gh) {
   return figureToTone(figureFromAlpha(g.getImageData(0, 0, R, R).data), gw, gh);
 }
 
+/** Imagen ASCII del modelo ya pasada a tonos (filas de dígitos '0'…'9') → tonos 0..1 con la resolución del muro.
+ *  Conserva los grises (luz y sombra) y suaviza los escalones de la grilla chica. */
+export function digitsToTone(rows, gw, gh) {
+  if (!Array.isArray(rows) || !rows.length) return null;
+  const rh = rows.length, rw = Math.max(...rows.map((r) => r.length));
+  const k = R / Math.max(rh, rw / 2); // celdas 1 × 2
+  const a = document.createElement('canvas');
+  a.width = a.height = R;
+  const g = a.getContext('2d');
+  g.fillStyle = '#fff';
+  rows.forEach((r, y) =>
+    [...r].forEach((ch, x) => {
+      const v = +ch;
+      if (!(v > 0)) return;
+      g.globalAlpha = 0.14 + 0.86 * (Math.min(9, v) / 9);
+      g.fillRect((x * k) / 2, y * k, k / 2 + 0.6, k + 0.6);
+    }),
+  );
+  const b = document.createElement('canvas');
+  b.width = b.height = R;
+  const g2 = b.getContext('2d', { willReadFrequently: true });
+  try {
+    g2.filter = `blur(${(k * 0.28).toFixed(1)}px)`; // los escalones de 48 × 26 no llegan al muro
+  } catch {
+    /* sin filtros de lienzo: queda con escalones */
+  }
+  g2.drawImage(a, 0, 0);
+  return figureToTone(figureFromAlpha(g2.getImageData(0, 0, R, R).data, 0.06), gw, gh, 0.88);
+}
+
 // ── 3. tratamientos ─────────────────────────────────────────────────────────
 /** Distancia con signo al borde (en filas; celdas 1 × 2 → una columna vale media fila). Negativa adentro. */
 function signedDistance(inside, gw, gh) {

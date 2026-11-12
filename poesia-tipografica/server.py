@@ -241,9 +241,9 @@ class SettingsStore:
     KEYS = ("device", "artists", "loop", "prompt_estetica", "avisos", "pointcloud", "profundidad", "nube", "orbita",
             "curaduria", "imagenes", "prompt_grilla", "polaridad", "director", "cadencia", "estilos", "glitch_ambiente", "ascii_filas",
             "marca", "muro", "formato", "canal", "canal2", "forma_grilla", "grilla_preset", "tratamiento",
-            "inicio_por_voz", "umbral_voz", "presentacion", "grabar", "carpeta_grabaciones", "cero", "brillo",
+            "inicio_por_voz", "umbral_voz", "presentacion", "grabar", "carpeta_grabaciones", "cero", "brillo", "dibujo_letras",
             # marcas de migración: que una corrección automática se aplique una sola vez (y no pise lo elegido)
-            "imagenes_v4", "imagenes_v5", "loop_grupos_v2", "loop_flat_v3", "loop_flat_v4", "loop_titulo_v7", "titulo_flat_v8", "titulo_v9", "titulo_v11", "titulo_solido_v12", "formato_v9", "formato_v10", "imagenes_v7")
+            "imagenes_v4", "imagenes_v5", "loop_grupos_v2", "loop_flat_v3", "loop_flat_v4", "loop_titulo_v7", "titulo_flat_v8", "titulo_v9", "titulo_v11", "titulo_solido_v12", "ascii_v13", "loop_viejo_v13", "formato_v9", "formato_v10", "imagenes_v7")
 
     def __init__(self, path: str) -> None:
         self.path = path
@@ -583,7 +583,28 @@ class FrontendHub:
         self.hello_extra: Callable[[], dict[str, Any]] = lambda: {}
         self.recorder: SessionRecorder | None = None
 
+    @staticmethod
+    def origin_allowed(origin: str | None) -> bool:
+        """Sólo páginas de este mismo equipo (el show, el panel, OBS). Sin Origin: programas, no navegadores.
+        Más orígenes: WS_ORIGINS en .env, separados por coma."""
+        if not origin:
+            return True
+        extra = [o.strip().rstrip("/") for o in os.environ.get("WS_ORIGINS", "").split(",") if o.strip()]
+        if origin.rstrip("/") in extra:
+            return True
+        m = re.match(r"^https?://(\[[0-9a-fA-F:]+\]|[^/:]+)(:\d+)?$", origin.strip())
+        return bool(m) and m.group(1).lower() in ("localhost", "127.0.0.1", "[::1]")
+
     async def handler(self, ws: ServerConnection) -> None:
+        origin = None
+        try:
+            origin = ws.request.headers.get("Origin") if ws.request is not None else None
+        except Exception:  # noqa: BLE001
+            origin = None
+        if not self.origin_allowed(origin):
+            log.warning("Conexión rechazada: viene de otra página (%s). Para permitirla: WS_ORIGINS en .env", origin)
+            await ws.close(1008, "origen no permitido")
+            return
         self.clients.add(ws)
         peer = getattr(ws, "remote_address", None)
         log.info("Frontend conectado %s (%d clientes)", peer, len(self.clients))
@@ -1608,14 +1629,19 @@ letra. Celdas el doble de altas que anchas; silueta rellena, centrada, bordes li
         "tokens": 2000,
     },
     "densidad": {
-        "nombre": "Arte ASCII con rampa de densidad",
-        "desc": "ASCII clásico con escala de tonos \" .:-=+*#%@\"; el programa toma los tonos oscuros como figura.",
+        "nombre": "Imagen ASCII con tonos (el modelo dibuja con la rampa)",
+        "desc": "El modelo devuelve la imagen como arte ASCII con la escala de tonos \" .:-=+*#%@\". El programa conserva "
+                "los tonos (luz, sombra, volumen) y los dibuja con las letras del muro.",
         "claves": f'  "grilla": [{GRID_H} cadenas de {GRID_W} caracteres],',
-        "bloque": f"""Sobre "grilla": arte ASCII de EXACTAMENTE {GRID_H} filas × {GRID_W} columnas con la rampa de densidad
-" .:-=+*#%@" (de vacío a lleno). La figura en tonos densos (+ * # % @), el fondo en espacio; usa los tonos medios sólo
-para el borde, como un sombreado. Cada carácter es una celda el doble de alta que ancha. Fuerte contraste figura /
-fondo, silueta inconfundible, centrada.""",
-        "tokens": 1800,
+        "bloque": f"""Sobre "grilla": la imagen como arte ASCII de EXACTAMENTE {GRID_H} filas × {GRID_W} columnas, usando SÓLO
+estos diez caracteres, de vacío a pleno:  " .:-=+*#%@"  (espacio = nada · . : - = luz tenue · + * = medio tono ·
+# % @ = lo más denso). Cada carácter es una celda el doble de alta que ancha.
+- Dibuja con VOLUMEN, no sólo la silueta: la parte de la figura que mira a la luz va en # % @, la que se aleja en
+  + * =, y los bordes que se pierden en - : . Usa al menos cinco tonos distintos.
+- El fondo es espacio. Nada de marcos, texto, firmas ni leyendas: sólo la figura.
+- Una sola figura grande y centrada, que ocupe unas {GRID_H - 6} filas de alto; silueta inconfundible a primera vista.
+- Todas las filas del mismo largo ({GRID_W}); completa con espacios a la derecha.""",
+        "tokens": 2600,
     },
 }
 DEFAULT_GRID_PRESET = "composicion"
@@ -1907,6 +1933,68 @@ def check_grid(raw: Any) -> tuple[list[str] | None, str]:
     if filled < 0.03:
         return None, f"figura demasiado chica ({filled:.0%} de la grilla)"
     if filled > 0.9:
+        return None, f"grilla casi llena ({filled:.0%}): sin figura reconocible"
+    return out, ""
+
+
+ASCII_RAMP = " .:-=+*#%@"
+# lo que el modelo use fuera de la rampa se lleva al tono más parecido (por cuánta tinta tiene el signo)
+_ASCII_EXTRA = {**{c: 1 for c in "`',·"}, **{c: 2 for c in "_~\";^"}, **{c: 3 for c in "!|/\\()<>[]{}"},
+                **{c: 4 for c in "?17ilcrtv"}, **{c: 5 for c in "oxzsanue"}, **{c: 8 for c in "$&80MWNBQ"}}
+
+
+def ascii_tones(raw: Any) -> tuple[list[str] | None, str]:
+    """Imagen ASCII del modelo → GRID_H filas de GRID_W dígitos '0'…'9' (tono de cada celda), centrada y a escala.
+    Conserva los tonos intermedios (luz y sombra); devuelve (filas, motivo si no sirve)."""
+    if raw is None or raw == "" or raw == []:
+        return None, "el modelo no devolvió «grilla»"
+    rows = _grid_rows(raw)
+    if not rows:
+        return None, "la grilla vino vacía"
+
+    def level(ch: str) -> int:
+        k = ASCII_RAMP.find(ch)
+        if k >= 0:
+            return k
+        if ch in _ASCII_EXTRA:
+            return _ASCII_EXTRA[ch]
+        return 7 if ch.isalnum() else 3 if not ch.isspace() else 0
+
+    lv = [[level(ch) for ch in r.expandtabs(4)] for r in rows]
+    h, w = len(lv), max(len(r) for r in lv)
+    if w < 6 or h < 3:
+        return None, f"grilla demasiado chica ({w} × {h})"
+    lv = [r + [0] * (w - len(r)) for r in lv]
+    flat = [v for r in lv for v in r]
+    # fondo de puntos («.» en lugar de espacio): si un tono tenue cubre más de la mitad, es el fondo
+    for bg in (1, 2):
+        if flat.count(bg) > 0.5 * len(flat):
+            lv = [[0 if v == bg else v for v in r] for r in lv]
+            flat = [v for r in lv for v in r]
+    if sum(flat) / (9 * len(flat)) > 0.62:  # figura clara sobre fondo denso: se invierte
+        lv = [[9 - v for v in r] for r in lv]
+    ys = [y for y, r in enumerate(lv) if any(r)]
+    xs = [x for x in range(w) if any(lv[y][x] for y in range(h))]
+    if not ys:
+        return None, "la grilla vino vacía"
+    y0, y1, x0, x1 = ys[0], ys[-1] + 1, xs[0], xs[-1] + 1
+    bh, bw = y1 - y0, x1 - x0
+    sc = max(0.25, min(GRID_H * 0.88 / bh, GRID_W * 0.94 / bw, 4.0))
+    oh, ow = max(1, round(bh * sc)), max(1, round(bw * sc))
+    oy, ox = (GRID_H - oh) // 2, (GRID_W - ow) // 2
+    out = []
+    for gy in range(GRID_H):
+        line = []
+        for gx in range(GRID_W):
+            ly, lx = gy - oy, gx - ox
+            v = lv[y0 + min(bh - 1, int(ly / sc))][x0 + min(bw - 1, int(lx / sc))] if 0 <= ly < oh and 0 <= lx < ow else 0
+            line.append(str(v))
+        out.append("".join(line))
+    cells = "".join(out)
+    filled = 1 - cells.count("0") / len(cells)
+    if filled < 0.03:
+        return None, f"figura demasiado chica ({filled:.0%} de la grilla)"
+    if filled > 0.92 and len(set(cells)) < 3:
         return None, f"grilla casi llena ({filled:.0%}): sin figura reconocible"
     return out, ""
 
@@ -2482,9 +2570,18 @@ class ArtDirector:
             return
         corpus = self._letters_text(text)
 
+        tonal: dict[str, list[str]] = {}
+
         def parse(r: Any) -> tuple[list[str] | None, str]:
             if forma == "letras":
                 return clean_letters(r.get("grilla") if isinstance(r, dict) else r, corpus)
+            if preset == "densidad":
+                # imagen ASCII con tonos: se conservan los grises; la silueta '#'/'.' queda para lo que la necesite
+                tones, why_ = ascii_tones(r.get("grilla") if isinstance(r, dict) else r)
+                if not tones:
+                    return None, why_
+                tonal["filas"] = tones
+                return ["".join("#" if ch >= "3" else "." for ch in row) for row in tones], ""
             return grid_from_preset(r, preset)
 
         grid, why = parse(raw)
@@ -2510,6 +2607,8 @@ class ArtDirector:
                 why = f"{why}; reintento: {why2}"
         if grid:
             direction["grilla_letras" if forma == "letras" else "grilla"] = grid
+            if forma == "llm" and tonal.get("filas"):
+                direction["grilla_tonos"] = tonal["filas"]
             if forma == "llm" and preset in ("formas", "composicion"):
                 src = raw2 if direction.get("grilla_origen") == "reintento" else raw
                 direction["formas"] = clean_shapes(src.get("formas") if isinstance(src, dict) else None)
@@ -2662,6 +2761,16 @@ def cronograma_for(day: dt.date | None = None) -> dict[str, Any]:
     out.update(fuente=fuente, actualizado=time.strftime("%H:%M"), error=err if not events else None,
                aviso=err if events and err else None, total=len(events))
     return out
+
+
+class _QuietHandshake(logging.Filter):
+    """Un sondeo de puerto (el lanzador que espera al backend, un antivirus) abre y cierra sin hablar: no es un error."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "opening handshake failed" not in record.getMessage()
+
+
+logging.getLogger("websockets.server").addFilter(_QuietHandshake())
 
 
 async def main_async(args: argparse.Namespace) -> None:
@@ -2931,14 +3040,33 @@ async def main_async(args: argparse.Namespace) -> None:
                 log.warning("No pude leer el cronograma: %s", exc)
             await asyncio.sleep(1800)
 
-    tasks.append(recorder_tick())
-    tasks.append(cronograma_tick())
+    async def supervised(name: str, factory: Callable[[], Awaitable[None]]) -> None:
+        """Una tarea que falla no tumba el servidor: se anota, se avisa y se vuelve a arrancar (con espera creciente)."""
+        wait = 1.0
+        while True:
+            started = time.monotonic()
+            try:
+                await factory()
+                return  # terminó sola (p. ej. sin dispositivo): no se reinicia
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001
+                log.exception("La tarea «%s» falló; se reinicia en %.0f s", name, wait)
+                hub.set_status(**{f"tarea_{name}": "reiniciando"})
+            if time.monotonic() - started > 60:
+                wait = 1.0
+            await asyncio.sleep(wait)
+            wait = min(30.0, wait * 2)
+            hub.set_status(**{f"tarea_{name}": "ok"})
+
+    tasks.append(supervised("grabacion", recorder_tick))
+    tasks.append(supervised("cronograma", cronograma_tick))
     if audio is not None:
-        tasks.append(audio.run())
+        tasks.append(supervised("audio", audio.run))
     else:
         hub.status["mic"] = "disabled"
     if transcriber is not None:
-        tasks.append(transcriber.run())
+        tasks.append(supervised("transcripcion", transcriber.run))
     else:
         hub.status["openai"] = "disabled"
 

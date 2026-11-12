@@ -11,9 +11,9 @@ const SHORTCUTS = [
   ['C', 'abrir / cerrar este panel'],
   ['→ / ←', 'loop: alterna FLAT ↔ título del ciclo (desde otro paso vuelve a FLAT). Los logos pasan solos en el loop automático'],
   ['T', 'desde el título (o cuando sea): empieza a grabar en modo palabras, hasta elegir artista'],
-  ['tecla del artista', 'la que tiene cada uno en «Artistas» (por defecto 1 … 4, 6 … 9): su placa; cuando empieza a hablar el nombre se borra y arranca la animación (o con S)'],
+  ['tecla del artista', 'la que tiene cada uno en «Artistas» (por defecto 1 … 9): su placa; cuando empieza a hablar el nombre se borra y arranca la animación (o con S)'],
   ['0', 'sólo transcripción: se borra todo; pocas palabras que arman figuras entre ellas y se rompen con glitch'],
-  ['5', 'cierre: todo se desarma y queda el logo de FLAT, que cada 4 s se rompe con glitch y se vuelve a armar'],
+  ['Z', 'cierre: todo se desarma y queda el logo de FLAT, que cada 4 s se rompe con glitch y se vuelve a armar'],
   ['S', 'grabar / dejar de grabar (el poema dibuja; lo dibujado queda en pantalla)'],
   ['P', 'detener la grabación (igual que S cuando está grabando)'],
   ['L', 'volver al loop (deja de grabar)'],
@@ -65,6 +65,7 @@ export class ConfigPanel {
         <h2>Atajos</h2>
         <dl class="keys">${SHORTCUTS.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
         <div class="state">Estado: <b data-state>—</b></div>
+        <p class="hint warn" data-notice></p>
         <div class="row rec">
           <button data-act="record" class="rec-on">● Grabar (S)</button>
           <button data-act="stop" class="rec-off">■ Detener (P)</button>
@@ -269,7 +270,7 @@ export class ConfigPanel {
       <section>
         <h2>Artistas</h2>
         <p class="hint">Nombre del disertante y la tecla que muestra su placa: una letra o un número. Vacía = su número
-        de orden (1 … 4, 6 … 9). No se pueden usar C, D, F, S, P, T, L, 0 ni 5 (son del show).</p>
+        de orden (1 … 9). No se pueden usar C, D, F, S, P, T, L, Z ni 0 (son del show).</p>
         <div data-artists></div>
         <p class="hint warn" data-artists-msg></p>
         <button data-act="add-artist">+ Agregar artista</button>
@@ -317,13 +318,23 @@ export class ConfigPanel {
       </section>
       <section>
         <h2>Grilla de texto</h2>
-        <p class="hint">La ilustración es texto: el modelo devuelve una grilla de 48×26 («#» figura, «.» fondo) y el muro
-        de palabras la compone. <b>Positivo</b>: la figura hecha de palabras sobre negro. <b>Negativo</b>: la figura es
-        un hueco negro en el muro. Abajo, la parte estética del pedido (el formato técnico se agrega solo).</p>
+        <p class="hint">La ilustración es texto: el modelo devuelve la imagen como arte ASCII de 48×26 con tonos
+        (« .:-=+*#%@») y el telón la dibuja con las palabras dichas. <b>Positivo</b>: la figura hecha de letras sobre
+        negro. <b>Negativo</b>: la figura es un hueco negro en el muro. Abajo, la parte estética del pedido (el formato
+        técnico se agrega solo).</p>
+        <div class="row">
+          <span>Dibujo con letras:</span>
+          <select data-sopt="dibujo_letras">
+            <option value="hibrido">Híbrido legible: se leen las palabras; el tono elige punto, minúscula, mayúscula o negrita</option>
+            <option value="rampa">Rampa ASCII: cada letra se elige por su tinta (más volumen; las palabras no se leen)</option>
+            <option value="estructura">Estructura: bordes con / \\ | _ y rampa adentro</option>
+            <option value="brillo">Sólo brillo (como antes): el texto corre y se enciende según el tono; usa los tratamientos</option>
+          </select>
+        </div>
         <div class="row">
           <span>Forma:</span>
           <select data-sopt="forma_grilla">
-            <option value="llm">Dibujada por el LLM (elegir el formato abajo; recomendado: composición)</option>
+            <option value="llm">Dibujada por el LLM (elegir el formato abajo; de fábrica: imagen ASCII con tonos)</option>
             <option value="emoji">Silueta de emoji elegido por el LLM (más literal)</option>
             <option value="letras">Arte ASCII sólo con las letras transcriptas (la imagen es el texto)</option>
           </select>
@@ -458,6 +469,8 @@ export class ConfigPanel {
     this.$('select[data-sopt="polaridad"]').value = s.polaridad || 'alternar';
     const forma = ['emoji', 'llm', 'letras'].includes(s.forma_grilla) ? s.forma_grilla : 'llm';
     this.$('select[data-sopt="tratamiento"]').value = s.tratamiento || 'azar';
+    this.$('select[data-sopt="dibujo_letras"]').value = ['rampa', 'hibrido', 'estructura', 'brillo'].includes(s.dibujo_letras) ? s.dibujo_letras : 'hibrido';
+    this.$('select[data-sopt="tratamiento"]').disabled = (s.dibujo_letras || 'hibrido') !== 'brillo'; // los tratamientos son del modo «sólo brillo»
     this.$('select[data-sopt="forma_grilla"]').value = forma;
     this._renderPresets(s, forma);
     this.$('[data-voz]').checked = s.inicio_por_voz !== false;
@@ -535,7 +548,7 @@ export class ConfigPanel {
     return `<div class="item step logos" data-i="${i}">
       <span class="num">${i + 1}</span>
       ${this._tipoSelect(st)}
-      <input data-field="carpeta" value="${esc(st.carpeta)}" placeholder="public/loop/sponsors" title="carpeta (dentro del proyecto) con los logos">
+      <input data-field="carpeta" value="${esc(st.carpeta)}" placeholder="logos/otros" title="carpeta con los logos, dentro de Documentos/Ciclo FLAT">
       <button data-act="scan">Revisar carpeta</button>
       <span class="unit">${count === undefined ? '' : `${count} en carpeta`}</span>
       <button data-act="upload-logos">Subir logos…</button>
@@ -700,6 +713,12 @@ export class ConfigPanel {
     this.$('[data-state]').textContent = text;
   }
 
+  /** Aviso del show al operador (p. ej. «Ningún artista tiene la tecla 6»); vacío lo borra. */
+  setNotice(text) {
+    const el = this.$('[data-notice]');
+    if (el) el.textContent = text || '';
+  }
+
   /** Estado del micrófono que reporta el backend (permiso de macOS, errores de dispositivo). */
   setMicStatus(status) {
     this.micStatus = status.mic;
@@ -730,6 +749,7 @@ export class ConfigPanel {
     const secs = Number.isFinite(d.latencia_ms) ? `${(d.latencia_ms / 1000).toFixed(1)} s` : '—';
     const origen = d.origen === 'llm' ? `dibujada por el LLM («${d.figura_libre || d.figura}»)`
       : d.origen === 'biblioteca' ? (d.pidio === 'llm' ? `biblioteca (el dibujo del LLM no sirvió) · ${d.figura}` : `biblioteca · ${d.figura}`)
+      : d.pidio === 'grilla' && d.origen ? d.origen // p. ej. «imagen ASCII del modelo · híbrido · positivo»
       : 'sin figura (modo simbólico)';
     el.textContent = `${secs} · ${d.estiloVisto ? d.estiloVisto + ' · ' : ''}${origen} · ${d.provider || ''}`;
     el.className = d.latencia_ms > 6000 ? 'bad' : 'ok';
@@ -765,8 +785,8 @@ export class ConfigPanel {
   }
 
   _cronoKeys(list) {
-    // teclas en orden: 1 … 4, 6 … 9 y después letras que no son del show
-    const keys = [...'12346789abeghijkmnoqruvwxyz'].filter((k) => !RESERVED_KEYS.has(k));
+    // teclas en orden: 1 … 9 y después letras que no son del show
+    const keys = [...'123456789abeghijkmnoqruvwxy'].filter((k) => !RESERVED_KEYS.has(k));
     let n = 0;
     return list.map((x) => (x.usar ? keys[n++] || '' : ''));
   }
@@ -1140,6 +1160,7 @@ export class ConfigPanel {
       const k = t.dataset.sopt;
       this._commit((s) => (s[k] = t.value), false);
       if (k === 'forma_grilla' || k === 'grilla_preset') this._renderPresets(this.getSettings());
+      if (k === 'dibujo_letras') this.$('select[data-sopt="tratamiento"]').disabled = t.value !== 'brillo';
       return;
     }
     if (t.matches('[data-rec-on]')) {
@@ -1215,7 +1236,7 @@ export class ConfigPanel {
       else st[field] = t.value;
       if (field === 'tipo') {
         st.render = st.tipo === 'logos' ? 'imagen' : 'letras';
-        if (st.tipo === 'logos') Object.assign(st, { carpeta: st.carpeta || 'public/loop/sponsors', imagenes: st.imagenes || [], por_pagina: st.por_pagina || 8, monocromo: st.monocromo ?? true });
+        if (st.tipo === 'logos') Object.assign(st, { carpeta: st.carpeta || 'logos/otros', imagenes: st.imagenes || [], por_pagina: st.por_pagina || 8, monocromo: st.monocromo ?? true });
       }
     }, rerender);
   }

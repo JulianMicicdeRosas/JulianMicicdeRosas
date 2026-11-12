@@ -162,6 +162,8 @@ case "$MODO" in
 esac
 
 for _ in $(seq 1 40); do curl -s -m 1 http://127.0.0.1:5173/ >/dev/null && break; sleep 0.25; done
+# y a que el backend acepte conexiones (hasta 30 s), para no abrir con «backend desconectado»
+for _ in $(seq 1 120); do nc -z 127.0.0.1 8765 >/dev/null 2>&1 && break; sleep 0.25; done
 
 URL="$SHOW_URL"
 if [ -d "/Applications/Google Chrome.app" ]; then

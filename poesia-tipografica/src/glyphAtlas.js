@@ -15,6 +15,8 @@ export const FONTS = {
   // («Marca FLAT» = tipografía cargada a mano desde el panel C, si se quiere reemplazar)
   brand: { family: '"Marca FLAT", "Geist Mono", "IBM Plex Mono", Consolas, monospace', weight: 500, em: 0.56 },
   brandText: { family: '"Roboto", "Helvetica Neue", Arial, sans-serif', weight: 400, em: 0.62 },
+  // negrita mono: lo más denso de las imágenes dibujadas con letras (y los bordes en «estructura»)
+  bold: { family: '"Marca FLAT", "Geist Mono", "IBM Plex Mono", Consolas, monospace', weight: 700, em: 0.56 },
 };
 
 // Rampa de densidad para el estilo ASCII (además de las letras del verso)
@@ -63,7 +65,7 @@ export class GlyphAtlas {
     const key = kind + ch;
     const hit = this.map.get(key);
     if (hit !== undefined) return hit;
-    if (this.next >= this.capacity) return this.fallback ? this.fallback[kind] : 0;
+    if (this.next >= this.capacity) return this.fallback ? (this.fallback[kind] ?? this.fallback.mono) : 0; // atlas lleno: un punto
     const s = this.next++;
     this.kindOf[s] = kind;
     this.charOf[s] = ch;
@@ -105,7 +107,7 @@ export class GlyphAtlas {
       const face = new FontFace('Marca FLAT', `url(${src})`);
       await face.load();
       document.fonts.add(face);
-      for (let s = 0; s < this.next; s++) if (this.kindOf[s] === 'brand') this._draw(s, this.charOf[s], 'brand');
+      for (let s = 0; s < this.next; s++) if (this.kindOf[s] === 'brand' || this.kindOf[s] === 'bold') this._draw(s, this.charOf[s], this.kindOf[s]);
       this.dirty = true;
       return true;
     } catch (e) {
@@ -134,6 +136,7 @@ export async function loadFonts() {
     `${FONTS.serif.weight} 64px "Cormorant Garamond"`,
     `${FONTS.mono.weight} 64px "IBM Plex Mono"`,
     `500 64px "Geist Mono"`,
+    `700 64px "Geist Mono"`,
     `400 64px "Roboto"`,
   ];
   try {
