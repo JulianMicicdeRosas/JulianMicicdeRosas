@@ -82,7 +82,8 @@ function render(t){
   const decay = P.echo.mode === 'directo' ? 0 : clamp(P.echo.decay + AM.echo * (.995 - P.echo.decay), 0, .995);
   gl.useProgram(pFeed); bindFBO(fbFeed[cur]); useTex(0, fbScene.t, pFeed, 'uScene'); useTex(1, fbFeed[prev].t, pFeed, 'uPrev');
   gl.uniform1f(U(pFeed, 'uDecay'), decay); gl.uniform1f(U(pFeed, 'uZoom'), P.echo.zoom);
-  gl.uniform1f(U(pFeed, 'uRot'), P.echo.rotate * .01); gl.uniform1f(U(pFeed, 'uDrift'), P.echo.drift * .001); gl.uniform1i(U(pFeed, 'uMode'), MODES[P.echo.mode] ?? 2); drawQuad(pFeed);
+  gl.uniform1f(U(pFeed, 'uRot'), P.echo.rotate * .01); gl.uniform1f(U(pFeed, 'uDrift'), P.echo.drift * .001); gl.uniform1i(U(pFeed, 'uMode'), MODES[P.echo.mode] ?? 2);
+  gl.uniform1f(U(pFeed, 'uWarp'), (P.echo.warp || 0) * AM.scatter); gl.uniform1f(U(pFeed, 'uWScale'), P.echo.warpScale || 1); gl.uniform1f(U(pFeed, 'uRise'), (P.echo.rise || 0) * .001); gl.uniform1f(U(pFeed, 'uTime'), (t % 1000) * AM.speed); gl.uniform1f(U(pFeed, 'uAsp'), W / H); drawQuad(pFeed);
   gl.useProgram(pBright); bindFBO(fbBright); useTex(0, fbFeed[cur].t, pBright, 'uTex'); gl.uniform1f(U(pBright, 'uThr'), P.fx.threshold); drawQuad(pBright);
   gl.useProgram(pBlur); const r = eff(P.fx, 'radius', prof.caps['fx.radius']); let src = fbBright;
   for (let i = 0; i < prof.bloomIter; i++) { bindFBO(fbB1); useTex(0, src.t, pBlur, 'uTex'); gl.uniform2f(U(pBlur, 'uDir'), r * (1 + i) / fbB1.w, 0); drawQuad(pBlur);

@@ -180,6 +180,8 @@ Para que el color sea de verdad el mismo de una función a otra, además de Mira
 
 **Efectos nuevos:** Partículas de luz, Fluido de luz, Membrana, Ondas de contorno y Silueta líquida. Corren enteros en la placa de video y se eligen con las 12 plantillas nuevas, que tienen miniatura en la pestaña Plantillas. Referencias y detalle en `PLANTILLAS.md`. Se ajustan en *Módulos → Efectos de GPU*.
 
+**Técnicas de TouchDesigner:** siete plantillas más (Contorno en llamas, Flujo fantasma, Coral, Laberinto, Cintas, Cronofotografía, Cuerpo de goma) con tres efectos nuevos (*Reacción-difusión*, *Cintas*, *Cuerpo en el tiempo*) y un *campo de flujo* para el eco. Crítica de la aplicación y propuestas en `CRITICA.md`.
+
 **Pensado para funciones largas:**
 - **Memoria constante.** Nada crece con el tiempo: los efectos nuevos no guardan nada en la CPU, y los registros por cuerpo se podan. En la prueba de estrés, la memoria JS se quedó en ~8 MB después de 48 cambios de plantilla y minutos de efecto.
 - **Ecos sin fantasmas.** Con 8 bits, un eco con permanencia nunca llegaba a negro y dejaba un velo. Ahora se resta un piso en cada cuadro.

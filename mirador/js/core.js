@@ -55,7 +55,10 @@ const P_DEFAULT = {
   ondas:      { enabled:false, cantidad:14, velocidad:.25, grosor:1, relleno:.15, brillo:1, temblor:.5, paleta:'neon', hue:300 },
   liquida:    { enabled:false, deformar:1, escala:1, separarColor:1, estirar:1, borde:1, relleno:.8, brillo:1, paleta:'coral', hue:10 },
   // mezcla y posproceso
-  echo: { mode:'screen', decay:.9, zoom:1.004, rotate:0, drift:0 },
+  reaccion:   { enabled:false, tipo:'coral', siembra:1, alcance:1, velocidad:1, brillo:1, paleta:'coral', hue:10 },
+  cintas:     { enabled:false, partes:'manos y pies', largo:40, ancho:14, ondular:.5, brillo:1, paleta:'neon', hue:300 },
+  crono:      { enabled:false, modo:'copias', copias:6, retraso:1.2, desde:'pies', grosor:1, brillo:1, paleta:'hielo', hue:200 },
+  echo: { mode:'screen', decay:.9, zoom:1.004, rotate:0, drift:0, warp:0, warpScale:1, rise:0 },
   fx:   { bloom:1, threshold:.42, radius:1.6, chroma:.9, glitch:0, glitchBlocks:38, vignette:.35, gamma:1 },
   map:  { blackout:false, testGrid:false, calibrate:false, scale:1, slices:1, blend:0,
           mosaic:false, mosW:7680, mosH:4320, tileW:1920, tileH:1080, mosCols:4, mosOrder:'filas', mosMap:'', mosPreview:false, pins:{},
@@ -72,7 +75,7 @@ const P_DEFAULT = {
 };
 const P = deepClone(P_DEFAULT);
 const PALETTES = [200, 330, 48, 130, 275];
-const MODULE_IDS = ['fluido','particulas','membrana','ondas','liquida','silueta','swarm','scribble','lluvia','pintura','grilla','cortinas','aves','fog','vivas','push'];
+const MODULE_IDS = ['fluido','particulas','membrana','ondas','liquida','reaccion','cintas','crono','silueta','swarm','scribble','lluvia','pintura','grilla','cortinas','aves','fog','vivas','push'];
 
 /* =====================================================================
    PERFIL DE HARDWARE (topes). eff(obj,key,cap)=min(preset,tope)
@@ -201,8 +204,9 @@ void main(){vec2 q=(v_uv-.5)*uScale+.5;float inside=step(0.,q.x)*step(q.x,1.)*st
   float sig=uMode==1?abs(l-bg):l;float sb=smoothstep(uThr-uSoft,uThr+uSoft,sig)*inside;
   float sil=uMode==2?sk:(uMode==3?max(sk*.6,sb*sk):sb);
   gl_FragColor=vec4(sil,l,sk,1.);}`;
-const FS_FEED = `precision highp float;varying vec2 v_uv;uniform sampler2D uScene,uPrev;uniform float uDecay,uZoom,uRot,uDrift;uniform int uMode;
-void main(){vec2 c=v_uv-.5;float s=sin(uRot),co=cos(uRot);c=mat2(co,-s,s,co)*c/uZoom;vec2 puv=c+.5+vec2(uDrift,0.);
+const FS_FEED = `precision highp float;varying vec2 v_uv;uniform sampler2D uScene,uPrev;uniform float uDecay,uZoom,uRot,uDrift,uWarp,uWScale,uRise,uTime,uAsp;uniform int uMode;
+void main(){vec2 c=v_uv-.5;float s=sin(uRot),co=cos(uRot);c=mat2(co,-s,s,co)*c/uZoom;vec2 puv=c+.5+vec2(uDrift,-uRise);
+  if(uWarp>0.){vec2 q=vec2(v_uv.x*uAsp,v_uv.y)*uWScale*6.;vec2 fl=vec2(sin(q.y*1.7+uTime*.6)+sin(q.x*1.1-uTime*.4+q.y*.6),cos(q.x*1.5+uTime*.5)+cos(q.y*1.2+uTime*.3-q.x*.7));puv-=vec2(fl.x/uAsp,fl.y)*uWarp*.0012;}
   vec3 sc=texture2D(uScene,v_uv).rgb;vec3 pv=max(texture2D(uPrev,puv).rgb*uDecay-vec3(1.6/255.),0.);
   if(puv.x<0.||puv.x>1.||puv.y<0.||puv.y>1.)pv=vec3(0.);
   vec3 o;if(uMode==0)o=sc;else if(uMode==1)o=sc+pv;else if(uMode==2)o=1.-(1.-sc)*(1.-pv);else o=max(sc,sc*(.35+pv*1.9)+pv*.25);

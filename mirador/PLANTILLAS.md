@@ -23,6 +23,21 @@ Hechas con cinco efectos que corren enteros en la placa de video (`js/efectos.js
 | — | **Eclipse** | Blanco y negro | *Partículas* en órbita + *Ondas*, sobrio. |
 | — | **Lluvia dorada** | *Pixel*; Random International, *Rain Room* | Cascada de oro sobre hilos verticales: el cuerpo abre un hueco en la lluvia. |
 
+## Plantillas tomadas de técnicas de TouchDesigner para danza
+
+Sin tecla; se eligen en la pestaña **Plantillas**. Cada una recrea una técnica muy usada en TouchDesigner con bailarines.
+
+| Plantilla | Técnica en TouchDesigner | Qué hace en Mirador |
+|---|---|---|
+| **Contorno en llamas** | Edge + Feedback + Displace, típico de visuales de concierto: <https://derivative.ca/community-post/tutorial/create-edge-feedback-concert-visuals/75058> | Contorno del cuerpo con un eco que sube y se retuerce (eco con *campo de flujo*). |
+| **Flujo fantasma** | Feedback con campo de flujo, "falso sistema de partículas": <https://derivative.ca/community-post/tutorial/touchdesigner-beginner-tutorial-feedback-flowfield-fake-particle-look/71665> | La silueta se deshace en hebras que el flujo arrastra. |
+| **Coral** / **Laberinto** | Reacción-difusión en un lazo de feedback: <https://alltd.org/?p=62911> | *Reacción-difusión* (Gray-Scott): un tejido que crece desde el borde del cuerpo y muere lejos de él. |
+| **Cintas** | Emisores y Trail CHOP en manos, pies y cabeza (instalación GO ROBOTS): <https://derivative.ca/community-post/making-go-robots-interactive-motion-tracked-dance-installation/60688> | *Cintas* de luz que siguen las extremidades. |
+| **Cronofotografía** | Cache TOP: copias retrasadas de la figura | *Cuerpo en el tiempo*, modo copias. |
+| **Cuerpo de goma** | Slit-scan y Time Machine TOP: <https://derivative.ca/community-post/tutorial/slitscan> | *Cuerpo en el tiempo*, modo slit-scan: los pies llegan más tarde que la cabeza. |
+
+En TouchDesigner el slit-scan y las copias se hacen guardando cuadros de video. Acá se hacen guardando las últimas poses del esqueleto (120 como máximo por cuerpo), que pesa muchísimo menos y no depende de la imagen de la cámara.
+
 ### Los cinco efectos
 
 - **Partículas de luz:** cientos de miles de partículas con posición y velocidad en texturas de GPU. Cuatro modos: corrientes (ruido *curl*), cascada vertical, atraer (se juntan en la silueta) y órbitas. El cuerpo las aparta o atrae por el gradiente de la silueta, y el movimiento las agita.
