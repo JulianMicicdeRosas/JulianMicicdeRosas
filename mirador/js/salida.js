@@ -9,7 +9,7 @@
    cuadro. Las teclas apretadas en la salida llegan al control.
    ?ventanas=2 la abre sola al encender (los lanzadores la piden).
    ===================================================================== */
-const Salida = { win:null, video:null, stream:null, cv:null, ctx:null, mode:'', NAME:'mirador-salida',
+const Salida = { win:null, video:null, stream:null, cv:null, ctx:null, mode:'', NAME:'mirador-salida', STREAM_MAX:4096,
   want:urlParams.get('ventanas') === '2',
   open(){
     // window.open tiene que correr dentro del clic (o con los pop-ups permitidos, como en los lanzadores)
@@ -25,17 +25,22 @@ const Salida = { win:null, video:null, stream:null, cv:null, ctx:null, mode:'', 
 #m{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);color:#555;font:14px ui-monospace,monospace;text-align:center}</style></head>
 <body><video id="v" autoplay muted playsinline></video><canvas id="c" hidden></canvas><div id="m">Mirador · salida<br>esperando imagen…</div></body></html>`); d.close();
     this.video = d.getElementById('v'); this.cv = d.getElementById('c'); this.ctx = null;
-    if (glCanvas.captureStream) {
+    // Con el lienzo muy ancho (sala: 8400 px) el video de captureStream queda en negro en la ventana (visto en la PC de la sala,
+    // Chrome + RTX 3070 Ti): el flujo trae cuadros, pero el compositor no los muestra. Ahí se copia cuadro a cuadro.
+    this.mode = '';
+    if (glCanvas.captureStream && Math.max(glCanvas.width, glCanvas.height) <= this.STREAM_MAX) {
       try { if (!this.stream) this.stream = glCanvas.captureStream(60); this.video.srcObject = this.stream; this.mode = 'stream';
         this.video.play?.().catch(() => {}); this.video.addEventListener('playing', () => { const m = d.getElementById('m'); if (m) m.remove(); }, { once:true }); }
       catch (e) { this.mode = ''; } }
-    if (this.mode !== 'stream') { this.video.hidden = true; this.cv.hidden = false; this.ctx = this.cv.getContext('2d'); this.mode = 'copia'; d.getElementById('m')?.remove(); }
+    if (this.mode !== 'stream') this.aCopia();
     // teclas en la salida → control (para no tener que cambiar de ventana)
     w.addEventListener('keydown', e => { if (e.key === 'F11') return; window.dispatchEvent(new KeyboardEvent('keydown', { key:e.key, shiftKey:e.shiftKey, altKey:e.altKey })); if (e.key === ' ') e.preventDefault(); });
     w.addEventListener('dblclick', () => { const el = d.documentElement; el.requestFullscreen?.().catch(() => {}); });
     w.addEventListener('beforeunload', () => setTimeout(() => { if (this.win && this.win.closed) { this.win = null; this.refresh(); } }, 300));
     document.body.classList.add('dos-ventanas'); this.refresh();
   },
+  aCopia(){ if (!this.win || !this.cv) return; this.video.hidden = true; this.video.style.display = 'none'; try { this.video.srcObject = null; } catch (e) {}
+    this.cv.hidden = false; this.ctx = this.cv.getContext('2d'); this.mode = 'copia'; this.win.document.getElementById('m')?.remove(); },
   isOpen(){ return !!(this.win && !this.win.closed); },
   close(){ try { this.win?.close(); } catch (e) {} this.win = null; document.body.classList.remove('dos-ventanas'); this.refresh(); },
   toggle(){ if (this.isOpen()) this.close(); else this.open(); },
@@ -43,6 +48,8 @@ const Salida = { win:null, video:null, stream:null, cv:null, ctx:null, mode:'', 
   frame(){
     if (!this.win) return;
     if (this.win.closed) { this.win = null; document.body.classList.remove('dos-ventanas'); this.refresh(); return; }
+    // el lienzo toma su tamaño después de abrir la salida (al recargar se abre con el lienzo todavía chico): se revisa en cada cuadro
+    if (this.mode === 'stream' && Math.max(glCanvas.width, glCanvas.height) > this.STREAM_MAX) this.aCopia();
     if (this.mode === 'copia' && this.ctx) { const d = Math.min(this.win.devicePixelRatio || 1, 2), tw = Math.max(2, Math.round(this.win.innerWidth * d)), th = Math.max(2, Math.round(this.win.innerHeight * d));
       if (this.cv.width !== tw || this.cv.height !== th) { this.cv.width = tw; this.cv.height = th; }
       if (STRETCH) this.ctx.drawImage(glCanvas, 0, 0, tw, th);

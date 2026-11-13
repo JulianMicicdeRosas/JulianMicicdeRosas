@@ -99,10 +99,16 @@ function detProcess(t, L){   // t: [h,w,3] 0–255 → float 0–255
   });
 }
 const METER_W = 160;
-async function meterExposure(src, frame, vw, vh){
-  const now = performance.now(); if (now - (src._meterT || 0) < 200) return; const dt = Math.min(1, (now - (src._meterT || now)) / 1000); src._meterT = now;
+/* No se espera la lectura: se pide a la GPU y se aplica cuando llega (la detección siguiente ya la usa). Con la placa
+   compartida (OBS, Resolume) cada lectura puede tardar cientos de ms, y esperarla atrasaba cada detección. */
+function meterExposure(src, frame, vw, vh){
+  const now = performance.now(); if (src._meterBusy || now - (src._meterT || 0) < 200) return; src._meterBusy = true;
   const mw = METER_W, mh = Math.max(9, Math.round(METER_W * vh / vw));
-  const sm = tf.tidy(() => tf.cast(tf.image.resizeBilinear(frame, [mh, mw]), 'int32')); const px = await sm.data(); sm.dispose();
+  const sm = tf.tidy(() => tf.cast(tf.image.resizeBilinear(frame, [mh, mw]), 'int32'));
+  sm.data().then(px => { try { meterApply(src, px, vw, vh, mw, mh); } finally { src._meterBusy = false; } }, () => { src._meterBusy = false; }).finally(() => sm.dispose());
+}
+function meterApply(src, px, vw, vh, mw, mh){
+  const now = performance.now(), dt = Math.min(1, (now - (src._meterT || now)) / 1000); src._meterT = now;
   const sx = vw / mw, sy = vh / mh, ig = src.cal?.ignore || [], B = src._calB;
   const boxes = (src.poses || []).filter(p => p._box && !(src._calH && calIgnored(src, p))).map(p => { const b = p._box, pw = (b.x1 - b.x0) * .15, ph = (b.y1 - b.y0) * .1; return { x0:b.x0 - pw, x1:b.x1 + pw, y0:b.y0 - ph, y1:b.y1 + ph }; });
   const ybAt = x => { if (!B || B.length < 2) return 0; if (x <= B[0].x) return B[0].y; for (let i = 0; i < B.length - 1; i++) { const a = B[i], c = B[i + 1]; if (x <= c.x) return a.y + (c.y - a.y) * (x - a.x) / Math.max(1e-6, c.x - a.x); } return B[B.length - 1].y; };
@@ -124,9 +130,9 @@ async function meterExposure(src, frame, vw, vh){
   lv.black += (black - lv.black) * k; lv.white += (white - lv.white) * k; lv.gamma += (gamma - lv.gamma) * k;
   src._meter = { mode, n, lo, hi, med };
 }
-/* partes en que se corta la imagen. El modelo (MoveNet MultiPose) da como mucho 6 cuerpos por pasada: para seguir más de 6
-   hacen falta al menos 3 partes (hasta 18 antes de unir los duplicados del solapamiento). */
-function detTileN(){ return (P.track.maxPoses | 0) > 6 ? Math.max(3, P.det.tiles | 0) : P.det.tiles; }
+/* partes en que se corta la imagen. El modelo (MoveNet MultiPose) da como mucho 6 cuerpos por pasada: con más de 6 hacen
+   falta al menos 2 partes (hasta 12 menos los repetidos del solapamiento). No más: cada parte suma una espera a la GPU. */
+function detTileN(){ return (P.track.maxPoses | 0) > 6 ? Math.max(2, P.det.tiles | 0) : P.det.tiles; }
 const DETPREV = { src:null };   // cámara que muestra la vista previa del panel (pide la imagen procesada)
 /* detecta en una cámara: corta en partes, une los duplicados del solapamiento y pone ids estables */
 async function detectSource(src){
@@ -134,22 +140,23 @@ async function detectSource(src){
   const tiles = DET.single ? [{ x0:0, x1:1 }] : detTiles(detTileN()), raw = [];
   const t0 = performance.now(), frame = tf.browser.fromPixels(v);
   try {
-    if (P.det.expo === 'auto') await meterExposure(src, frame, vw, vh);
+    if (P.det.expo === 'auto') meterExposure(src, frame, vw, vh);
     const L = detLevels(src), same = levelsIdentity(L);
-    for (let i = 0; i < tiles.length; i++) {
+    const base = same || tiles.length < 2 ? null : detProcess(frame, L);   // niveles una sola vez, no por parte (las partes se pisan)
+    try { for (let i = 0; i < tiles.length; i++) {
       const t = tiles[i], sx = Math.round(t.x0 * vw), sw = Math.round((t.x1 - t.x0) * vw);
-      const input = tf.tidy(() => { const c = tiles.length > 1 ? tf.slice(frame, [0, sx, 0], [vh, sw, 3]) : tf.clone(frame); return same ? c : detProcess(c, L); });
+      const input = tf.tidy(() => { if (tiles.length < 2) return same ? tf.clone(frame) : detProcess(frame, L); return tf.slice(base || frame, [0, sx, 0], [vh, sw, 3]); });
       let ps = []; try { ps = await det.estimatePoses(input, { maxPoses:Math.min(6, P.track.maxPoses + 2), flipHorizontal:false }); DET.fails = 0; } catch (e) { DET.error = e.message; DET.fails = (DET.fails || 0) + 1; } finally { input.dispose(); }
       for (const p of ps) { if (sx) for (const k of p.keypoints) k.x += sx;
         const b = kpBox(p), edge = (i > 0 && b.x0 < sx + sw * .03) || (i < tiles.length - 1 && b.x1 > sx + sw * .97);
         p._tile = i; p._box = b; p._q = (p.score ?? .5) * (edge ? .6 : 1); raw.push(p); }
-    }
-    // vista previa del panel: la imagen tal como la recibe el modelo
+    } } finally { base?.dispose(); }
+    // vista previa del panel: la imagen tal como la recibe el modelo (sin esperarla: llega sola)
     const now = performance.now();
-    if (DETPREV.src === src && typeof UI !== 'undefined' && UI.tab === 'camaras' && !document.body.classList.contains('panel-hidden') && now - (src._prevT || 0) > 150) { src._prevT = now;
+    if (DETPREV.src === src && !src._prevBusy && typeof UI !== 'undefined' && UI.tab === 'camaras' && !document.body.classList.contains('panel-hidden') && now - (src._prevT || 0) > 150) { src._prevT = now; src._prevBusy = true;
       const pw = 320, ph = Math.max(18, Math.round(pw * vh / vw));
       const sm = tf.tidy(() => { const r = tf.image.resizeBilinear(frame, [ph, pw]); return tf.cast(tf.clipByValue(same ? r : detProcess(r, L), 0, 255), 'int32'); });
-      try { const px = await tf.browser.toPixels(sm); src._prevImg = new ImageData(px, pw, ph); } finally { sm.dispose(); } }
+      tf.browser.toPixels(sm).then(px => { src._prevImg = new ImageData(px, pw, ph); }, () => {}).finally(() => { sm.dispose(); src._prevBusy = false; }); }
   } finally { frame.dispose(); }
   src._raw = raw; const diag = src._diag ||= {}; diag.raw = raw.length; diag.low = raw.filter(p => (p.score ?? 1) < P.det.minPose).length; diag.ms = performance.now() - t0; diag.tiles = tiles.length;
   diag.best = raw.reduce((m, p) => Math.max(m, p.score ?? 0), 0);

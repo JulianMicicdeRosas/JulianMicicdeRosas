@@ -219,6 +219,14 @@ Cosas a saber para operar:
 - **OBS:** la captura de Mirador apareció corrida y al 72 %. Tiene que ocupar todo el lienzo: seleccionarla y apretar Ctrl+S (estirar a la pantalla). En Modo Estudio, después apretar *Transición*.
 - **CPU al límite:** con Resolume mostrando otra presentación por NDI (1,5 núcleos), la CPU (i5-8500, 6 núcleos) llegó al 97 % y cada detección tardó 1–2 s, cuando con la sala libre tardaba ~48 ms. El cuello es el proceso de GPU de Chrome, que queda atado a un núcleo. Volver a medir con la sala libre (`sources[0]._diag.ms`). Si sigue lento, bajar a 6 cuerpos (una sola parte) o sacar la fuente NDI que no se use en Resolume.
 
+### Vínculo con OBS y Resolume (13/11/2026, noche)
+
+- **Fuente propia en OBS:** la escena **Mirador** tiene ahora su fuente **Mirador SALIDA** (`[chrome.exe]: Mirador · SALIDA`, Windows 10, estirada a 8400 × 690, 31 px de recorte arriba, bloqueada). La fuente vieja **Captura de ventana 2** quedó oculta en esa escena y sin tocar, porque la comparte la escena **umbral** (4 copias) y alguien la apunta a otras ventanas (hoy: `Proyección — MODO NO SUPERVISADO`). Respaldo de la escena anterior: `%APPDATA%\obs-studio\respaldo-antes-de-mirador`.
+- **Si OBS muestra negro con la fuente visible:** seleccionarla, desbloquearla (candado), Ctrl+S (estirar a la pantalla), bloquearla de nuevo y, en Modo Estudio, *Transición*. Los límites cargados editando el .json no siempre los toma.
+- **Resolume:** `Mirador sala`, clip NDI **OBS PGM** de la columna 2 activo (8400 × 690, sin escala). Ya estaba así.
+- **Verificado con la cámara:** durante un concierto, la figura de la chelista cayó en la pared Norte justo detrás de ella (pie en x = 0,35 de la cámara → Norte, 39 % del lienzo). Detección 68 ms, 39 fps con toda la cadena andando. La sincronización no se repitió: es la del 13/11 a la tarde.
+- **Lanzar Mirador desde una terminal de Claude:** si el lanzador queda como hijo de esa terminal, al reiniciarse la terminal se cierran también Chrome y el servidor. Lanzarlo independiente (`Invoke-CimMethod Win32_Process Create`) o con doble clic en `start_sala.bat`.
+
 ## 6. Qué falta (próximo paso, en este orden)
 
 ### 6.1 En la sala, con la PC
@@ -302,4 +310,19 @@ Cosas a saber para operar:
 - `js/salida.js`: la ventana de control corre todo y la de **SALIDA** (título "Mirador · SALIDA") muestra solo la imagen. La imagen pasa por `glCanvas.captureStream(60)`; si no hay, se copia cuadro a cuadro. Las teclas de la salida se reenvían al control.
 - `?ventanas=2` la abre al encender, dentro del clic en *Encender*. `start_sala.bat` ya no usa kiosk: pone `MIRADOR_VENTANAS=2`, que suma `--disable-popup-blocking --start-maximized`.
 - **En OBS hay que cambiar la fuente** a la ventana "Mirador · SALIDA". Antes capturaba la única ventana, con el panel incluido.
+
+### Prueba en la sala del 13/11/2026 (dos ventanas por toda la cadena)
+
+- **Ojo con las copias:** el repo es `C:\Mirador`. Había otra copia corriendo desde `Downloads\Mirador final\Mirador` (como administrador, mismo puerto 8766, otro perfil de Chrome sin la sesión Sala). Hay que abrir siempre `C:\Mirador\start_sala.bat`.
+- **La SALIDA quedaba en negro:** con el lienzo de 8400 px, el video de `captureStream` trae cuadros pero la ventana no los muestra. `js/salida.js` ahora copia cuadro a cuadro cuando el lienzo pasa de 4096 px (`Salida.STREAM_MAX`); el límite exacto no se midió.
+- **OBS** (perfil y escena **Mirador**; el lienzo del perfil está en **8400 × 690**, no 1920 × 1080): la captura apunta a `[chrome.exe]: Mirador · SALIDA`, método **Windows 10**, sin cursor, estirada con Ctrl+S y con **31 px de recorte arriba** (la ventana emergente de Chrome dibuja su barra de título dentro del área capturada). Si cambia el alto de esa barra, hay que retocar el recorte. La escena "umbral" no se tocó.
+- **Resolume:** estaba abierta una composición vacía de 1920 × 1080. Hay que abrir **Mirador sala** y disparar el clip NDI de la **columna 2** de la capa 2 (**OBS PGM**, 8400 × 690, sin escala). El de la columna 1 (OBS Preview, Scale 156,72 % / W 437,5 % / H 63,89 %) quedó de cuando OBS mandaba 1920 × 1080 y ahora muestra solo la pared Norte ampliada.
+- **Pantallas hoy:** operación 1366 × 768 y salida al splitter 2048 × 1080 (antes figuraban 1920 × 1080 y 4096 × 2160). La ventana de SALIDA mide 1584 × 861: el lienzo viaja con ~1584 px de ancho hasta OBS.
+- **Patrón de ajuste visto con la cámara:** OESTE, NORTE y ESTE caen cada una en su pared.
+- **Sincronización** (grilla 5 × 3): con 900 ms → Oeste 9/15, Norte 13/15, Este 8/15; con 1400 ms → Oeste 11/15, Norte 11/15, Este 8/15, error ≤ 3,3 px de cámara. Subir la espera no cambia el resultado: los puntos que faltan son la primera columna de Oeste y las dos últimas de Este (fuera de cuadro o sin luz, como el 10/11) y puntos de la fila de abajo tapados por las sillas y el pedestal. Había sillas en la sala y entraba luz por la ventana de arriba a la derecha. Las líneas nuevas coinciden con las del 10/11 y con los bordes reales de las paredes; con S la cámara superpuesta coincide.
+- **Detección:** `sources[0]._diag.ms` = 26–50 ms (mediana 37) con 2 partes y la sala vacía. No hizo falta bajar la exigencia. Falta medir con bailarines.
+- **Con personas (tecla E), 2 y después 3 frente a la pared Norte:** cada figura cae en la pared detrás de su cuerpo. Medido con la cámara (proyección menos negro): corrimiento horizontal de −33 a +16 px de cámara, sin signo fijo (se movían y la cadena demora ~1 s); los pies apoyan en la base de la pared y la figura mide 48–62 % del alto de la pared (tamaño "altura real"). **El ajuste fino quedó en neutro** (tamaño 1, correr 0, separación 1, altura 0,97): no hizo falta tocarlo. `_diag.ms` = 24–32 ms con 3 cuerpos.
+- **Esqueleto opcional en todas las plantillas:** `P.track.skelMode` = `plantilla` (lo que diga la plantilla) | `si` | `no`. Se elige arriba en la pestaña **Plantillas** y en **Módulos → esqueleto**; no cambia al elegir otra plantilla y se guarda en la sesión. La tecla E lo sigue mostrando encima de todo. Probado en un Chrome aparte (lógica, panel y sesiones); el Mirador de la sala lo toma recién al recargar.
+- **Si se apaga el splitter:** Resolume pierde la ventana "Display". Al volver, *Output → Advanced…* (Screen 9 tiene que decir DISPLAY1 4096×2160) y cerrar sin tocar nada la vuelve a crear.
+- **Pendiente:** probar con gente frente a Oeste y Este (todos estuvieron en Norte) y con 10 personas. Las sillas de la derecha a veces se detectan como cuerpo en la pared Este.
 

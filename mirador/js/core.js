@@ -32,7 +32,7 @@ const Noise = (() => { const grad = [[1,1],[-1,1],[1,-1],[-1,-1],[1,0],[-1,0],[0
    ===================================================================== */
 const P_DEFAULT = {
   cam:   { mirror:true, showVideo:false, videoOpacity:.5, contrast:1.15, brightness:1, saturate:.7 },
-  track: { minScore:.22, smoothing:.55, showSkeleton:true, boneWidth:3, showJoints:false, jointSize:5, showId:false, glow:.85, maxPoses:1 },
+  track: { minScore:.22, smoothing:.55, skelMode:'plantilla', showSkeleton:true, boneWidth:3, showJoints:false, jointSize:5, showId:false, glow:.85, maxPoses:1 },
   det:   { preset:'sala', res:384, tiles:2, minPose:.12, expo:'auto', light:1, black:0, white:1, gamma:1, gray:false, target:.45, speed:.8, meter:'auto' },
   link:  { enabled:true, range:.4, width:2.2, energy:1 },
   mask:  { source:'esqueleto', threshold:.34, softness:.12, learnBg:false, bodyWidth:1 },

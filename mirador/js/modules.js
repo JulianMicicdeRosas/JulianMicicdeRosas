@@ -75,9 +75,18 @@ registerModule('mask', { producer:true, res:'mask', needs:[],
     gl.viewport(0, 0, MASK_W, MASK_H);
   } });
 /* ===================== PRODUCTOR: maskcpu (lectura a CPU, cada 2 cuadros) ===================== */
-let maskTick = 0, maskFresh = false;
+/* readPixels frena el cuadro hasta que la GPU termina (WebGL 1 no tiene lectura asincrónica). Para no pagarlo de más:
+   · sin cuerpos y con todas las zonas calibradas (máscara = esqueletos) la máscara está vacía: se lee una vez y listo;
+   · si la lectura tarda (placa compartida con OBS/Resolume), se espacia hasta cada 4 cuadros; si vuelve a ser rápida, cada 2. */
+let maskTick = 0, maskFresh = false, maskIv = 2, maskEmptyRead = false, maskMs = 0;
 registerModule('maskcpu', { producer:true, res:'maskcpu', needs:['mask'],
-  produce(){ maskFresh = (maskTick++ % 2) === 0; if (!maskFresh) return; bindFBO(fbMask); gl.readPixels(0, 0, MASK_W, MASK_H, gl.RGBA, gl.UNSIGNED_BYTE, readBuf); } });
+  produce(){ maskFresh = false;
+    const empty = bodies.size === 0 && sources.length > 0 && sources.every(s => s._calH);
+    if (empty && maskEmptyRead) return;
+    if ((maskTick++ % maskIv) !== 0 && !(empty && !maskEmptyRead)) return;
+    const a = performance.now(); bindFBO(fbMask); gl.readPixels(0, 0, MASK_W, MASK_H, gl.RGBA, gl.UNSIGNED_BYTE, readBuf); maskMs = performance.now() - a;
+    maskIv = maskMs > 8 ? Math.min(4, maskIv + 1) : maskMs < 3 ? Math.max(2, maskIv - 1) : maskIv;
+    maskEmptyRead = empty; maskFresh = true; } });
 /* valor de máscara (0..255) en coordenadas de salida internas (W,H); el FBO está invertido en Y */
 function maskAt(x, y){ const mx = (x * MASK_W / W) | 0, my = (y * MASK_H / H) | 0; if (mx < 0 || my < 0 || mx >= MASK_W || my >= MASK_H) return 0; return readBuf[((MASK_H - 1 - my) * MASK_W + mx) * 4]; }
 
@@ -340,10 +349,13 @@ function sampleEdges(){   // bordes de la máscara (muestra barata, sin marching
 }
 
 /* ===================== Esqueleto, enlaces, cuadrícula de ajuste (siempre disponibles) ===================== */
+/* el esqueleto es opcional en todas las plantillas: P.track.skelMode = 'plantilla' (lo que diga la plantilla) | 'si' | 'no'.
+   No lo pisa el cambio de plantilla y se guarda en la sesion. La tecla E (revisar la deteccion) lo muestra igual. */
+function skelOn(){ const m = P.track.skelMode; return m === 'si' ? true : m === 'no' ? false : !!P.track.showSkeleton; }
 function drawSkeletons(list){
   sctx.globalCompositeOperation = 'lighter'; sctx.lineCap = 'round'; sctx.lineJoin = 'round';
   for (const b of list) {
-    if (P.track.showSkeleton || verEsqueletos) { sctx.lineWidth = Math.max(P.track.boneWidth, verEsqueletos ? 4 : 0) * DPR * AM.size; sctx.strokeStyle = hsl(b.hue + AM.hue, 95, 66, .55 + .4 * P.track.glow * AM.glow); sctx.beginPath();
+    if (skelOn() || verEsqueletos) { sctx.lineWidth = Math.max(P.track.boneWidth, verEsqueletos ? 4 : 0) * DPR * AM.size; sctx.strokeStyle = hsl(b.hue + AM.hue, 95, 66, .55 + .4 * P.track.glow * AM.glow); sctx.beginPath();
       for (const [a, c] of SKEL) { const ka = b.kp[a], kc = b.kp[c]; if (ka && kc && ka.s > P.track.minScore && kc.s > P.track.minScore) { sctx.moveTo(ka.x, ka.y); sctx.lineTo(kc.x, kc.y); } } sctx.stroke(); }
     if (P.track.showJoints) { sctx.fillStyle = hsl((b.hue + 30) % 360, 100, 78, .9);
       for (const k of b.kp) if (k && k.s > P.track.minScore) { sctx.beginPath(); sctx.arc(k.x, k.y, P.track.jointSize * DPR * .5, 0, 6.283); sctx.fill(); } }

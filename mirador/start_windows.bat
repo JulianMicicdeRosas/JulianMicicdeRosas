@@ -36,7 +36,13 @@ if not defined PY (
 
 REM -- Servidor local (ventana aparte, minimizada) --------------
 for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":%PORT% " ^| findstr LISTENING') do taskkill /PID %%p /F >nul 2>nul
+REM servidor.py = http.server sin cache (despues de actualizar, Chrome carga siempre el codigo nuevo)
+if exist "servidor.py" goto servpy
 start "Mirador servidor (no cerrar)" /min %PY% -m http.server %PORT% --bind 127.0.0.1
+goto servok
+:servpy
+start "Mirador servidor (no cerrar)" /min %PY% servidor.py %PORT%
+:servok
 timeout /t 2 /nobreak >nul
 
 REM -- Direccion ------------------------------------------------

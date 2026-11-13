@@ -14,7 +14,7 @@ command -v python3 >/dev/null 2>&1 || { echo "Falta python3 (viene con Xcode Com
 [ -f vendor/movenet/multipose-lightning/model.json ] || echo "Aviso: el modelo de pose no está descargado (./descargar_modelo.sh). Con internet se baja solo."
 # cierra un servidor anterior
 lsof -ti tcp:$PORT | xargs kill 2>/dev/null
-python3 -m http.server $PORT --bind 127.0.0.1 >/dev/null 2>&1 &
+if [ -f servidor.py ]; then python3 servidor.py $PORT >/dev/null 2>&1 & else python3 -m http.server $PORT --bind 127.0.0.1 >/dev/null 2>&1 & fi
 SRV=$!
 caffeinate -dimsu &
 CAF=$!

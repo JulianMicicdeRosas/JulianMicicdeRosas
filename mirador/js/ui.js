@@ -5,6 +5,7 @@
    helpers (range/hue/toggle/select/text); UI.refresh() reconstruye la
    pestaña visible después de cargar una plantilla o una sesión.
    ===================================================================== */
+const SKEL_MODES = [['plantilla', 'según la plantilla'], ['si', 'siempre visible'], ['no', 'nunca']];
 const UI = {
   tab:'plantillas', built:false, liveFns:[],
   TABS:[['sesion', 'Sesión'], ['plantillas', 'Plantillas'], ['modulos', 'Módulos'], ['sync', 'Sincronizar'], ['camaras', 'Cámaras'], ['audio', 'Audio'], ['proyeccion', 'Proyección'], ['sistema', 'Sistema']],
@@ -94,6 +95,7 @@ const UI = {
   /* =================== Plantillas =================== */
   tab_plantillas(body){
     this.note(body, 'Una plantilla fija los módulos, los ecos y el posproceso. Después ajustás todo en <b>Módulos</b>. Teclas 1‑9 y 0 cambian rápido. Referencias y enlaces en <code>PLANTILLAS.md</code>.');
+    { const ge = this.group(body, 'Esqueleto', { desc:'Vale para todas las plantillas: no cambia al elegir otra y se guarda en la sesión.' }); this.select(ge, P.track, 'skelMode', SKEL_MODES, 'esqueleto', () => Sessions.touch()); }
     const cards = document.createElement('div'); cards.className = 'cards';
     for (const t of PLANTILLAS) { const c = document.createElement('div'); c.className = 'card-t' + (t.id === plantillaActual ? ' pick' : '');
       c.innerHTML = `<div class="thumb" style="background-image:url('referencia/plantillas/${esc(t.id)}.jpg')"></div><b>${esc(t.nombre)}</b><small>${esc(t.desc)}</small><small style="margin-top:4px;color:#6f7482">${esc(t.origen)}</small>${t.key ? `<span class="k">${t.key}</span>` : ''}${t.nueva ? '<span class="nueva">nueva</span>' : ''}`;
@@ -149,7 +151,7 @@ const UI = {
     } else { const w = document.createElement('div'); w.className = 'warnbox'; w.textContent = 'Esta GPU no lee texturas en el vertex shader: Niebla, Líneas vivas y Empuje no están disponibles. El resto funciona.'; body.appendChild(w); }
 
     const gs = this.group(body, 'Esqueleto y enlaces', { closed:true });
-    this.toggle(gs, P.track, 'showSkeleton', 'esqueleto'); this.range(gs, P.track, 'boneWidth', .5, 14, .1, 'grosor hueso'); this.range(gs, P.track, 'glow', 0, 1, .01, 'resplandor'); this.toggle(gs, P.track, 'showJoints', 'articulaciones'); this.range(gs, P.track, 'jointSize', 2, 20, .5, 'tamaño articulación'); this.toggle(gs, P.track, 'showId', 'mostrar ID');
+    this.select(gs, P.track, 'skelMode', SKEL_MODES, 'esqueleto', () => { Sessions.touch(); this.refresh('modulos'); }); if ((P.track.skelMode || 'plantilla') === 'plantilla') this.toggle(gs, P.track, 'showSkeleton', 'esqueleto en esta plantilla'); this.range(gs, P.track, 'boneWidth', .5, 14, .1, 'grosor hueso'); this.range(gs, P.track, 'glow', 0, 1, .01, 'resplandor'); this.toggle(gs, P.track, 'showJoints', 'articulaciones'); this.range(gs, P.track, 'jointSize', 2, 20, .5, 'tamaño articulación'); this.toggle(gs, P.track, 'showId', 'mostrar ID');
     this.toggle(gs, P.link, 'enabled', 'enlaces entre cuerpos'); this.range(gs, P.link, 'range', .05, 1, .01, 'alcance'); this.range(gs, P.link, 'width', .5, 8, .1, 'grosor enlace'); this.range(gs, P.link, 'energy', 0, 2, .01, 'energía');
     const gm = this.group(body, 'Silueta: de dónde sale', { closed:true, desc:'Esqueleto: se arma con las articulaciones (no la afecta la luz del proyector). Brillo: píxeles claros del video. Fondo: diferencia contra un fondo aprendido (Shift+B).' });
     this.select(gm, P.mask, 'source', [['esqueleto', 'esqueleto (recomendado)'], ['brillo', 'brillo del video'], ['fondo', 'fondo aprendido'], ['ambos', 'esqueleto y brillo']], 'fuente');
