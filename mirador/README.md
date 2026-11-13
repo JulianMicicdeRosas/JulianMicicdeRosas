@@ -144,6 +144,20 @@ Con calibración, el video de la cámara no se dibuja sobre las paredes y la sil
 
 **Luz.** La cámara tiene que ver a los bailarines, no a la proyección. En sala oscura la solución estándar es **luz infrarroja**: focos IR (850 nm) y una cámara sin filtro IR (o una cámara de seguridad USB "IR"); el público no la ve y el proyector no la contamina. La silueta por defecto se arma desde el esqueleto justamente para no depender del brillo de la imagen.
 
+## Dos ventanas: control y salida
+
+Mirador abre **dos ventanas**:
+- **Control:** la del panel (H), para operar. Puede mostrar el panel, la vista K, avisos y menús sin que nada de eso llegue al público.
+- **Salida** ("Mirador · SALIDA"): solo la imagen final, sin panel ni avisos. Es la que se captura en OBS.
+
+`start_sala.bat` abre las dos solas. A mano: tecla **O** o *Proyección → Dos ventanas*.
+
+- **Cómo pasa la imagen:** por la GPU (`captureStream` del canvas), sin copias por CPU.
+- **Teclas:** las que se aprietan en la ventana de salida (B, X, números…) llegan al control.
+- **Recargas:** si el control se recarga (por ejemplo, cuando el guardián se recupera), la salida queda abierta y se vuelve a enganchar con O.
+
+**En OBS:** Captura de ventana → `[chrome.exe]: Mirador · SALIDA`, método *Windows 10 (1903 y posterior)*, y después Ctrl+S (estirar a la pantalla). La salida puede quedar detrás del control, pero **no la minimices**: minimizada, Windows no la dibuja.
+
 ## Sincronizar la proyección con los cuerpos (pestaña naranja)
 
 Para que el esqueleto o la figura caiga donde está la persona real, Mirador necesita saber en qué lugar de la imagen de la cámara aparece cada parte de lo que se proyecta. Si eso viene de la foto de referencia y la cámara o la proyección no están exactamente igual, las figuras salen corridas, amontonadas o de otro tamaño.

@@ -151,3 +151,7 @@ body.panel-hidden #cue{opacity:0}
 .card-t .thumb{height:64px;margin:-9px -10px 8px;border-radius:6px 6px 0 0;background:#05070a center/cover no-repeat;border-bottom:1px solid var(--line)}
 .card-t .nueva{position:absolute;left:7px;top:6px;font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;background:var(--live);color:#04140c;border-radius:3px;padding:1px 5px;font-weight:700}
 .sechead{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--live);margin:6px 2px 8px}
+
+/* con ventana de salida aparte, esta es solo de control: indicarlo */
+body.dos-ventanas #stage{outline:2px solid rgba(105,240,176,.35);outline-offset:-2px}
+body.dos-ventanas #stage::after{content:"vista previa · la salida está en otra ventana (O)";position:absolute;left:8px;top:6px;font:11px ui-monospace,monospace;color:rgba(105,240,176,.8);pointer-events:none}

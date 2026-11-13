@@ -110,6 +110,7 @@ function render(t){
   }
   feedIdx = prev;
   if (typeof pushOutputs === 'function') pushOutputs();
+  if (typeof Salida !== 'undefined') Salida.frame();
   if (typeof Rec !== 'undefined') Rec.frame();
 }
 

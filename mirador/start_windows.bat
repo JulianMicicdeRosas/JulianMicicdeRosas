@@ -7,6 +7,7 @@ REM
 REM  Variables opcionales (se fijan antes de llamar; ver start_8k.bat y start_13440.bat):
 REM    MIRADOR_SALIDA   = 13440x1080 | 1920x1080 | ventana   (formato de salida)
 REM    MIRADOR_VENTANA  = x,y,ancho,alto   (posicion y tamano de la ventana de Chrome)
+REM    MIRADOR_VENTANAS = 2  (dos ventanas: CONTROL para operar y SALIDA para OBS)
 REM    MIRADOR_KIOSK    = 1  (pantalla completa kiosk en la pantalla principal)
 REM    MIRADOR_AUDIO    = mic | cancion | off
 REM    MIRADOR_MOSAICO  = 7680x4320  (salida 8K a splitter)
@@ -42,6 +43,7 @@ REM -- Direccion ------------------------------------------------
 set "URL=http://127.0.0.1:%PORT%/index.html?salida=%MIRADOR_SALIDA%&audio=%MIRADOR_AUDIO%"
 if defined MIRADOR_MOSAICO set "URL=%URL%&mosaico=%MIRADOR_MOSAICO%"
 if defined MIRADOR_AJUSTE set "URL=%URL%&ajuste=%MIRADOR_AJUSTE%"
+if defined MIRADOR_VENTANAS set "URL=%URL%&ventanas=%MIRADOR_VENTANAS%"
 
 REM -- Buscar Chrome o Edge -------------------------------------
 set "NAV="
@@ -56,6 +58,8 @@ if not defined NAV for %%c in ("%ProgramFiles(x86)%\Microsoft\Edge\Application\m
 
 set "PERFIL=%CD%\.chrome-mirador"
 set "FLAGS=--new-window --no-first-run --disable-infobars --disable-session-crashed-bubble --overscroll-history-navigation=0 --disable-pinch --autoplay-policy=no-user-gesture-required --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling --disable-features=Translate,CalculateNativeWinOcclusion,IntensiveWakeUpThrottling --ignore-gpu-blocklist --force_high_performance_gpu"
+REM dos ventanas (control + salida): la de salida es una ventana emergente
+if defined MIRADOR_VENTANAS set "FLAGS=%FLAGS% --disable-popup-blocking --start-maximized"
 if defined MIRADOR_CDP set "FLAGS=%FLAGS% --remote-debugging-port=%MIRADOR_CDP% --remote-debugging-address=127.0.0.1 --use-fake-ui-for-media-stream"
 
 echo.

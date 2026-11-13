@@ -296,3 +296,10 @@ Cosas a saber para operar:
 2. ¿Qué salida del splitter va a cada proyector, y qué cubre cada uno: qué pared y qué parte?
 3. ¿Los 7 proyectores ya están todos colgados y apuntados, o por ahora hay solo algunos? En la foto se veía uno sobre la pared norte.
 4. ¿La cámara ve las tres paredes completas desde su lugar definitivo?
+
+## Dos ventanas (13/11/2026)
+
+- `js/salida.js`: la ventana de control corre todo y la de **SALIDA** (título "Mirador · SALIDA") muestra solo la imagen. La imagen pasa por `glCanvas.captureStream(60)`; si no hay, se copia cuadro a cuadro. Las teclas de la salida se reenvían al control.
+- `?ventanas=2` la abre al encender, dentro del clic en *Encender*. `start_sala.bat` ya no usa kiosk: pone `MIRADOR_VENTANAS=2`, que suma `--disable-popup-blocking --start-maximized`.
+- **En OBS hay que cambiar la fuente** a la ventana "Mirador · SALIDA". Antes capturaba la única ventana, con el panel incluido.
+

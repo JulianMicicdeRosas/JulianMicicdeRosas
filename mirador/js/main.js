@@ -26,7 +26,9 @@ async function loadCDNFallback(){
   for (const u of urls) await new Promise((res, rej) => { const s = document.createElement('script'); s.src = u; s.onload = res; s.onerror = () => rej(new Error('sin internet para bajar ' + u)); document.head.appendChild(s); });
 }
 async function start(sim){
-  if (started) return; const btn = $('start'); btn.disabled = $('startSim').disabled = true; btn.textContent = 'Encendiendo…';
+  if (started) return;
+  if (Salida.want && !Salida.isOpen()) Salida.open();   // dentro del clic: si no, el navegador bloquea la ventana
+  const btn = $('start'); btn.disabled = $('startSim').disabled = true; btn.textContent = 'Encendiendo…';
   const sessName = $('gateSession').value, newName = $('gateNewName').value.trim();
   setOutputFormat($('gateOut').value, +$('gateOutW').value, +$('gateOutH').value);
   simMode = !!sim;
@@ -104,6 +106,7 @@ addEventListener('keydown', e => {
   else if (k === 'h') UI.togglePanel();
   else if (k === 'c') { P.map.calibrate = !P.map.calibrate; uiCanvas.classList.toggle('calibrating', P.map.calibrate); UI.refresh('proyeccion'); }
   else if (k === 'k') Calib.toggle();
+  else if (k === 'o') { Salida.toggle(); if (Salida.isOpen()) toast('ventana de salida abierta: capturala en OBS ("Mirador · SALIDA")', 5000); }
   else if (k === 's') { Sync.overlay = !Sync.overlay; toast(Sync.overlay ? 'cámara sobre la proyección (S)' : 'cámara sobre la proyección: no'); UI.refresh('sync'); }
   else if (k === '+' || k === '=') { P.view.zoom = clamp(+(P.view.zoom * 1.05).toFixed(3), .25, 4); toast('zoom ' + P.view.zoom.toFixed(2) + '×'); Sessions.touch(); }
   else if (k === '-' || k === '_') { P.view.zoom = clamp(+(P.view.zoom / 1.05).toFixed(3), .25, 4); toast('zoom ' + P.view.zoom.toFixed(2) + '×'); Sessions.touch(); }

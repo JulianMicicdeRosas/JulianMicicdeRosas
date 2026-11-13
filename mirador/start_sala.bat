@@ -2,7 +2,10 @@
 REM -------------------------------------------------------------
 REM  Mirador - sala con OBS + Resolume (la forma en que esta armada la sala)
 REM
-REM  Cadena:  Mirador (Chrome, pantalla principal 1920x1080)
+REM  Dos ventanas: CONTROL (panel, para operar) y SALIDA (solo la imagen).
+REM  OBS captura la ventana "Mirador - SALIDA". El panel ya no se proyecta.
+REM
+REM  Cadena:  Mirador SALIDA (ventana 1920x1080)
 REM           -> OBS (captura de ventana, lienzo 1920x1080, salida NDI)
 REM           -> Resolume (clip NDI ESTIRADO a la composicion 8400x690)
 REM           -> Advanced Output (slices) -> salida 4096x2160 -> splitter -> proyectores
@@ -16,6 +19,7 @@ set MIRADOR_PORT=8766
 set MIRADOR_SALIDA=8400x690
 set MIRADOR_MOSAICO=
 set MIRADOR_AJUSTE=estirar
-set MIRADOR_KIOSK=1
+set MIRADOR_KIOSK=
+set MIRADOR_VENTANAS=2
 set MIRADOR_AUDIO=mic
 call "%~dp0start_windows.bat"

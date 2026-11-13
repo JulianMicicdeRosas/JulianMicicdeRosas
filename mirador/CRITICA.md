@@ -4,7 +4,7 @@ Revisión hecha el 12/11/2026 sobre el código de `main` y lo que se vio en las 
 
 ## 1. Lo más importante
 
-### 1.1 El panel de control se proyecta
+### 1.1 El panel de control se proyecta — **resuelto el 13/11: dos ventanas, control y salida (tecla O)**
 El panel, los avisos y las vistas K y S viven en la misma ventana que la imagen. Todo lo que el operador abre lo ve el público. Ya hubo que esconder a mano el aviso de canción y la ayuda de teclas.
 
 **Propuesta:** separar control y salida en dos ventanas. La salida queda limpia y va a OBS; el control se abre en el monitor del operador y le manda los cambios a la salida (`BroadcastChannel`, mismo origen). Es el cambio que más mejora el uso en función.

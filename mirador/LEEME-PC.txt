@@ -61,4 +61,6 @@ SI ALGO FALLA
     Ajuste fino: separacion, altura, tamano. Tamano "altura real" = proporcional a cada persona.
   - Colores distintos entre paredes: Proyeccion > Colorimetria > patron de color, y ajustar cada pared
     (brillo, nivel de negro, rojo/verde/azul). Proyectores todos en el mismo modo (sRGB, 6500 K).
+  - El panel se ve en la proyeccion: usar start_sala.bat (abre dos ventanas). En OBS capturar la ventana
+    "Mirador - SALIDA", no la del panel. Tecla O abre o cierra la salida.
   Más detalle: README.md (puesta en marcha, OBS, 7 proyectores) y REVISION.md.
