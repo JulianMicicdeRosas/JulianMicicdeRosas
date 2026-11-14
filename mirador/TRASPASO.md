@@ -227,6 +227,14 @@ Cosas a saber para operar:
 - **Verificado con la cámara:** durante un concierto, la figura de la chelista cayó en la pared Norte justo detrás de ella (pie en x = 0,35 de la cámara → Norte, 39 % del lienzo). Detección 68 ms, 39 fps con toda la cadena andando. La sincronización no se repitió: es la del 13/11 a la tarde.
 - **Lanzar Mirador desde una terminal de Claude:** si el lanzador queda como hijo de esa terminal, al reiniciarse la terminal se cierran también Chrome y el servidor. Lanzarlo independiente (`Invoke-CimMethod Win32_Process Create`) o con doble clic en `start_sala.bat`.
 
+### Apagones de las pantallas (14/11/2026)
+
+- **No es la placa ni Windows:** en 3 días el registro de Windows tiene solo 2 desconexiones reales del splitter (`DISPLAY\HJW1836`: 12/11 13:07 y 13/11 18:28, esta última cuando se apagó el splitter), ningún reinicio del driver NVIDIA, y la pantalla no se apaga por energía (nunca, con corriente). El splitter va a 4096 × 2160 a **30 Hz**, su máximo.
+- **Lo que sí se corta es el NDI entre OBS y Resolume:** el log de Resolume (`%APPDATA%\Resolume Arena\Resolume Arena 6 log.txt`) muestra `connecting to NDI source ... (OBS PGM)` más o menos una vez por minuto con todo andando. El NDI viaja por la dirección del **Wi-Fi** (10.201.x.x), aunque OBS y Resolume están en la misma PC. Falta confirmar en la sala que cada reconexión coincide con un apagón.
+- **Arreglado a medias:** OBS emitía dos NDI de 8400 × 690 (PGM y Preview) y Resolume recibía los dos. Se apagó **Salida de Previsualización** en *Herramientas → Ajustes de DistroAV NDI*. CPU total de ~95–100 % a ~58 %; Resolume de 195 % a 79 % de un núcleo, OBS de 112 % a 29 %. Las reconexiones de PGM siguen (4 en 4 minutos).
+- **Siguiente paso si los apagones coinciden con las reconexiones:** sacar el NDI del medio. Opciones: plugin Spout para OBS (textura compartida en la placa, sin red; Resolume lo lee como fuente Spout) o probar con el Wi-Fi desconectado para ver si las reconexiones desaparecen.
+- Los clips de Resolume que apuntan a **OBS Preview** ya no reciben señal (el de la columna 1 de la capa 2 era el viejo, con escala).
+
 ## 6. Qué falta (próximo paso, en este orden)
 
 ### 6.1 En la sala, con la PC
