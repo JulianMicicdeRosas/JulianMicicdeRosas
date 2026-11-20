@@ -12,6 +12,7 @@ REM    MIRADOR_KIOSK    = 1  (pantalla completa kiosk en la pantalla principal)
 REM    MIRADOR_AUDIO    = mic | cancion | off
 REM    MIRADOR_MOSAICO  = 7680x4320  (salida 8K a splitter)
 REM    MIRADOR_AJUSTE   = estirar  (el lienzo llena la ventana; para capturarla con OBS y estirarla en Resolume)
+REM    MIRADOR_APP      = acreditaciones  (pagina de acreditaciones de FLAT + particulas; ver start_acreditaciones.bat)
 REM    MIRADOR_PORT     = 8766  (puerto del servidor local; por defecto 8765)
 REM    MIRADOR_CDP      = 9222  (puerto local de depuracion, para manejar Mirador desde afuera; acepta la camara sin preguntar)
 REM -------------------------------------------------------------
@@ -50,6 +51,7 @@ set "URL=http://127.0.0.1:%PORT%/index.html?salida=%MIRADOR_SALIDA%&audio=%MIRAD
 if defined MIRADOR_MOSAICO set "URL=%URL%&mosaico=%MIRADOR_MOSAICO%"
 if defined MIRADOR_AJUSTE set "URL=%URL%&ajuste=%MIRADOR_AJUSTE%"
 if defined MIRADOR_VENTANAS set "URL=%URL%&ventanas=%MIRADOR_VENTANAS%"
+if defined MIRADOR_APP set "URL=%URL%&app=%MIRADOR_APP%"
 
 REM -- Buscar Chrome o Edge -------------------------------------
 set "NAV="

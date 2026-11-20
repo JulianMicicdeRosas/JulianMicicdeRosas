@@ -86,8 +86,11 @@ function loop(now){
 function frame(now, dt, t){
   _frameNo++; motion.dt = dt;
   simTick(dt); syncBodies(); Audio_.tick(dt);
-  for (const m of plan) if (!m.producer && m.update) m.update(dt);
-  drawScene(dt); render(t); drawCalib(); Calib.draw(); scalerTick(dt);
+  const lite = Acred.lite();   // aplicación Acreditaciones con el panel cerrado: no se dibuja la imagen de Mirador
+  if (!lite) { for (const m of plan) if (!m.producer && m.update) m.update(dt);
+    drawScene(dt); render(t); }
+  drawCalib(); Calib.draw(); if (!lite) scalerTick(dt);
+  Acred.frame();
   fpsAcc += 1 / Math.max(dt, 1e-4); fpsN++;
   if (fpsN >= 20) { $('fFps').textContent = Math.round(fpsAcc / fpsN) + ' fps'; fpsAcc = 0; fpsN = 0; const n = bodies.size; $('fBodies').textContent = n === 0 ? 'sin cuerpos' : `${n} ${n === 1 ? 'cuerpo' : 'cuerpos'}`; }
   if ((uiTick++ % 6) === 0) { $('fAudio').firstElementChild.style.width = (clamp(AM.level, 0, 1) * 100).toFixed(0) + '%'; if (!document.body.classList.contains('panel-hidden')) UI.tick(); }

@@ -158,6 +158,12 @@ Mirador abre **dos ventanas**:
 
 **En OBS:** Captura de ventana → `[chrome.exe]: Mirador · SALIDA`, método *Windows 10 (1903 y posterior)*, y después Ctrl+S (estirar a la pantalla). La salida puede quedar detrás del control, pero **no la minimices**: minimizada, Windows no la dibuja.
 
+## Acreditaciones FLAT
+
+`start_acreditaciones.bat` abre Mirador con otra salida: en la pared del medio, la página de acreditaciones de FLAT (`flatfestival.org/acreditaciones`, con el QR y las actividades del día); en las tres paredes, las partículas de la web, que se apartan, giran y se agitan donde hay gente. La cámara, la calibración, la sincronización y la sesión son las de Mirador.
+
+Según el lugar de la sala donde está cada persona cambia la parte de cada pared que reacciona: en Norte, frente a ella; en Oeste y Este, a la altura de su profundidad. Se ajusta en la pestaña **Acreditaciones** del panel (H). Para probar la salida sin cámara: `acreditaciones-salida.html?demo=3`. Detalles en `TRASPASO.md`.
+
 ## Sincronizar la proyección con los cuerpos (pestaña naranja)
 
 Para que el esqueleto o la figura caiga donde está la persona real, Mirador necesita saber en qué lugar de la imagen de la cámara aparece cada parte de lo que se proyecta. Si eso viene de la foto de referencia y la cámara o la proyección no están exactamente igual, las figuras salen corridas, amontonadas o de otro tamaño.

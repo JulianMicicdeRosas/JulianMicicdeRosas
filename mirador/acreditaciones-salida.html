@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<!-- El título es el mismo que el de la salida de Mirador: la fuente "Mirador SALIDA" de OBS la captura sin tocar nada. -->
+<title>Mirador · SALIDA</title>
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;cursor:none}
+  #fx{position:fixed;display:block;background:#000}
+  /* lienzo de la sala en px propios (8400 × 690), escalado a la ventana */
+  #stage{position:fixed;left:0;top:0;transform-origin:0 0;pointer-events:none}
+  #pagina{position:absolute;top:0;border:0;transform-origin:0 0;background:transparent;color-scheme:normal}
+  #pagina.directa{background:#000}
+  /* imagen de Mirador encima de todo (sincronización, patrón de ajuste, negro): la dibuja la ventana de control */
+  #mir{position:fixed;inset:0;width:100%;height:100%;display:block;background:#000}
+  #mir[hidden]{display:none}
+  #m{position:fixed;left:50%;bottom:8%;transform:translateX(-50%);color:#555;font:14px ui-monospace,monospace;text-align:center}
+</style>
+</head>
+<body>
+<canvas id="fx"></canvas>
+<div id="stage"><iframe id="pagina" title="Acreditaciones FLAT" allow="fullscreen"></iframe></div>
+<canvas id="mir" hidden></canvas>
+<script src="js/acred-salida.js"></script>
+</body>
+</html>

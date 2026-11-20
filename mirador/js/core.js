@@ -70,6 +70,10 @@ const P_DEFAULT = {
   color: { mode:'libre', c1:'#ffffff', c0:'#000000', mix:1, exposure:1, contrast:1, sat:1, gamma:1, black:0, white:1, r:1, g:1, b:1,
            oneHue:false, bodyHue:200, lockAudioHue:false, test:false, segs:[] },
   perf: { targetFps:30, autoScale:true, scene2d:1 },
+  // aplicación Acreditaciones FLAT (js/acred.js y js/acred-salida.js; mismos valores de fábrica en los dos)
+  acred: { modo:'sala', alcance:.7, radio:260, altura:.55, fuerza:1, remolino:.5, agitar:1, quieto:.45, tinte:.6, crecer:.6,
+           cantidad:1, tamano:1, deriva:1, brillo:1, figura:true, figuraEscala:1, paralaje:.35,
+           pagina:true, pagEscala:1, velo:.55, color1:'#ccff00', color2:'#9999ff', ahorrar:true, verMirador:false },
   // audio
   audio:{ source:'off', gain:1, smooth:.6, react:{ size:.8, glow:.6, bloom:.8, scatter:.5, hue:.3, echo:.4, flash:.3, speed:.5 } },
 };

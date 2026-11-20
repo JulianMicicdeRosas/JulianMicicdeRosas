@@ -1,0 +1,9 @@
+/* Mirador · Acreditaciones FLAT
+   servidor.py agrega estos estilos a la página de acreditaciones cuando la sirve en /flat/acreditaciones/.
+   La página queda transparente: detrás se ven las partículas de la sala (acreditaciones-salida.html). */
+html,body{ background:transparent !important; cursor:none !important; }
+#fondo1-holder{ display:none !important; }
+/* velo para que el texto y el QR se lean; se desvanece hacia los bordes de la pared (no se nota el rectángulo) */
+.fondo-velo{ animation:none !important;
+  background:radial-gradient(62% 78% at 50% 50%, rgba(0,0,0,var(--velo,.55)) 0%, rgba(0,0,0,calc(var(--velo,.55) * .8)) 55%, rgba(0,0,0,0) 100%) !important; }
+.fs{ display:none !important; }
