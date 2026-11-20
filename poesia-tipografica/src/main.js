@@ -7,8 +7,8 @@
 //    ?bloom=0.55  ?grain=0.055  ?dpr=1.5
 //    ?debug          abre el panel de calibración al inicio
 // ─────────────────────────────────────────────────────────────────────────────
-import { frameRect, setFormat, visibleAspect, wallLayout, DEFAULT_FORMAT } from './frame.js'; // primero: fija el cuadro de salida
-import { nextFrame, later } from './ticker.js';
+import { frameRect, setFormat, setFranjas, blockedZones, visibleAspect, wallLayout, DEFAULT_FORMAT } from './frame.js'; // primero: fija el cuadro de salida
+import { nextFrame, later, tickStats } from './ticker.js';
 import '@fontsource/cormorant-garamond/500.css';
 import '@fontsource/ibm-plex-mono/400.css';
 // Manual de marca FLAT: Geist Mono (títulos y destacados) y Roboto (texto). Empaquetadas: funcionan sin internet.
@@ -382,9 +382,10 @@ async function boot() {
   let brandFontLoaded = '';
   function applyLiveSettings() {
     setFormat(settings.formato || DEFAULT_FORMAT);
+    setFranjas(settings.franjas); // franjas negras: ahí no se escribe y la salida queda en negro
     document.title = presentationTitle(settings); // la presentación elegida (UMBRAL o Charlas y talleres)
     const wl = wallLayout(); // paredes: la de frente y las esquinas
-    field.setWalls(wl.walls, wl.front);
+    field.setWalls(wl.walls, wl.front, blockedZones());
     field.wallMode = (settings.muro?.tipo || 'grilla') === 'grilla';
     field.brandAll = settings.marca?.global === true;
     field.brandUpper = field.brandAll && settings.marca?.mayusculas !== false;
@@ -926,7 +927,7 @@ async function boot() {
 
   // ── bucle ────────────────────────────────────────────────────────────────
   const clock = new THREE.Clock();
-  let frames = 0, fpsT = 0, timeOffset = 0;
+  let frames = 0, fpsT = 0, timeOffset = 0, fpsNow = 0;
   // avance rápido determinista (calibración y pruebas automáticas)
   function advance(seconds, step = 1 / 60) {
     const t0 = clock.elapsedTime + timeOffset;
@@ -1054,6 +1055,7 @@ async function boot() {
     fpsT += dt;
     if (fpsT > 0.5) {
       const fps = frames / fpsT;
+      fpsNow = fps;
       adaptQuality(fps);
       debug.setStats({ fps: Math.round(fps), calidad: QUALITY[quality].name, ...field.stats() });
       frames = 0;
@@ -1109,14 +1111,19 @@ async function boot() {
   const sceneNow = () => ({ state: show.state, mode: show.mode, variant: show.variant, artist: show.artistIdx, recording: show.recording });
   if (!CONTROL) {
     // la salida le cuenta su escena a la ventana de control: al cambiar y, si no, cada 5 s (para la que recién abre)
-    let prev = '', beat = 0;
+    // con la escena van los cuadros por segundo reales de la salida y si los está dando el navegador o el respaldo
+    // (por debajo de 20 el show se ve en cámara lenta: el motor no avanza más de 1/20 s por cuadro)
+    let prev = '', beat = 0, antes = { ...tickStats };
     setInterval(() => {
       if (replayMode || !socket?.open) return;
       const escena = sceneNow(), s = JSON.stringify(escena);
       if (s === prev && ++beat < 5) return;
       prev = s;
       beat = 0;
-      socket.send({ type: 'estado', escena, label: show.label() });
+      const raf = tickStats.raf - antes.raf, resp = tickStats.respaldo - antes.respaldo;
+      antes = { ...tickStats };
+      const cuadros = `${Math.round(fpsNow)} c/s${resp > raf ? ' · SIN cuadros del navegador (respaldo)' : ''}`;
+      socket.send({ type: 'estado', escena, label: `${show.label()} · ${cuadros}` });
     }, 1000);
   } else {
     // sin avisos de la salida (OBS cerrado, la fuente apagada, la página caída): que el operador lo vea

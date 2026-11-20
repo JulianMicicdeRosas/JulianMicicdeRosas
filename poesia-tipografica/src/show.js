@@ -85,6 +85,8 @@ export const DEFAULT_SETTINGS = {
   cero: { palabras: 12, lineas: 'figura', vida: 13, tamanos: 'media', aparecen: 100 },
   // brillo (1 = normal): telón y letras que caen · palabras, nombres y títulos · logos, título sólido y dibujos
   brillo: { fondo: 1, palabras: 1, cosas: 1 },
+  // franjas negras: tramos del ancho (px del formato) donde no se escribe nada y la salida queda en negro
+  franjas: [],
   pointcloud: true, // estética nube de puntos (TouchDesigner)
   profundidad: 0.45, // extrusión en Z de las figuras
   nube: 1, // intensidad de la nube

@@ -4,7 +4,7 @@
 //  Se guarda solo (en el backend → settings.local.json, y en este navegador).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { formatFromUrl, formatLabel } from './frame.js';
+import { formatFromUrl, formatLabel, formatWidth, parseFranjas, physicalWalls } from './frame.js';
 import { artistKey, resolveAnim, RESERVED_KEYS, PRESENTACIONES, presentationTitle } from './show.js';
 
 const SHORTCUTS = [
@@ -321,6 +321,19 @@ export class ConfigPanel {
         </div>
       </section>
       <section>
+        <h2>Franjas negras (sin palabras)</h2>
+        <p class="hint">Tramos del ancho donde <b>no aparece nada</b>: quedan en negro y las palabras, el verso, el
+        título y los logos se acomodan en el resto. Arrastrar sobre la barra para marcar una franja (clic en una franja
+        para sacarla), o escribirlas en px: «desde-hasta», separadas por coma (p. ej. «3175-4950, 8000-8400»). En la
+        ventana de control cada franja se ve con un borde punteado; en la pared es negro liso.</p>
+        <div data-franjas-bar style="position:relative;height:34px;background:#1b1a18;border:1px solid #3a3835;cursor:crosshair;user-select:none;touch-action:none;margin:6px 0"></div>
+        <div class="row">
+          <input data-franjas type="text" placeholder="sin franjas · p. ej. 3175-4950" style="flex:1;min-width:14em">
+          <button data-act="franjas-clear">Sacar todas</button>
+        </div>
+        <p class="hint" data-franjas-info></p>
+      </section>
+      <section>
         <h2>Grilla de texto</h2>
         <p class="hint">La ilustración es texto: el modelo devuelve la imagen como arte ASCII de 48×26 con tonos
         (« .:-=+*#%@») y el telón la dibuja con las palabras dichas. <b>Positivo</b>: la figura hecha de letras sobre
@@ -493,6 +506,7 @@ export class ConfigPanel {
     const fu = this.$('[data-formato-url]');
     fu.style.display = formatFromUrl() ? '' : 'none';
     fu.textContent = formatFromUrl() ? 'Formato fijado por el lanzador (p. ej. start_instalacion_13480.bat): lo de abajo no se usa mientras tanto.' : '';
+    this._renderFranjas(s);
     const pg = this.$('[data-prompt-grilla]');
     if (document.activeElement !== pg) pg.value = s.prompt_grilla || this.defaultPromptGrid || '';
     this.$('select[data-sopt="director"]').value = s.director || 'openai';
@@ -927,6 +941,82 @@ export class ConfigPanel {
     this._savedT = setTimeout(() => (s.textContent = ''), 1500);
   }
 
+  // ── franjas negras ───────────────────────────────────────────────────────
+  _setFranjas(list) {
+    this._commit((s) => (s.franjas = parseFranjas(list)), false);
+    this._renderFranjas(this.getSettings());
+  }
+
+  _renderFranjas(s) {
+    const bar = this.$('[data-franjas-bar]');
+    if (!bar) return;
+    const W = Math.max(1, formatWidth()), list = parseFranjas(s.franjas || []).filter((f) => f.desde < W);
+    const inp = this.$('[data-franjas]');
+    if (document.activeElement !== inp) inp.value = list.map((f) => `${f.desde}-${Math.min(W, f.hasta)}`).join(', ');
+    const negro = list.reduce((a, f) => a + Math.min(W, f.hasta) - f.desde, 0);
+    this.$('[data-franjas-info]').textContent = list.length ? `${list.length} franja${list.length > 1 ? 's' : ''} · ${negro} px en negro de ${W} (${Math.round((negro / W) * 100)} %).` : `Sin franjas: se escribe en los ${W} px.`;
+    const pct = (px) => `${(Math.min(W, Math.max(0, px)) / W) * 100}%`;
+    const mk = (css, txt = '', title = '') => {
+      const d = document.createElement('div');
+      d.style.cssText = `position:absolute;top:0;height:100%;box-sizing:border-box;${css}`;
+      d.textContent = txt;
+      if (title) d.title = title;
+      return d;
+    };
+    const kids = [];
+    // paredes del formato (de fondo, con su ancho) y franjas (negras, encima)
+    const vis = physicalWalls();
+    vis.walls.forEach((w, i) => kids.push(mk(`left:${w.x0 * 100}%;width:${(w.x1 - w.x0) * 100}%;border-right:1px solid #55524c;color:#77736b;font-size:10px;line-height:32px;text-align:center;pointer-events:none;overflow:hidden;white-space:nowrap`, vis.walls.length > 1 ? `${i === vis.front ? 'frente · ' : ''}${w.px ?? ''}` : '')));
+    list.forEach((f, i) => {
+      const d = mk(`left:${pct(f.desde)};width:calc(${pct(f.hasta)} - ${pct(f.desde)});background:#000;border:1px dashed #b05050;cursor:pointer`, '', `${f.desde}-${Math.min(W, f.hasta)} px · clic para sacarla`);
+      d.dataset.franja = String(i);
+      kids.push(d);
+    });
+    bar.replaceChildren(...kids);
+    if (bar.dataset.listo) return;
+    bar.dataset.listo = '1';
+    // arrastrar sobre la barra: franja nueva; clic en una franja: se saca
+    let x0 = null, ghost = null;
+    const px = (ev) => {
+      const r = bar.getBoundingClientRect();
+      return Math.round((Math.min(1, Math.max(0, (ev.clientX - r.left) / Math.max(1, r.width))) * Math.max(1, formatWidth())) / 5) * 5;
+    };
+    bar.addEventListener('pointerdown', (ev) => {
+      if (ev.target.dataset.franja != null) {
+        const cur = parseFranjas(this.getSettings().franjas || []).filter((f) => f.desde < formatWidth());
+        cur.splice(+ev.target.dataset.franja, 1);
+        this._setFranjas(cur);
+        return;
+      }
+      x0 = px(ev);
+      bar.setPointerCapture(ev.pointerId);
+      ghost = document.createElement('div');
+      ghost.style.cssText = 'position:absolute;top:0;height:100%;background:rgba(0,0,0,.75);border:1px dashed #b05050;pointer-events:none;color:#cfcac0;font-size:10px;line-height:32px;text-align:center;white-space:nowrap;overflow:visible';
+      bar.appendChild(ghost);
+    });
+    bar.addEventListener('pointermove', (ev) => {
+      if (x0 == null || !ghost) return;
+      const W2 = Math.max(1, formatWidth()), a = Math.min(x0, px(ev)), b = Math.max(x0, px(ev));
+      ghost.style.left = `${(a / W2) * 100}%`;
+      ghost.style.width = `${((b - a) / W2) * 100}%`;
+      ghost.textContent = `${a}-${b}`;
+    });
+    const end = (ev) => {
+      if (x0 == null) return;
+      const a = Math.min(x0, px(ev)), b = Math.max(x0, px(ev));
+      x0 = null;
+      ghost?.remove();
+      ghost = null;
+      if (b - a >= 20) this._setFranjas([...parseFranjas(this.getSettings().franjas || []), { desde: a, hasta: b }]);
+    };
+    bar.addEventListener('pointerup', end);
+    bar.addEventListener('pointercancel', () => {
+      x0 = null;
+      ghost?.remove();
+      ghost = null;
+    });
+  }
+
   // ── edición ──────────────────────────────────────────────────────────────
   _commit(mutator, rerender = true) {
     const s = structuredClone(this.getSettings());
@@ -969,6 +1059,7 @@ export class ConfigPanel {
     }
     else if (act === 'devices') this.requestDevices();
     else if (act === 'show-prompt') this.onShowPrompt?.(this.$('[data-grid-text]')?.value || '');
+    else if (act === 'franjas-clear') this._setFranjas([]);
     else if (act === 'add-artist') this._commit((s) => (s.artists = [...(s.artists || []), { name: '' }]));
     else if (act === 'add-step') this._commit((s) => (s.loop = [...(s.loop || []), { tipo: 'texto', contenido: '', render: 'letras', duracion: 10, letras: '' }]));
     else if (act === 'up') this._commit((s) => move(s[list], -1));
@@ -1153,6 +1244,11 @@ export class ConfigPanel {
         this.$('[data-formato-otro]').style.display = '';
         this.$('[data-formato-otro]').focus();
       } else this._commit((s) => (s.formato = t.value), false);
+      return;
+    }
+    if (t.matches('[data-franjas]')) {
+      if (ev.type === 'input') return; // se aplica al salir del campo o con Enter
+      this._setFranjas(parseFranjas(t.value));
       return;
     }
     if (t.matches('[data-formato-otro]')) {

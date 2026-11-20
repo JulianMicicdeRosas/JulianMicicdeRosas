@@ -60,10 +60,16 @@ No abras además el show en un Chrome aparte: serían dos shows independientes y
    Charlas y Talleres FLAT 8400x690**.
 4. **Salida a Resolume**: en la escena «Charlas y Talleres 8400x690», clic derecho → **Filtros** → **+** →
    **Spout Filter** → nombre del emisor: `FLAT`. (Manda la imagen de la escena directo desde la placa de video.)
-   - Otra forma, que manda **el programa entero** (lo mismo que salía por NDI «OBS PGM», sea cual sea la escena):
-     **Herramientas → Ajustes de la salida Spout** → nombre `FLAT`, tildar el arranque automático, **Iniciar**.
-     En la 1.13.0 el arranque automático recién corre cuando se abre ese cuadro: **abrirlo una vez en cada inicio
-     de OBS**. No usar las dos formas a la vez con el mismo nombre.
+   - En la sala el filtro está puesto en la **fuente** «Show Umbral (navegador)» (clic en la fuente → Filtros),
+     no en la escena: así sale igual con el modo estudio y con OBS minimizado.
+   - **No usar «Herramientas → Ajustes de la salida Spout» ni la salida NDI con el lienzo de 8400 px.** Las dos
+     sacan cada cuadro de la placa de video y lo procesan en el procesador, en un solo hilo: a 8400 × 690 ese hilo
+     no llega y OBS saltea más del 95 % de los cuadros (se ve a los saltos y como en cámara lenta). Se comprueba
+     al cerrar OBS, en el registro: `skipped frames due to encoding lag`. El filtro comparte la textura directo
+     en la placa y no tiene ese costo. Dejar destildados el arranque automático de la salida Spout y la «Salida
+     de Programa» de DistroAV NDI.
+   - Si la salida Spout estuvo andando con el nombre `FLAT`, el nombre queda tomado hasta cerrar OBS y el filtro
+     pasa a llamarse `FLAT_1`: reiniciar OBS.
    - **No usar NDI entre OBS y Resolume en la misma PC**: el NDI viaja por la dirección de la placa de red (en la
      sala, la del Wi-Fi) y cada vez que la red se corta la fuente queda «offline» en Resolume. Spout no usa red.
 5. **Aceleración por hardware**: Ajustes → Avanzado → Fuentes → tildar **«Habilitar aceleración de hardware de la
@@ -95,6 +101,10 @@ No abras además el show en un Chrome aparte: serían dos shows independientes y
   fuente de OBS), que es la que los ejecuta y los graba; los ajustes del panel se aplican en la pared al instante.
   La ventana de control repite las teclas para acompañar, pero **la pared es la que manda**: si se abre con el show
   empezado, su vista previa puede no coincidir. Para Umbral, `presentacion=umbral`.
+- **Franjas negras** (panel C → «Franjas negras (sin palabras)»): tramos del ancho que quedan en negro y donde no
+  se escribe nada (una puerta, una columna, un proyector que no se usa). Se marcan arrastrando sobre la barra o
+  escribiendo los px («3175-4950, 8000-8400»); clic en una franja para sacarla. Las palabras, el verso, el título y
+  los logos se acomodan en los tramos libres; si la pared de frente queda toda en negro, pasan al tramo más ancho.
 - **No abrir el panel C dentro de la fuente** (clic derecho → Interactuar → tecla C): a 8400 px queda ilegible en el
   monitor y **se ve en la pared**. Interactuar sirve para una tecla suelta si la ventana de control no está.
 - **Vista previa**: a 8400 px de ancho consume placa. Si hace falta, clic derecho en la vista previa → destildar

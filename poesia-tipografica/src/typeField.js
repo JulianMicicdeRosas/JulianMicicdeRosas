@@ -293,12 +293,13 @@ export class TypeField {
    * Paredes contiguas (fracciones 0..1 del cuadro) y cuál es la de frente. En la de frente se centran el verso, el
    * título, los nombres, las figuras y los dibujos; en las uniones entre paredes (esquinas) no se parte ninguna palabra.
    */
-  setWalls(walls = [{ x0: 0, x1: 1 }], front = 0) {
-    const key = JSON.stringify([walls, front]);
+  setWalls(walls = [{ x0: 0, x1: 1 }], front = 0, blocked = []) {
+    const key = JSON.stringify([walls, front, blocked]);
     if (key === this.wallsKey) return;
     this.wallsKey = key;
     this.wallFracs = walls;
     this.wallFront = front;
+    this.blockedFracs = blocked; // franjas negras (panel C): ahí no se escribe nada
     this._applyWalls();
     if (this.wall) this._markSeams(this.wall);
   }
@@ -308,22 +309,39 @@ export class TypeField {
     this.walls = fr.map((w) => ({ x0: (w.x0 - 0.5) * this.W, x1: (w.x1 - 0.5) * this.W }));
     const f = this.walls[this.wallFront || 0] || this.walls[0];
     this.focus = { x0: f.x0, x1: f.x1, cx: (f.x0 + f.x1) / 2, w: f.x1 - f.x0 };
-    this.seams = this.walls.slice(1).map((w) => w.x0); // dónde dobla la pared (esquinas)
+    this.blocked = (this.blockedFracs || []).map((z) => ({ x0: (z.x0 - 0.5) * this.W, x1: (z.x1 - 0.5) * this.W }));
+    // dónde dobla la pared (esquinas) y dónde empieza o termina una franja negra: ninguna palabra cruza
+    const edge = this.W / 2 - 1e-6;
+    const cuts = [...this.walls.slice(1).map((w) => w.x0), ...this.blocked.flatMap((z) => [z.x0, z.x1])];
+    this.seams = [...new Set(cuts.filter((x) => Math.abs(x) < edge))].sort((a, b) => a - b);
     this.lineMaxW = this.focus.w * 0.78;
   }
 
-  /** ¿El tramo horizontal [x0, x1] (mundo) cruza una esquina? */
+  /** ¿El tramo horizontal [x0, x1] (mundo) cruza una esquina o pisa una franja negra? */
   _crossesSeam(x0, x1, pad = 0) {
-    return this.seams.some((sx) => x0 - pad < sx && x1 + pad > sx);
+    return this.seams.some((sx) => x0 - pad < sx && x1 + pad > sx) || this.blocked.some((z) => x0 < z.x1 && x1 > z.x0);
   }
 
-  /** En la grilla del muro, las columnas de las esquinas quedan bloqueadas (-2): ninguna palabra las cruza. */
+  /** Fin de la franja negra que pisa el tramo [x0, x1] (mundo), o null si no pisa ninguna. */
+  _blockedEnd(x0, x1) {
+    const z = this.blocked.find((b) => x0 < b.x1 && x1 > b.x0);
+    return z ? z.x1 : null;
+  }
+
+  /**
+   * En la grilla del muro, las columnas de las esquinas y las de las franjas negras quedan bloqueadas (-2): ninguna
+   * palabra las cruza ni cae adentro.
+   */
   _markSeams(W) {
     for (let q = 0; q < W.occ.length; q++) if (W.occ[q] === -2) W.occ[q] = -1;
-    for (const sx of this.seams) {
-      const c = Math.floor((sx - W.x0) / W.cw);
-      if (c < 0 || c >= W.colsN) continue;
+    const lock = (c) => {
+      if (c < 0 || c >= W.colsN) return;
       for (let r = 0; r < W.rowsN; r++) if (W.occ[r * W.colsN + c] === -1) W.occ[r * W.colsN + c] = -2;
+    };
+    for (const sx of this.seams) lock(Math.floor((sx - W.x0) / W.cw));
+    for (const z of this.blocked) {
+      const c0 = Math.floor((z.x0 - W.x0) / W.cw), c1 = Math.ceil((z.x1 - W.x0) / W.cw);
+      for (let c = Math.max(0, c0); c < Math.min(W.colsN, c1); c++) lock(c);
     }
   }
 
@@ -1668,8 +1686,11 @@ export class TypeField {
     let k = B.wc || 0;
     if (k % B.colsN + chars.length > B.colsN) k = (Math.floor(k / B.colsN) + 1) * B.colsN; // no partir palabras
     // ni doblarlas en una esquina: salta a la pared siguiente
-    const c0 = k % B.colsN, sx = this.seams.find((x) => x > B.x0 + c0 * B.cw && x < B.x0 + (c0 + chars.length) * B.cw);
-    if (sx !== undefined) {
+    // ni escribirlas en una franja negra: sigue después de la franja
+    for (let tries = 0; tries < 8; tries++) {
+      const c0 = k % B.colsN, wx0 = B.x0 + c0 * B.cw, wx1 = B.x0 + (c0 + chars.length) * B.cw;
+      const sx = this._blockedEnd(wx0, wx1) ?? this.seams.find((x) => x > wx0 && x < wx1);
+      if (sx == null) break;
       const c1 = Math.ceil((sx - B.x0) / B.cw) + 1;
       k = c1 + chars.length > B.colsN ? (Math.floor(k / B.colsN) + 1) * B.colsN : Math.floor(k / B.colsN) * B.colsN + c1;
     }
@@ -2785,7 +2806,10 @@ export class TypeField {
     // con varias paredes, cada figura va entera en una (la de frente, la mitad de las veces): no dobla en las esquinas
     let wi = this.wallFront || 0;
     if (this.walls.length > 1 && Math.random() >= 0.5) {
-      const others = this.walls.map((w, i) => i).filter((i) => i !== wi);
+      // (con franjas negras quedan tramos angostos: ahí no entra una figura)
+      const wide = Math.max(...this.walls.map((w) => w.x1 - w.x0)) * 0.3;
+      const others = this.walls.map((w, i) => i).filter((i) => i !== wi && this.walls[i].x1 - this.walls[i].x0 >= wide);
+      if (!others.length) others.push(wi);
       const tot = others.reduce((a, i) => a + (this.walls[i].x1 - this.walls[i].x0), 0);
       let r = Math.random() * tot;
       wi = others.find((i) => (r -= this.walls[i].x1 - this.walls[i].x0) <= 0) ?? others[others.length - 1];

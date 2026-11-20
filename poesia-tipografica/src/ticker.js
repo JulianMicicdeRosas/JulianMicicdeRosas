@@ -10,7 +10,17 @@ let queue = [];
 let rafPending = false;
 let lastFlush = performance.now();
 
+/** Cuántos cuadros dio el navegador y cuántos hubo que dar de respaldo (diagnóstico: panel de control). */
+export const tickStats = { raf: 0, respaldo: 0 };
+
+let lastRaf = performance.now(); // último cuadro que dio el navegador
+
 function flush(ts) {
+  if (ts == null) tickStats.respaldo++;
+  else {
+    tickStats.raf++;
+    lastRaf = performance.now();
+  }
   lastFlush = performance.now();
   const q = queue;
   queue = [];
@@ -52,8 +62,12 @@ try {
   worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
   worker.onmessage = (e) => {
     if (e.data === 0) {
-      // cuadro de respaldo: sólo cuando requestAnimationFrame no llegó a tiempo (ventana oculta o tapada)
-      if (queue.length && performance.now() - lastFlush > 100) flush();
+      // cuadro de respaldo: sólo cuando requestAnimationFrame no llegó a tiempo (ventana oculta o tapada).
+      // Si el navegador lleva un cuarto de segundo sin dar cuadros (la fuente de OBS a veces no los da), el
+      // respaldo marca TODOS los pasos (~30 por segundo). Antes daba uno cada 100 ms: a ~9 cuadros por segundo
+      // el motor, que no avanza más de 1/20 s por cuadro, se veía a los saltos y en cámara lenta.
+      const now = performance.now();
+      if (queue.length && now - lastFlush > (now - lastRaf > 250 ? 20 : 100)) flush();
       return;
     }
     const tm = timers.get(e.data);
