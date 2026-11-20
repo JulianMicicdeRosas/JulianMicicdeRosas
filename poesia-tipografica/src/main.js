@@ -49,6 +49,10 @@ function poolFor() {
 // al ritmo que se le pide (30 por defecto): la calidad adaptativa lo tomaba por una placa lenta y bajaba la resolución
 // interna hasta el 60 % (se veía pixelado).
 const OBS = typeof window !== 'undefined' && (!!window.obsstudio || params.get('obs') === '1');
+// ?control=1: ventana de control para el monitor del operador, cuando la salida es una fuente de navegador de OBS
+// (ahí el panel C queda ilegible y se vería en la pared). Abre el panel C, manda las teclas del show a la salida por
+// el backend («mando») y no le habla al backend como si fuera el show (sesión, grabación de teclas, preroll).
+const CONTROL = params.get('control') === '1';
 const CONFIG = {
   pool: Math.round(Math.min(100000, Math.max(2000, num('pool', poolFor())))), // muro de 40 filas ≈ 11 000 letras (en 1822 × 737) + caída + títulos
   points: Math.round(Math.min(300000, Math.max(0, num('points', 80000)))),
@@ -641,6 +645,22 @@ async function boot() {
       config.setState(show.label());
     },
     replay_settings: (m) => setSettings({ ...settings, ...(m.settings || {}) }, { persist: false }),
+    // tecla o botón del show apretado en la ventana de control: la salida lo ejecuta (y lo graba); la ventana de
+    // control lo repite para acompañar lo que se ve
+    mando: (m) => {
+      if (replayMode) return;
+      if (m.action === 'grabar' || m.action === 'detener') {
+        if (!CONTROL) logUi({ action: m.action });
+        if (m.action === 'grabar') show.start(...show.nextRecording());
+        else show.stop();
+        config.setState(show.label());
+        return;
+      }
+      const k = String(m.key || '').toLowerCase();
+      if (!SHOW_KEY.test(k) && show.artistForKey(k) < 0) return;
+      if (!CONTROL) logUi({ key: k });
+      doKey(k);
+    },
     replay_end: () => notify('Fin de la re-proyección', true),
     prompt_preview: (m) => config.setPromptPreview(m),
     grid_test: (m) => {
@@ -657,7 +677,13 @@ async function boot() {
     },
     devices: (m) => config.setDevices(m.devices, m.current, m.channel),
     inputs: (m) => config.setInputs(m),
-    settings: () => {},
+    // ajustes guardados desde otra ventana (la de control): la salida los toma al instante. La de control no, para
+    // no pisar lo que se está tocando en su panel.
+    settings: (m) => {
+      if (CONTROL || replayMode || !backendSettingsLoaded || !m.settings) return;
+      setSettings({ ...settings, ...m.settings }, { persist: false });
+      if (config.isOpen) config.render();
+    },
     logos: (m) => {
       logoRequests.get(m.id)?.(m.logos || []);
       logoRequests.delete(m.id);
@@ -688,6 +714,14 @@ async function boot() {
       if (d.source === 'debug' || (show.recording && show.mode !== 'pocas')) applyDirection(d);
     },
   });
+  if (CONTROL) {
+    // la ventana de control no es el show: no abre ni cierra la sesión de transcripción, no graba teclas y no
+    // descarta lo previo. Todo eso lo hace la salida cuando recibe el «mando».
+    const enviar = socket.send.bind(socket);
+    const DEL_SHOW = new Set(['session', 'ui', 'preroll_reset', 'inject_verse']);
+    socket.send = (m) => (DEL_SHOW.has(m?.type) ? true : enviar(m));
+    document.title = `CONTROL · ${document.title}`;
+  }
 
   const config = new ConfigPanel({
     getSettings: () => settings,
@@ -714,11 +748,13 @@ async function boot() {
       settings = { ...settings, estilos: prev };
     },
     onRecord: () => {
+      if (CONTROL) return void socket.send({ type: 'mando', action: 'grabar' });
       logUi({ action: 'grabar' });
       show.start(...show.nextRecording());
       config.setState(show.label());
     },
     onStop: () => {
+      if (CONTROL) return void socket.send({ type: 'mando', action: 'detener' });
       logUi({ action: 'detener' });
       show.stop();
       config.setState(show.label());
@@ -727,6 +763,7 @@ async function boot() {
     onScanLogos: (carpeta) => fetchLogos(carpeta).catch(() => config.setLogoCount(carpeta, 0)),
   });
   setInterval(() => config.tick(), 400);
+  if (CONTROL) config.toggle(true); // la ventana de control arranca con el panel C a la vista
 
   // ── simulador (modo D) ───────────────────────────────────────────────────
   const sim = {
@@ -809,6 +846,7 @@ async function boot() {
     if (SHOW_KEY.test(k) || show.artistForKey(k) >= 0) {
       if (replayMode) return; // re-proyectando: el show lo conduce la grabación
       e.preventDefault();
+      if (CONTROL) return void socket.send({ type: 'mando', key: k }); // la ejecuta la salida (y vuelve acá como «mando»)
       logUi({ key: k });
     }
     doKey(k, e);

@@ -85,8 +85,18 @@ No abras además el show en un Chrome aparte: serían dos shows independientes y
 
 ### Durante el show
 
-- **Operar** (teclas, panel C, flechas): clic derecho en la fuente → **Interactuar**. Ahí funcionan todas las teclas
-  del show. El panel C se abre en la parte visible.
+- **Operar** (teclas, panel C, flechas): abrir en Chrome, en el monitor del operador, la **ventana de control**:
+
+  ```
+  http://127.0.0.1:5173/?control=1&presentacion=charlas&formato=8400x690/3175,1775,3450
+  ```
+
+  Arranca con el panel C a la vista. Las teclas del show y los botones Grabar / Detener se mandan a la salida (la
+  fuente de OBS), que es la que los ejecuta y los graba; los ajustes del panel se aplican en la pared al instante.
+  La ventana de control repite las teclas para acompañar, pero **la pared es la que manda**: si se abre con el show
+  empezado, su vista previa puede no coincidir. Para Umbral, `presentacion=umbral`.
+- **No abrir el panel C dentro de la fuente** (clic derecho → Interactuar → tecla C): a 8400 px queda ilegible en el
+  monitor y **se ve en la pared**. Interactuar sirve para una tecla suelta si la ventana de control no está.
 - **Vista previa**: a 8400 px de ancho consume placa. Si hace falta, clic derecho en la vista previa → destildar
   «Habilitar vista previa» (Spout y Resolume siguen recibiendo igual).
 - **Control**: Ver → Estadísticas: «Fotogramas perdidos por renderizado» tiene que quedar en 0.
