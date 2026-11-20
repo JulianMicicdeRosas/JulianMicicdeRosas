@@ -45,6 +45,10 @@ from websockets.asyncio.client import connect as ws_connect
 from websockets.asyncio.server import ServerConnection, broadcast, serve
 from websockets.exceptions import ConnectionClosed, InvalidStatus, InvalidURI
 
+# ASIO en Windows: sounddevice lo trae pero sólo lo habilita con esta variable, puesta antes de importarlo. Con una
+# placa multicanal (Scarlett 18i20) los drivers comunes de Windows (MME, DirectSound, WASAPI) no entregan todas las
+# entradas: la 8 llega en silencio. Por ASIO («Focusrite USB ASIO») llegan las 18, cada una en su canal.
+os.environ.setdefault("SD_ENABLE_ASIO", "1")
 try:  # PortAudio puede faltar en máquinas de desarrollo; en Windows viene incluido en la wheel.
     import sounddevice as sd
 except Exception as _sd_exc:  # pragma: no cover - depende del sistema
