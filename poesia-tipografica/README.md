@@ -398,7 +398,9 @@ Quedan a lo sumo 12 palabras: cada una vive 10–16 s y se rompe con glitch. Las
 en el resto de las escenas. **Abajo a la derecha queda fijo el logo de FLAT** (el de `logos/flat`), y ninguna palabra
 se pone encima. S detiene / retoma; L vuelve al loop.
 
-**Ajustes de la tecla 0** (panel C → Tecla 0 · palabras; se ven al instante): cuántas palabras a la vez (2 a 60; de
+**Ajustes de la tecla 0** (panel C → Tecla 0 · palabras; se ven al instante): cuántas palabras **aparecen** (de cada
+100 dichas, de 5 a 100; de fábrica 100 = todas; al bajar salen primero las de enlace —al 50 % no queda ninguna— y por
+debajo de 50 % también se saltean palabras con peso), cuántas **quedan** a la vez (2 a 60; de
 fábrica 12), cuántos segundos queda cada una (3 a 90, ±23 %; de fábrica 13), las **líneas** que las unen (todas las de
 cada figura · sólo las de la misma oración, cortando en cada punto o pausa al hablar · sin líneas) y la **variación
 de tamaños** (todas iguales · poca, 1× y 2× · media, 1× a 3× · mucha, 1× a 5×). Las palabras de enlace quedan chicas.

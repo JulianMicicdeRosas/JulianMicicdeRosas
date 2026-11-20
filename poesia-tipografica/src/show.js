@@ -81,7 +81,8 @@ export const DEFAULT_SETTINGS = {
   // modo T: muro de palabras
   muro: { tipo: 'grilla', filas: 34, mayusculas: true }, // cada cuánto una imagen: verso | estrofa | contemplativa | personalizada
   // tecla 0: cuántas palabras a la vez, líneas que las unen, segundos en pantalla y variación de tamaños
-  cero: { palabras: 12, lineas: 'figura', vida: 13, tamanos: 'media' },
+  // `aparecen`: de cada 100 palabras dichas, cuántas llegan a la pared (100 = todas; las de enlace salen primero)
+  cero: { palabras: 12, lineas: 'figura', vida: 13, tamanos: 'media', aparecen: 100 },
   // brillo (1 = normal): telón y letras que caen · palabras, nombres y títulos · logos, título sólido y dibujos
   brillo: { fondo: 1, palabras: 1, cosas: 1 },
   pointcloud: true, // estética nube de puntos (TouchDesigner)
@@ -690,7 +691,7 @@ export class Show {
     f.sparseMode = mode === 'pocas' || v === 'constelacion';
     const cero = { ...DEFAULT_SETTINGS.cero, ...(this.settings.cero || {}) };
     f.sparseMax = mode === 'pocas' ? Math.round(clampN(+cero.palabras, 2, 80, 12)) : 14;
-    f.sparseCfg = mode === 'pocas' ? { lineas: cero.lineas, vida: clampN(+cero.vida, 2, 120, 13), tamanos: cero.tamanos } : { lineas: 'figura', vida: 13, tamanos: 'media' };
+    f.sparseCfg = mode === 'pocas' ? { lineas: cero.lineas, vida: clampN(+cero.vida, 2, 120, 13), tamanos: cero.tamanos, aparecen: clampN(+cero.aparecen, 5, 100, 100) } : { lineas: 'figura', vida: 13, tamanos: 'media', aparecen: 100 };
     f.sparseKeep = 0; // tecla 0: pocas palabras que viven unos segundos y se rompen (sin acumular párrafos)
     f.artistWall = v === 'muro' || v === 'cruce';
     f.flowMode = v === 'sedimento' || v === 'partitura' ? v : null;

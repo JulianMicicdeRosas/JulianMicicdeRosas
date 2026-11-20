@@ -223,7 +223,8 @@ export class ConfigPanel {
       <section>
         <h2>Tecla 0 · palabras</h2>
         <p class="hint">Cómo aparecen las palabras dichas en la tecla 0. Los cambios se ven enseguida.</p>
-        <div class="slider"><span>Palabras a la vez</span><input type="range" min="2" max="60" step="1" data-cero="palabras"><output></output></div>
+        <div class="slider"><span>Palabras que aparecen (%)</span><input type="range" min="5" max="100" step="5" data-cero="aparecen"><output></output></div>
+        <div class="slider"><span>Palabras que quedan a la vez</span><input type="range" min="2" max="60" step="1" data-cero="palabras"><output></output></div>
         <div class="slider"><span>Segundos en pantalla</span><input type="range" min="3" max="90" step="1" data-cero="vida"><output></output></div>
         <div class="row">
           <span>Líneas que las unen:</span>
@@ -244,6 +245,9 @@ export class ConfigPanel {
         </div>
         <p class="hint">Cada palabra dura los segundos elegidos (±23 %) y se rompe con glitch; si se llega al máximo, se
         rompen las más viejas. Las palabras de enlace (de, la, y…) quedan chicas.</p>
+        <p class="hint"><b>Palabras que aparecen</b>: de cada 100 palabras dichas, cuántas llegan a la pared. 100 = todas.
+        Al bajar salen primero las de enlace (al 50 % no queda ninguna); por debajo de 50 % también se saltean
+        palabras con peso, de forma pareja.</p>
       </section>
       <section>
         <h2>Brillo</h2>
@@ -515,7 +519,7 @@ export class ConfigPanel {
       if (document.activeElement !== el) el.value = cad[el.dataset.cad];
       if (el.type === 'number') el.disabled = cad.preset !== 'personalizada';
     }
-    const cero = { palabras: 12, lineas: 'figura', vida: 13, tamanos: 'media', ...(s.cero || {}) };
+    const cero = { palabras: 12, lineas: 'figura', vida: 13, tamanos: 'media', aparecen: 100, ...(s.cero || {}) };
     const brillo = { fondo: 1, palabras: 1, cosas: 1, ...(s.brillo || {}) };
     for (const el of this.el.querySelectorAll('[data-cero], [data-brillo]')) {
       const v = el.dataset.cero ? cero[el.dataset.cero] : brillo[el.dataset.brillo];

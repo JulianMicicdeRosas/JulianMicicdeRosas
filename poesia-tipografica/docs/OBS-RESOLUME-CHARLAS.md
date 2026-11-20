@@ -49,6 +49,10 @@ No abras además el show en un Chrome aparte: serían dos shows independientes y
 ### Una sola vez
 
 1. **Plugin de Spout**: instalar «Spout2 Plugin for OBS Studio» (Off World Live). Reiniciar OBS.
+   - **La versión depende de OBS**: con OBS 32 o anterior, la **1.13.0** (las 1.14 y siguientes exigen OBS 33 y no
+     cargan: «The following OBS plugins failed to load: win-spout»). Con OBS 33 o más nuevo, la última.
+   - Instalación manual: descomprimir el ZIP en `C:\ProgramData\obs-studio\plugins` (queda la carpeta `win-spout`).
+   - En el registro de OBS (Ayuda → Archivos de registro) tiene que decir `[win_spout] win-spout loaded!`.
 2. **Perfil** (resolución, cuadros y color): menú **Perfil → Importar** y elegir la carpeta
    `poesia-tipografica\obs\Perfil Charlas 8400x690`. Después **Perfil → Charlas 8400x690**.
 3. **Escena**: menú **Colección de escenas → Importar**, elegir
@@ -56,6 +60,12 @@ No abras además el show en un Chrome aparte: serían dos shows independientes y
    Charlas y Talleres FLAT 8400x690**.
 4. **Salida a Resolume**: en la escena «Charlas y Talleres 8400x690», clic derecho → **Filtros** → **+** →
    **Spout Filter** → nombre del emisor: `FLAT`. (Manda la imagen de la escena directo desde la placa de video.)
+   - Otra forma, que manda **el programa entero** (lo mismo que salía por NDI «OBS PGM», sea cual sea la escena):
+     **Herramientas → Ajustes de la salida Spout** → nombre `FLAT`, tildar el arranque automático, **Iniciar**.
+     En la 1.13.0 el arranque automático recién corre cuando se abre ese cuadro: **abrirlo una vez en cada inicio
+     de OBS**. No usar las dos formas a la vez con el mismo nombre.
+   - **No usar NDI entre OBS y Resolume en la misma PC**: el NDI viaja por la dirección de la placa de red (en la
+     sala, la del Wi-Fi) y cada vez que la red se corta la fuente queda «offline» en Resolume. Spout no usa red.
 5. **Aceleración por hardware**: Ajustes → Avanzado → Fuentes → tildar **«Habilitar aceleración de hardware de la
    fuente de navegador»**. Reiniciar OBS.
 

@@ -395,7 +395,7 @@ async function boot() {
     if (show.mode === 'pocas' && show.state === 'perform') {
       const c = { ...DEFAULT_SETTINGS.cero, ...(settings.cero || {}) };
       field.sparseMax = Math.round(Math.min(80, Math.max(2, +c.palabras || 12)));
-      field.sparseCfg = { lineas: c.lineas, vida: Math.min(120, Math.max(2, +c.vida || 13)), tamanos: c.tamanos };
+      field.sparseCfg = { lineas: c.lineas, vida: Math.min(120, Math.max(2, +c.vida || 13)), tamanos: c.tamanos, aparecen: Math.min(100, Math.max(5, +c.aparecen || 100)) };
     }
     field.wallUpper = settings.muro?.mayusculas !== false;
     const fuente = settings.marca?.fuente || '';

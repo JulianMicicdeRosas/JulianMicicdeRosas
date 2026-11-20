@@ -147,7 +147,8 @@ export class TypeField {
     this.sparseMax = 12;
     // tecla 0, desde el panel C: líneas ('figura' todas · 'oracion' sólo dentro de cada oración · 'no'), segundos en
     // pantalla (±23 %) y variación de tamaños ('iguales' · 'poca' · 'media' · 'mucha')
-    this.sparseCfg = { lineas: 'figura', vida: 13, tamanos: 'media' };
+    // `aparecen`: de cada 100 palabras dichas, cuántas llegan a la pared (100 = todas)
+    this.sparseCfg = { lineas: 'figura', vida: 13, tamanos: 'media', aparecen: 100 };
     this.sparseSent = 0; // oración en curso (sube con cada punto)
     // brillo, desde el panel C: telón y letras que caen · palabras dichas, nombres y títulos · dibujos
     this.gainFondo = 1;
@@ -2845,8 +2846,33 @@ export class TypeField {
     }
   }
 
+  /**
+   * Tecla 0, regulador «palabras que aparecen» (panel C): de cada 100 palabras dichas, cuántas llegan a la pared.
+   * Las de enlace (de, la, y…) son las primeras en quedar afuera: al 50 % no entra ninguna y entran todas las
+   * demás; por debajo de 50 % también se saltean palabras con peso. Las palabras clave entran siempre.
+   * Reparto parejo (acumuladores, sin azar): con 25 % entra una de cada dos palabras con peso, no rachas.
+   */
+  _sparseLets(word) {
+    const pct = clamp(+this.sparseCfg.aparecen || 100, 5, 100);
+    if (pct >= 100 || this.sparseKeep) return true;
+    const nw = normalizeWord(word);
+    if (this.keywords.has(nw)) return true;
+    const enlace = STOP.has(nw) || nw.length <= 2;
+    const p = enlace ? clamp((pct - 50) / 50, 0, 1) : clamp(pct / 50, 0, 1);
+    const acc = (this.sparseAcc ||= { enlace: 0, peso: 1 }); // la primera palabra con peso siempre entra
+    const key = enlace ? 'enlace' : 'peso';
+    acc[key] += p;
+    if (acc[key] < 1) return false;
+    acc[key] -= 1;
+    return true;
+  }
+
   _placeSparse(word) {
     const t = this.time;
+    if (!this._sparseLets(word)) {
+      if (/[.?!…]["»”)]?$/.test(word)) this.sparseSent++; // la oración igual terminó, aunque la palabra no se vea
+      return;
+    }
     if (!this.sparseFig || this.sparseFig.n >= this.sparseFig.total) {
       this.sparseFig = this._sparseFigure();
       this.sparseFig.id = this.sparseFigN = (this.sparseFigN || 0) + 1; // las líneas unen sólo palabras de la misma figura
