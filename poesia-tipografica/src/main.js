@@ -573,6 +573,7 @@ async function boot() {
   let bootLogged = false;
   const logUi = (ev) => !replayMode && socket?.send({ type: 'ui', ...ev });
   let lastSpeechStop = 0; // tecla 0: pausas largas → párrafo nuevo
+  let mandoAt = 0, estadoAt = 0, sincronizadoCon = ''; // ventana de control: última tecla mandada y último aviso de la salida
   const socket = new BackendSocket(CONFIG.ws, {
     open: () => {
       debug.setStatus({ backend: 'connected' });
@@ -659,7 +660,24 @@ async function boot() {
       const k = String(m.key || '').toLowerCase();
       if (!SHOW_KEY.test(k) && show.artistForKey(k) < 0) return;
       if (!CONTROL) logUi({ key: k });
+      mandoAt = performance.now();
       doKey(k);
+    },
+    // la salida avisa cada segundo (o al cambiar) qué hay en la pared: la ventana de control lo muestra en el panel
+    // y, si su vista previa quedó en otra escena (la salida se recargó, se abrió con el show empezado), la acomoda
+    estado: (m) => {
+      if (!CONTROL || replayMode || !m.escena) return;
+      estadoAt = performance.now();
+      const a = sceneNow(), b = m.escena;
+      const igual = a.state === b.state && a.mode === b.mode && (a.variant || null) === (b.variant || null) && a.artist === b.artist && !!a.recording === !!b.recording;
+      // recién apretada una tecla las dos páginas están cambiando de escena: se espera a que se asienten
+      const destino = JSON.stringify(b);
+      if (!igual && destino !== sincronizadoCon && performance.now() - mandoAt > 2500) {
+        sincronizadoCon = destino; // un solo intento por escena: si no se puede igualar, no se insiste
+        if (b.state === 'loop') show.goLoop();
+        else resumeAfterReload({ ...b });
+      } else if (igual) sincronizadoCon = '';
+      config.setState(`pared · ${m.label || show.label()}`);
     },
     replay_end: () => notify('Fin de la re-proyección', true),
     prompt_preview: (m) => config.setPromptPreview(m),
@@ -1089,6 +1107,23 @@ async function boot() {
   });
 
   const sceneNow = () => ({ state: show.state, mode: show.mode, variant: show.variant, artist: show.artistIdx, recording: show.recording });
+  if (!CONTROL) {
+    // la salida le cuenta su escena a la ventana de control: al cambiar y, si no, cada 5 s (para la que recién abre)
+    let prev = '', beat = 0;
+    setInterval(() => {
+      if (replayMode || !socket?.open) return;
+      const escena = sceneNow(), s = JSON.stringify(escena);
+      if (s === prev && ++beat < 5) return;
+      prev = s;
+      beat = 0;
+      socket.send({ type: 'estado', escena, label: show.label() });
+    }, 1000);
+  } else {
+    // sin avisos de la salida (OBS cerrado, la fuente apagada, la página caída): que el operador lo vea
+    setInterval(() => {
+      if (performance.now() - estadoAt > 9000) config.setState('pared · SIN SEÑAL de la salida (¿OBS abierto y la fuente visible?)');
+    }, 2000);
+  }
   // Una grabación nueva con el show ya andando (se cambió de carpeta, se volvió a prender, o el backend se
   // reinició con esta página abierta): anotar la escena del momento, para que la re-proyección arranque desde ahí.
   let recDir, recSeen = false;

@@ -474,7 +474,8 @@ def check_writable(folder: str) -> str | None:
     except OSError as exc:
         return str(exc)
 # mensajes al frontend que no se guardan: el análisis del audio se recalcula desde audio.wav al re-proyectar
-_NO_RECORD = {"audio_reactive", "inputs", "pong", "hello", "devices", "logos", "grabacion", "cronograma"}
+# («mando» y «estado» son el ida y vuelta con la ventana de control: lo que cuenta ya queda grabado como «ui»)
+_NO_RECORD = {"audio_reactive", "inputs", "pong", "hello", "devices", "logos", "grabacion", "cronograma", "mando", "estado"}
 
 
 def _wav_header(sr: int, n_samples: int) -> bytes:
@@ -2939,12 +2940,16 @@ async def main_async(args: argparse.Namespace) -> None:
             if audio is not None:
                 audio.request_device(dev)
         elif kind == "save_settings" and isinstance(msg.get("settings"), dict):
-            settings.update(msg["settings"])
+            # el micrófono (dispositivo y entradas) sólo se cambia con set_device / set_channel: una página abierta
+            # desde antes guarda sus ajustes enteros y pisaba el dispositivo elegido con el que ella recordaba
+            settings.update({k: v for k, v in msg["settings"].items() if k not in ("device", "canal", "canal2")})
             hub.emit("settings", settings=settings.data)
         elif kind == "mando":  # ventana de control (?control=1): tecla o botón del show para la página de salida
             key, action = str(msg.get("key") or "")[:20], str(msg.get("action") or "")[:20]
             if key or action in ("grabar", "detener"):
                 hub.emit("mando", key=key, action=action)
+        elif kind == "estado" and isinstance(msg.get("escena"), dict):  # la salida avisa qué hay en la pared
+            hub.emit("estado", escena=msg["escena"], label=str(msg.get("label") or "")[:120])
         elif kind == "set_api_key":
             key = str(msg.get("key", "")).strip()
             if not key.startswith("sk-") or len(key) < 20 or any(c.isspace() for c in key):
