@@ -306,7 +306,7 @@ export class TypeField {
 
   _applyWalls() {
     const fr = this.wallFracs && this.wallFracs.length ? this.wallFracs : [{ x0: 0, x1: 1 }];
-    this.walls = fr.map((w) => ({ x0: (w.x0 - 0.5) * this.W, x1: (w.x1 - 0.5) * this.W }));
+    this.walls = fr.map((w, i) => ({ x0: (w.x0 - 0.5) * this.W, x1: (w.x1 - 0.5) * this.W, wi: w.wi ?? i }));
     const f = this.walls[this.wallFront || 0] || this.walls[0];
     this.focus = { x0: f.x0, x1: f.x1, cx: (f.x0 + f.x1) / 2, w: f.x1 - f.x0 };
     this.blocked = (this.blockedFracs || []).map((z) => ({ x0: (z.x0 - 0.5) * this.W, x1: (z.x1 - 0.5) * this.W }));
@@ -2800,12 +2800,46 @@ export class TypeField {
   // ════════════════════════════════════════════════════════════════════════
   //  Tecla 0: pocas palabras que arman figuras entre ellas y se rompen con glitch
   // ════════════════════════════════════════════════════════════════════════
+  /**
+   * Tecla 0, «reparto por pared» (panel C): qué tramo recibe la figura nueva. `sparseCfg.reparto` es un porcentaje
+   * por pared del formato (oeste, frente, este…). Reparto parejo, sin rachas: va a la pared que más debe respecto de
+   * su porcentaje. Dentro de una pared partida por franjas negras, a un tramo según su ancho (los angostos no cuentan).
+   * Devuelve el índice del tramo, o -1 si no hay reparto elegido.
+   */
+  _sparseWallPick() {
+    const rep = this.sparseCfg?.reparto;
+    if (!Array.isArray(rep) || !this.walls.length) return -1;
+    const minW = this.H * 1.2; // un tramo más angosto que esto no da para una figura
+    const usable = this.walls.map((w, i) => ({ ...w, i })).filter((w) => w.x1 - w.x0 >= minW);
+    const pool = usable.length ? usable : this.walls.map((w, i) => ({ ...w, i }));
+    const phys = [...new Set(pool.map((w) => w.wi))];
+    const want = phys.map((p) => Math.max(0, +rep[p] || 0));
+    const tot = want.reduce((a, b) => a + b, 0);
+    if (tot <= 0) return -1;
+    const cnt = (this.sparseWallN ||= {});
+    const done = phys.reduce((a, p) => a + (cnt[p] || 0), 0) + 1;
+    let best = -1, bestD = -Infinity;
+    phys.forEach((p, k) => {
+      if (!want[k]) return;
+      const d = (want[k] / tot) * done - (cnt[p] || 0) + Math.random() * 0.01;
+      if (d > bestD) (bestD = d), (best = p);
+    });
+    cnt[best] = (cnt[best] || 0) + 1;
+    const pieces = pool.filter((w) => w.wi === best);
+    let r = Math.random() * pieces.reduce((a, w) => a + w.x1 - w.x0, 0);
+    return (pieces.find((w) => (r -= w.x1 - w.x0) <= 0) || pieces[pieces.length - 1]).i;
+  }
+
   _sparseFigure() {
     const kinds = ['circulo', 'espiral', 'diagonal', 'onda', 'columna', 'constelacion'];
     const kind = kinds[Math.floor(Math.random() * kinds.length)];
-    // con varias paredes, cada figura va entera en una (la de frente, la mitad de las veces): no dobla en las esquinas
+    // con varias paredes, cada figura va entera en una: no dobla en las esquinas.
+    // Con «reparto por pared» (panel C) cada pared recibe ese porcentaje de las figuras; si no, la de frente la mitad
+    // de las veces y el resto según el ancho.
     let wi = this.wallFront || 0;
-    if (this.walls.length > 1 && Math.random() >= 0.5) {
+    const rep = this._sparseWallPick();
+    if (rep >= 0) wi = rep;
+    else if (this.walls.length > 1 && Math.random() >= 0.5) {
       // (con franjas negras quedan tramos angostos: ahí no entra una figura)
       const wide = Math.max(...this.walls.map((w) => w.x1 - w.x0)) * 0.3;
       const others = this.walls.map((w, i) => i).filter((i) => i !== wi && this.walls[i].x1 - this.walls[i].x0 >= wide);
@@ -2815,7 +2849,11 @@ export class TypeField {
       wi = others.find((i) => (r -= this.walls[i].x1 - this.walls[i].x0) <= 0) ?? others[others.length - 1];
     }
     const wall = this.walls[wi], ww = wall.x1 - wall.x0, wx = (wall.x0 + wall.x1) / 2;
-    const F = { kind, n: 0, total: 7 + Math.floor(Math.random() * 4), wx, ww, cx: wx + (Math.random() - 0.5) * ww * 0.3, cy: (Math.random() - 0.5) * this.H * 0.2, rot: Math.random() * Math.PI * 2, last: null, sc: 1 };
+    // dónde cae la figura dentro de su pared: las compactas (círculo, espiral, columna) pueden ir de punta a punta
+    // (dejando lugar para su ancho); las que ya ocupan casi toda la pared (diagonal, onda, constelación), cerca del medio
+    const half = kind === 'circulo' || kind === 'espiral' ? this.H * 0.75 : kind === 'columna' ? this.H * 0.35 : ww * 0.36;
+    const libre = Math.max(ww * 0.15, ww / 2 - half);
+    const F = { kind, n: 0, total: 7 + Math.floor(Math.random() * 4), wx, ww, cx: wx + (Math.random() * 2 - 1) * libre, cy: (Math.random() - 0.5) * this.H * 0.2, rot: Math.random() * Math.PI * 2, last: null, sc: 1 };
     if (this.sparseKeep) {
       // tecla 0 acumulando: cada párrafo en la zona más libre del cuadro, con una figura más compacta
       F.sc = 0.5;

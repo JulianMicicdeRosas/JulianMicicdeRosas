@@ -96,7 +96,8 @@ export function physicalWalls() {
  */
 export function wallLayout() {
   const ph = physicalWalls(), zs = blockedZones();
-  if (!zs.length) return ph;
+  // cada tramo recuerda a qué pared del formato pertenece (wi): el reparto de palabras por pared lo usa
+  if (!zs.length) return { walls: ph.walls.map((w, wi) => ({ x0: w.x0, x1: w.x1, wi })), front: ph.front };
   const MIN = 0.012; // un tramo más angosto que esto no sirve para escribir
   const pieces = [];
   ph.walls.forEach((w, wi) => {
@@ -112,7 +113,7 @@ export function wallLayout() {
   const widest = (list) => list.reduce((a, b) => (b.x1 - b.x0 > a.x1 - a.x0 ? b : a));
   const own = pieces.filter((p) => p.wi === ph.front);
   const front = pieces.indexOf(widest(own.length ? own : pieces));
-  return { walls: pieces.map(({ x0, x1 }) => ({ x0, x1 })), front };
+  return { walls: pieces.map(({ x0, x1, wi }) => ({ x0, x1, wi })), front };
 }
 
 /** La pared de frente, en fracción del cuadro visible ({x0, x1}). */

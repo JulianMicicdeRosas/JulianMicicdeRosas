@@ -105,6 +105,10 @@ No abras además el show en un Chrome aparte: serían dos shows independientes y
   se escribe nada (una puerta, una columna, un proyector que no se usa). Se marcan arrastrando sobre la barra o
   escribiendo los px («3175-4950, 8000-8400»); clic en una franja para sacarla. Las palabras, el verso, el título y
   los logos se acomodan en los tramos libres; si la pared de frente queda toda en negro, pasan al tramo más ancho.
+- **Reparto por pared** (panel C → «Tecla 0 · palabras» → «Reparto por pared (%)»): qué parte de las figuras de la
+  tecla 0 va a cada pared (izquierda, frente, derecha). Valen como proporción; en 0 esa pared queda sin palabras.
+  «Parejo según el ancho» reparte por el ancho de cada pared; «Como antes (automático)» manda la mitad al frente.
+  Dentro de cada pared las figuras pueden caer de punta a punta.
 - **No abrir el panel C dentro de la fuente** (clic derecho → Interactuar → tecla C): a 8400 px queda ilegible en el
   monitor y **se ve en la pared**. Interactuar sirve para una tecla suelta si la ventana de control no está.
 - **Vista previa**: a 8400 px de ancho consume placa. Si hace falta, clic derecho en la vista previa → destildar
@@ -120,6 +124,11 @@ No abras además el show en un Chrome aparte: serían dos shows independientes y
 2. **Fuente**: panel **Sources → Spout → FLAT**, arrastrarla al primer clip de la capa 1.
    - En el clip: **Transform → Auto size: Fit** (al ser el mismo tamaño queda 1:1), escala 100 %, posición 0.
    - Capa al 100 % de opacidad. Sin efectos de escalado.
+   - **Revisar los efectos de la composición** (pestaña Composition, abajo): si la composición viene de otra obra
+     puede traer un **Mirror** (copia la mitad de la imagen dada vuelta: palabras espejadas y pantallas que parecen
+     superpuestas) o un **Transform** con escala distinta de 100 % (la imagen se agranda y los bordes, con el logo de
+     FLAT, quedan fuera de los proyectores). Desactivarlos (botón B) o dejar la escala en 100 %.
+   - En la sala está guardada como **«Charlas en el FLAT»** (Composition → Open). No usar «UMBRAL»: la pisó otra obra.
 3. **Salida**: **Output → Advanced Output**. Un slice por pared, con estos recortes de entrada (Input Selection):
 
    | Slice | X | Y | Ancho | Alto |

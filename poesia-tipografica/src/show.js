@@ -693,7 +693,7 @@ export class Show {
     f.sparseMode = mode === 'pocas' || v === 'constelacion';
     const cero = { ...DEFAULT_SETTINGS.cero, ...(this.settings.cero || {}) };
     f.sparseMax = mode === 'pocas' ? Math.round(clampN(+cero.palabras, 2, 80, 12)) : 14;
-    f.sparseCfg = mode === 'pocas' ? { lineas: cero.lineas, vida: clampN(+cero.vida, 2, 120, 13), tamanos: cero.tamanos, aparecen: clampN(+cero.aparecen, 5, 100, 100) } : { lineas: 'figura', vida: 13, tamanos: 'media', aparecen: 100 };
+    f.sparseCfg = mode === 'pocas' ? { lineas: cero.lineas, vida: clampN(+cero.vida, 2, 120, 13), tamanos: cero.tamanos, aparecen: clampN(+cero.aparecen, 5, 100, 100), reparto: Array.isArray(cero.reparto) ? cero.reparto : null } : { lineas: 'figura', vida: 13, tamanos: 'media', aparecen: 100, reparto: null };
     f.sparseKeep = 0; // tecla 0: pocas palabras que viven unos segundos y se rompen (sin acumular párrafos)
     f.artistWall = v === 'muro' || v === 'cruce';
     f.flowMode = v === 'sedimento' || v === 'partitura' ? v : null;

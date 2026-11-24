@@ -243,6 +243,13 @@ export class ConfigPanel {
             <option value="mucha">mucha variación (1× a 5×)</option>
           </select>
         </div>
+        <div class="row" style="margin-top:10px"><b>Reparto por pared (%)</b></div>
+        <div data-reparto></div>
+        <div class="row">
+          <button data-act="reparto-parejo">Parejo según el ancho</button>
+          <button data-act="reparto-auto">Como antes (automático)</button>
+        </div>
+        <p class="hint" data-reparto-info></p>
         <p class="hint">Cada palabra dura los segundos elegidos (±23 %) y se rompe con glitch; si se llega al máximo, se
         rompen las más viejas. Las palabras de enlace (de, la, y…) quedan chicas.</p>
         <p class="hint"><b>Palabras que aparecen</b>: de cada 100 palabras dichas, cuántas llegan a la pared. 100 = todas.
@@ -534,6 +541,7 @@ export class ConfigPanel {
       if (el.type === 'number') el.disabled = cad.preset !== 'personalizada';
     }
     const cero = { palabras: 12, lineas: 'figura', vida: 13, tamanos: 'media', aparecen: 100, ...(s.cero || {}) };
+    this._renderReparto(s);
     const brillo = { fondo: 1, palabras: 1, cosas: 1, ...(s.brillo || {}) };
     for (const el of this.el.querySelectorAll('[data-cero], [data-brillo]')) {
       const v = el.dataset.cero ? cero[el.dataset.cero] : brillo[el.dataset.brillo];
@@ -941,6 +949,44 @@ export class ConfigPanel {
     this._savedT = setTimeout(() => (s.textContent = ''), 1500);
   }
 
+  // ── reparto de la tecla 0 por pared ──────────────────────────────────────
+  /** Porcentaje por pared: el elegido o, si no hay, el equivalente al automático (frente 50 %, el resto según el ancho). */
+  _repartoValues(s) {
+    const { walls, front } = physicalWalls();
+    const rep = s.cero?.reparto;
+    if (Array.isArray(rep) && rep.length === walls.length) return rep.map((v) => Math.max(0, Math.min(100, +v || 0)));
+    if (walls.length < 2) return [100];
+    const otros = walls.reduce((a, w, i) => a + (i === front ? 0 : w.x1 - w.x0), 0) || 1;
+    return walls.map((w, i) => (i === front ? 50 : Math.round((50 * (w.x1 - w.x0)) / otros)));
+  }
+
+  _renderReparto(s, force = false) {
+    const box = this.$('[data-reparto]');
+    if (!box) return;
+    const { walls, front } = physicalWalls();
+    const vals = this._repartoValues(s);
+    const name = (i) => (walls.length < 2 ? 'Pantalla' : i === front ? 'Frente' : i < front ? (front - i > 1 ? `Izquierda ${front - i}` : 'Izquierda') : i - front > 1 ? `Derecha ${i - front}` : 'Derecha');
+    if (force || box.childElementCount !== walls.length) {
+      box.innerHTML = walls
+        .map((w, i) => `<div class="slider"><span>${name(i)}${w.px ? ` (${w.px} px)` : ''}</span><input type="range" min="0" max="100" step="5" data-reparto="${i}"><output></output></div>`)
+        .join('');
+    }
+    box.querySelectorAll('[data-reparto]').forEach((el) => {
+      const v = vals[+el.dataset.reparto] ?? 0;
+      if (document.activeElement !== el) el.value = v;
+      el.nextElementSibling.textContent = String(v);
+    });
+    const tot = vals.reduce((a, b) => a + b, 0);
+    const auto = !Array.isArray(s.cero?.reparto);
+    this.$('[data-reparto-info]').innerHTML = walls.length < 2
+      ? 'Con una sola pantalla no hay reparto.'
+      : tot <= 0
+        ? 'Todas en 0: se usa el reparto automático.'
+        : `${auto ? '<b>Automático</b> (como antes). ' : ''}Qué parte de las figuras de la tecla 0 va a cada pared: ` +
+          walls.map((w, i) => `${name(i).toLowerCase()} ${Math.round((vals[i] / tot) * 100)} %`).join(' · ') +
+          '. Los valores se toman como proporción (no hace falta que sumen 100). En 0, esa pared queda sin palabras. Cada figura va entera en una pared y puede caer en cualquier parte de ella.';
+  }
+
   // ── franjas negras ───────────────────────────────────────────────────────
   _setFranjas(list) {
     this._commit((s) => (s.franjas = parseFranjas(list)), false);
@@ -1059,7 +1105,13 @@ export class ConfigPanel {
     }
     else if (act === 'devices') this.requestDevices();
     else if (act === 'show-prompt') this.onShowPrompt?.(this.$('[data-grid-text]')?.value || '');
-    else if (act === 'franjas-clear') this._setFranjas([]);
+    else if (act === 'reparto-parejo' || act === 'reparto-auto') {
+      const ws = physicalWalls().walls;
+      const tot = ws.reduce((a, w) => a + (w.x1 - w.x0), 0) || 1;
+      const vals = act === 'reparto-auto' ? null : ws.map((w) => Math.round(((w.x1 - w.x0) / tot) * 100));
+      this._commit((s) => (s.cero = { ...(s.cero || {}), reparto: vals }), false);
+      this._renderReparto(this.getSettings(), true);
+    }    else if (act === 'franjas-clear') this._setFranjas([]);
     else if (act === 'add-artist') this._commit((s) => (s.artists = [...(s.artists || []), { name: '' }]));
     else if (act === 'add-step') this._commit((s) => (s.loop = [...(s.loop || []), { tipo: 'texto', contenido: '', render: 'letras', duracion: 10, letras: '' }]));
     else if (act === 'up') this._commit((s) => move(s[list], -1));
@@ -1203,6 +1255,14 @@ export class ConfigPanel {
     if (t.dataset.marca) {
       if (ev.type === 'input' && t.type === 'checkbox') return;
       this._commit((s) => (s.marca = { ...(s.marca || {}), [t.dataset.marca]: t.type === 'checkbox' ? t.checked : t.value }), false);
+      return;
+    }
+    if (t.dataset.reparto != null) {
+      const vals = this._repartoValues(this.getSettings());
+      vals[+t.dataset.reparto] = +t.value;
+      t.nextElementSibling.textContent = t.value;
+      this._commit((s) => (s.cero = { ...(s.cero || {}), reparto: vals }), false);
+      this._renderReparto(this.getSettings());
       return;
     }
     if (t.dataset.cero || t.dataset.brillo) {
