@@ -86,9 +86,7 @@ export const DEFAULT_SETTINGS = {
   // brillo (1 = normal): telón y letras que caen · palabras, nombres y títulos · logos, título sólido y dibujos
   brillo: { fondo: 1, palabras: 1, cosas: 1 },
   // franjas negras: tramos del ancho (px del formato) donde no se escribe nada y la salida queda en negro
-  // en la sala del MMAMM el tramo 3172–3457 (comienzo del frente, junto a la esquina oeste) cae en el hueco entre los
-  // paneles: no se ve, así que de fábrica queda en negro y sin palabras (se cambia en el panel C)
-  franjas: [{ desde: 3172, hasta: 3457 }],
+  franjas: [],
   pointcloud: true, // estética nube de puntos (TouchDesigner)
   profundidad: 0.45, // extrusión en Z de las figuras
   nube: 1, // intensidad de la nube
@@ -419,6 +417,13 @@ export class Show {
       this._showImage(img.src);
       return;
     }
+    // título con imagen propia (p. ej. la portada de Vértice): el nombre sigue sirviendo para el telón y los avisos,
+    // pero en la pared va el diseño
+    if (kind === 'texto' && step.imagen) {
+      f.releaseFigure(true);
+      this._showImage(step.imagen, true);
+      return;
+    }
     if (kind === 'texto' && step.render === 'solido') {
       f.releaseFigure(true);
       await this._showSolidTitle(content);
@@ -492,8 +497,10 @@ export class Show {
     this.stage.show(page); // glitch entre el logo anterior y éste
   }
 
-  _showImage(src) {
+  /** Imagen en la pared de frente. `pleno`: ocupa todo el alto y el ancho de la pared (la portada del título). */
+  _showImage(src, pleno = false) {
     this.overlayImg.src = src;
+    this.overlay.classList.toggle('pleno', pleno);
     this.overlay.classList.add('on');
   }
 
@@ -631,7 +638,8 @@ export class Show {
     f.setPalette(this.basePalette());
     f.setPhysics({ modo: 'lluvia_text_rain', intensidad: 0.3, velocidad: 0.35, turbulencia: 0.15, densidad: 0.4 });
     f.setBackdrop(true);
-    if (solid) this._showSolidTitle(name);
+    if (txt?.imagen) this._showImage(txt.imagen, true);
+    else if (solid) this._showSolidTitle(name);
     else f.showTitle(name);
     this.state = 'title';
     this.notify(`${name} — T para comenzar`);

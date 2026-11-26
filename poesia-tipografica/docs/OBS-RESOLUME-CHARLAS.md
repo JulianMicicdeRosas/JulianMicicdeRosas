@@ -105,12 +105,12 @@ No abras además el show en un Chrome aparte: serían dos shows independientes y
   se escribe nada (una puerta, una columna, un proyector que no se usa). Se marcan arrastrando sobre la barra o
   escribiendo los px («3175-4950, 8000-8400»); clic en una franja para sacarla. Las palabras, el verso, el título y
   los logos se acomodan en los tramos libres; si la pared de frente queda toda en negro, pasan al tramo más ancho.
-- **Esquina oeste del frente (3172–3457 px)**: en la sala del MMAMM ese tramo cae en el hueco entre la pared
-  izquierda y el panel del frente y no se ve. Viene de fábrica como franja negra, así nada importante queda ahí.
 - **Vértice - Laboratorio de Blockchain**: presentación `vertice`. En la fuente de OBS y en la ventana de control
   usar `presentacion=vertice` en la dirección (con `charlas` la página vuelve a escribir el título de charlas en los
   ajustes). Los logos del laboratorio (Torablock, Aureo Innova, Google Cloud Partner, Stellar, Hedera) están en
-  `logos/vertice`; en el loop ese grupo va antes del de «socio-cultural» (Pampa).
+  `logos/vertice`; en el loop ese grupo va antes del de «socio-cultural» (Pampa). El paso del título lleva la
+  portada del laboratorio sin logos (`public/loop/vertice-portada.png`) en el campo `imagen`: en la pared va el
+  diseño a todo el alto del frente, y el nombre sigue sirviendo para el telón y los avisos.
 - **Reparto por pared** (panel C → «Tecla 0 · palabras» → «Reparto por pared (%)»): qué parte de las figuras de la
   tecla 0 va a cada pared (izquierda, frente, derecha). Valen como proporción; en 0 esa pared queda sin palabras.
   «Parejo según el ancho» reparte por el ancho de cada pared; «Como antes (automático)» manda la mitad al frente.

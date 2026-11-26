@@ -174,6 +174,11 @@ body.hide-cursor * {
   max-height: calc(var(--fh, 100vh) * 0.58);
   object-fit: contain;
 }
+/* portada del título (imagen propia del paso de título): todo el alto de la pared de frente */
+#overlay.pleno img {
+  max-width: var(--ww, var(--fw, 100vw));
+  max-height: var(--fh, 100vh);
+}
 
 /* ── Logo de FLAT abajo a la derecha (tecla 0) ─────────────────────── */
 #corner {
