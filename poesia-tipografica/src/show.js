@@ -35,7 +35,7 @@ export function resolveAnim(a, i) {
 // título del evento: el loop lo escribe en letras después del logo de FLAT y queda fijo hasta T
 export const TITULO = 'UMBRAL';
 // presentación: qué título escribe el loop (y lleva la ventana y el panel C); se elige en el panel C
-export const PRESENTACIONES = { umbral: 'UMBRAL', charlas: 'Ciclo de charlas y talleres FLAT' };
+export const PRESENTACIONES = { umbral: 'UMBRAL', charlas: 'Ciclo de charlas y talleres FLAT', vertice: 'Vértice - Laboratorio de Blockchain' };
 export const presentationTitle = (s) => PRESENTACIONES[s?.presentacion] || TITULO;
 
 const clampN = (v, a, b, d) => (Number.isFinite(v) ? Math.min(b, Math.max(a, v)) : d);
@@ -60,7 +60,7 @@ export const DEFAULT_SETTINGS = {
   curaduria: '', // texto curatorial en lenguaje normal (guía principal del director de arte)
   imagenes: 'grilla', // 'grilla' = el LLM devuelve la figura como texto · 'llm' = trazado SVG · 'biblioteca' = curadas
   polaridad: 'alternar', // grilla: positivo | negativo | alternar | llm
-  presentacion: 'umbral', // umbral | charlas
+  presentacion: 'umbral', // umbral | charlas | vertice
   formato: '8400x690/3175,1775,3450', // salida: 'ANCHOxALTO' (cuadro centrado), con '/A,B,C' paredes; o 'pantalla'
   inicio_por_voz: true, // placa del artista: arranca sola cuando la persona habla
   umbral_voz: 0.35,
@@ -86,7 +86,9 @@ export const DEFAULT_SETTINGS = {
   // brillo (1 = normal): telón y letras que caen · palabras, nombres y títulos · logos, título sólido y dibujos
   brillo: { fondo: 1, palabras: 1, cosas: 1 },
   // franjas negras: tramos del ancho (px del formato) donde no se escribe nada y la salida queda en negro
-  franjas: [],
+  // en la sala del MMAMM el tramo 3172–3457 (comienzo del frente, junto a la esquina oeste) cae en el hueco entre los
+  // paneles: no se ve, así que de fábrica queda en negro y sin palabras (se cambia en el panel C)
+  franjas: [{ desde: 3172, hasta: 3457 }],
   pointcloud: true, // estética nube de puntos (TouchDesigner)
   profundidad: 0.45, // extrusión en Z de las figuras
   nube: 1, // intensidad de la nube
